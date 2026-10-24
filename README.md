@@ -1,5 +1,7 @@
 # lajur
 
+[![proofs](https://github.com/elianiva/lajur/actions/workflows/proofs.yml/badge.svg)](https://github.com/elianiva/lajur/actions/workflows/proofs.yml)
+
 Indonesian traffic rules as a model a compiler can check, next to the statutes they come from.
 
 Status: v0 slice. 19 rules, 9 scenarios, 10 laws. All proofs check with Bend 2.0.39.

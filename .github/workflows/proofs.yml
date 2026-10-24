@@ -10,11 +10,13 @@ jobs:
     env:
       BEND_NO_TELEMETRY: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Bend
         run: |
           curl -fsSL https://bend-lang.com/install.sh | sh
           echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
+      - name: Report the toolchain
+        run: bend version
       - name: Check the rules
         working-directory: bend
         run: bend rules.bend
