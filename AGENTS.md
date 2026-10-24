@@ -13,6 +13,28 @@ bend PROOF.bend --verdict    # the same proofs through the Lean kernel
 `.agents/setup` installs Bend 2.0.39 and Lean 4.34.0 in a fresh orb. Both checks
 run in CI on every push.
 
+## The game
+
+`web/` is the driving game. The road, the traffic, the speed ceiling and the
+verdicts are Bend: `web/logic/game.bend`, proved by `web/logic/PROOF.bend`. The
+map is 1-D value-noise curvature integrated along arc length; the renderer
+streams 50 m chunks, bakes each into one mesh per material, and drops them
+behind the player.
+TypeScript draws the result and decides nothing, so a rule that ships is a rule
+that checks.
+
+```sh
+cd web
+vp run proof             # bend logic/PROOF.bend
+vpr proof --verdict      # the same through the Lean kernel
+vp check                 # format, lint, types
+vp dev                   # serves on $PORT
+```
+
+`src/game.mjs` is generated from the model by `vp dev` and `vp build`; do not
+edit it. A change to the game is done when `vp run proof` prints ALL PROOFS
+CHECK and the page still drives.
+
 ## Corpus
 
 `corpus/` is generated from `laws/`. Rebuild it with

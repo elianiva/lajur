@@ -55,11 +55,37 @@ Two more forces shape the model:
   but the criminal chapter assigns no fine for a private driver. The model
   records zero, not a guess.
 
+## The game
+
+`web/` is a playable slice of the same model: a low-poly street that generates
+itself, traffic to weave through, and the speed ceiling enforced by the
+catalogue. The driving rules, the road generator and the verdicts are Bend
+(`web/logic/game.bend`), and `web/logic/PROOF.bend` proves them. TypeScript is
+only the renderer: three.js draws what the model reports.
+
+The map follows the pattern endless driving games use: the road is a pure
+function of distance along it, its curvature sampled from 1-D value noise with a
+smoothstep ease, then integrated into a centreline. Any 50 m stretch can be
+asked for by index alone, so the renderer streams chunks, bakes each one into
+one mesh per material, and drops it when it falls behind.
+
+The street itself is an Indonesian arterial, not an American one: undivided and
+two-way, two lanes each way, white broken centre line, a shoulder and a narrow
+pavement, and warungs with tarpaulin roofs, ruko, parked motorbikes, carts,
+palms and power lines packed to the kerb.
+
+```sh
+cd web
+vp run proof    # ALL PROOFS CHECK
+vp dev          # the street, on $PORT
+```
+
 ## Layout
 
 ```text
 laws/     the statutes, unmodified, plus an index with checksums and sources
 corpus/   every provision indexed by article, ayat and page
+web/      the game: the same model as a Bend program, drawn with three.js
 bend/     the model and the laws
 docs/     categories, the model, known gaps
 tools/    the extractor that builds corpus/
@@ -184,13 +210,15 @@ Not covered:
 1. **v0.** 19 rules, 9 scenarios, 10 laws, one instrument.
 2. **v1, this commit.** 8 instruments, 50 scenario rules, 109 sign rules, 350 laws, one per requirement,
    with the corpus indexed by page.
-3. **v1.1.** Scenario JSON, a TypeScript port of the adjudicator, and a harness
-   that runs the same corpus in both. The game needs the port; the proofs keep
-   it honest.
+3. **v1.1, this commit.** The game in `web/`. Bend compiles to the browser, so
+   there is no TypeScript port of the adjudicator to keep in step: the street,
+   the traffic, the road generator and the verdict all come from the model.
+   The slice is driving; the situations, the pre/post quiz and the third
+   amendment are still ahead.
 4. **v2.** Rule packages with `effective_from` and `effective_to`, plus the
    third amendment once it is enacted.
-5. **v3.** A playable slice: short situations, a verdict with the article, and
-   a pre/post quiz that measures learning.
+5. **v3.** Short situations inside the drive, each one ending in a verdict with
+   the article, and a pre/post quiz that measures learning.
 
 ## Sources
 
