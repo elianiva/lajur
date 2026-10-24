@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Prepares a fresh orb to check the laws: Bend, Lean for `bend --verdict`, and
-# the corpus toolchain. Idempotent, non-interactive, and safe to run twice.
+# the corpus toolchain, plus the Vite+ JavaScript toolchain the orb carries.
+# Idempotent, non-interactive, and safe to run twice.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -75,6 +76,34 @@ if elan toolchain list 2>/dev/null | grep -Fxq "$lean_toolchain"; then
   echo "   already installed"
 else
   elan toolchain install "$lean_toolchain"
+fi
+done_step
+
+# Vite+ is here for work around the laws, not for the laws themselves. The orb
+# template already ships Node.js and package managers, so the installer keeps
+# those: managed mode would put its shims in front of them.
+step "Installing Vite+ (vp)"
+vp_bin="$HOME/.local/share/vite-plus/bin"
+export PATH="$vp_bin:$PATH"
+vp_version="$(vp --version 2>/dev/null | sed -n '1p' || true)"
+if [ "${vp_version%% *}" != "vp" ]; then
+  if CI=1 VP_NODE_MANAGER=no VP_PM_MANAGER=no bash -c 'curl -fsSL https://vite.plus | bash'; then
+    hash -r
+    vp_version="$(vp --version 2>/dev/null | sed -n '1p' || true)"
+  fi
+fi
+if [ "${vp_version%% *}" = "vp" ]; then
+  printf '   %s\n' "$vp_version"
+  # The installer wires the login shells it finds, but a bare non-interactive
+  # shell reads none of them. ~/.local/bin is already on PATH there.
+  mkdir -p "$HOME/.local/bin"
+  for name in vp vpx vpr; do
+    if [ -e "$vp_bin/$name" ]; then
+      ln -sfn "$vp_bin/$name" "$HOME/.local/bin/$name"
+    fi
+  done
+else
+  warn "cannot install Vite+; the laws still check without it"
 fi
 done_step
 
