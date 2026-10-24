@@ -23,5 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Generated from logic/game.bend by `vp run logic`
+# Generated from logic/game.bend and logic/town.bend by `vp run logic`
 src/game.mjs
+src/town.mjs

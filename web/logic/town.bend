@@ -1182,18 +1182,40 @@ def row_v(+i: U32, +j: U32, +seed: U32) -> U32:
 def gang_v(+i: U32, +j: U32, +seed: U32) -> U32:
   U32.div(U32.mul(gang_cm(), 1024), block_depth(i, j, seed))
 
-# How many rows fit between the two pavements.
-def rows_in(+i: U32, +j: U32, +seed: U32) -> U32:
+# A block exists where both of the streets that bound it do. The river leaves
+# a column of cells with no east street, and those are water, not blocks.
+def block_exists(+i: U32, +j: U32) -> Bool:
+  Bool.and(has(i, j, East{}), has(i, j, South{}))
+
+def rows_measured(+i: U32, +j: U32, +seed: U32) -> U32:
   +room = U32.sub(block_depth(i, j, seed),
                   U32.add(U32.add(U32.add(south_half(i, j), north_half(i, j)),
                                   U32.mul(2, pavement_cm())), 200))
   +each = U32.add(row_depth_cm(), gang_cm())
   U32.min(U32.max(U32.div(U32.add(room, gang_cm()), each), 1), 4)
 
+def rows_where(on: Bool, +i: U32, +j: U32, +seed: U32) -> U32:
+  match on:
+    case True{}:
+      rows_measured(i, j, seed)
+    case False{}:
+      0
+
+# How many rows fit between the two pavements.
+def rows_in(+i: U32, +j: U32, +seed: U32) -> U32:
+  rows_where(block_exists(i, j), i, j, seed)
+
 # A row's lots are seven hundred centimetres each, at least one and at most
 # twelve, and they share the width exactly.
+def lots_where(on: Bool, +i: U32, +j: U32, +seed: U32) -> U32:
+  match on:
+    case True{}:
+      U32.min(U32.max(U32.div(block_width(i, j, seed), 700), 1), 12)
+    case False{}:
+      0
+
 def lots_in(+i: U32, +j: U32, +seed: U32) -> U32:
-  U32.min(U32.max(U32.div(block_width(i, j, seed), 700), 1), 12)
+  lots_where(block_exists(i, j), i, j, seed)
 
 def lot_width(+i: U32, +j: U32, +seed: U32) -> U32:
   U32.div(block_width(i, j, seed), lots_in(i, j, seed))

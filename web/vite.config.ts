@@ -39,7 +39,11 @@ export default defineConfig({
   server: { host: true, port, strictPort: true },
   preview: { host: true, port, strictPort: true },
   // The game, and the lab that shows every asset in src/assets.
-  build: { rollupOptions: { input: { game: resolve("index.html"), lab: resolve("lab.html") } } },
+  build: {
+    rollupOptions: {
+      input: { game: resolve("index.html"), lab: resolve("lab.html"), town: resolve("town.html") },
+    },
+  },
   fmt: {},
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],

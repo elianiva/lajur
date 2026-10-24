@@ -45,10 +45,15 @@ export interface Built {
  */
 export function buildLogic(): Built {
   try {
-    execFileSync(findBend(), [`${BEND_DIR}/game.bend`, "-o", "src/game.mjs"], {
-      stdio: "pipe",
-      encoding: "utf8",
-    });
+    for (const [from, to] of [
+      ["game.bend", "src/game.mjs"],
+      ["town.bend", "src/town.mjs"],
+    ]) {
+      execFileSync(findBend(), [`${BEND_DIR}/${from}`, "-o", to], {
+        stdio: "pipe",
+        encoding: "utf8",
+      });
+    }
     return { ok: true, output: "" };
   } catch (error) {
     const failed = error as { stdout?: string; stderr?: string; message: string };
