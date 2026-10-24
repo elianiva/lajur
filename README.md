@@ -5,7 +5,7 @@
 Indonesian traffic law as named claims a compiler checks, next to the statutes
 they come from.
 
-Status: 8 instruments, 50 scenario rules, 176 laws. All proofs check with Bend
+Status: 8 instruments, 50 scenario rules, 109 sign rules, 282 laws. All proofs check with Bend
 2.0.39, and the Lean 4.34.0 kernel accepts the verdict.
 
 ## The idea
@@ -26,6 +26,9 @@ law issuing_a_licence_runs_five_steps:
 
 law leaving_a_crash_costs_three_years_and_75000000:
   { Bool.and(U32.is_eq(R.months_of(28), 36), U32.is_eq(R.fine_of(28), 75000000)) == True{} : Bool }
+
+law stopping_at_a_no_stopping_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_stopping(M.NoStopping{}, True{}))) == True{} : Bool }
 ```
 
 Change the speed table to 110 and `a_motorway_is_100` stops checking. Change
@@ -66,20 +69,21 @@ tools/    the extractor that builds corpus/
 
 `bend/rules.bend` holds three things:
 
-- **Scenario.** A record of six groups: road, load, equipment, motion, priority,
-  papers.
+- **Scenario.** Six records: road, load, equipment, motion, priority, papers,
+  plus a sign act: the posted duty and the actions a sign rule reads.
 - **Catalogue.** 50 rules. Each carries `tier`, `months`, `days`, `fine`, the
   article that imposes the duty, and the article that punishes breaking it.
 - **Adjudicator.** `charges(scenario)` returns violated rule ids in ascending
-  order. Nothing else.
+  order. Nothing else. Rule 8 applies the duty a sign posts.
 
 `bend/model.bend` holds the vocabulary the laws share: the instruments, speed by
-zone, sign colours, licence classes and validity, road classes.
+zone, sign families and duties, licence classes and validity, road classes.
 
-Six more modules hold what a moment cannot express:
+Seven more modules hold what a moment cannot express:
 
 | Module | Instrument | Content |
 | --- | --- | --- |
+| `signs.bend` | PM 13/2014 | 347 signs in seven tables, 109 operative sign rules, five supplement kinds |
 | `network.bend` | PP 79/2013, PM 111/2015, PM 13/2014 | Road functions, class dimensions, grounds for lowering a limit, sign placement |
 | `licence.bend` | Perpol 5/2021 | Requirements, health checks, test stages, pass mark, retakes, validity |
 | `vehicle.bend` | UU 22/2009 | Type test, periodic test, the kit, the technical items |
@@ -93,7 +97,7 @@ Six more modules hold what a moment cannot express:
 | --- | --- | --- |
 | UU 22/2009 | 68 + 13 | 51 behaviour laws over 50 rules, 9 penalties, 8 catalogue properties, and the vehicle: type test, periodic test, kit, technical items |
 | Perpol 5/2021 | 32 | Classes, ages, validity, health checks, test stages, pass mark, retakes |
-| PM 13/2014 | 13 | Four families, colours, temporary signs, placement, leaf sizes |
+| PM 13/2014 | 119 | 347 signs, 109 operative sign rules, families, colours, placement, heights, warning distances, supplements |
 | PP 30/2021 with UU 22/2009 | 12 | Impact analysis, approval authority, warnings, terminals, papers, insurance |
 | PP 37/2017 | 11 | Pillars, plan periods, safety system elements, ratios |
 | PP 79/2013 | 10 | Functions, class dimensions, axle load, signing |
@@ -154,7 +158,9 @@ one exists. Tesseract with the Indonesian model is needed for that step only.
 
 Covered: every rule's condition, every sanction the catalogue states, every
 numeric table the statutes set, the procedure deadlines, the competence rules,
-the class and licence boundaries, and twelve golden verdicts with a law each.
+the class and licence boundaries, every coded sign in PM 13/2014, every
+prohibition and command sign's operative rule, and twelve golden verdicts with
+a law each.
 
 Not covered:
 
@@ -167,13 +173,16 @@ Not covered:
   current model does not carry.
 - **Local rules.** Provincial and municipal regulations add signs and limits.
   They are out of scope until the rule package has a jurisdiction field.
+- **Values printed on a leaf.** A length, height, width, following distance or
+  speed sign carries its number on the leaf. The model records a variable sign
+  with a limit of zero and does not charge until a scenario supplies the value.
 - **Principles and transitions.** *Asas*, *tujuan*, effective dates and repeal
   state no requirement a moment can break. See `docs/taxonomy.md`.
 
 ## Roadmap
 
 1. **v0.** 19 rules, 9 scenarios, 10 laws, one instrument.
-2. **v1, this commit.** 8 instruments, 50 rules, 176 laws, one per requirement,
+2. **v1, this commit.** 8 instruments, 50 scenario rules, 109 sign rules, 282 laws, one per requirement,
    with the corpus indexed by page.
 3. **v1.1.** Scenario JSON, a TypeScript port of the adjudicator, and a harness
    that runs the same corpus in both. The game needs the port; the proofs keep

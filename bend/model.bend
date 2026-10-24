@@ -133,6 +133,67 @@ def signs() -> List<Sign>:
   [ Warning{}, Prohibition{}, Command{}, Guidance{} ]
 
 # ---------------------------------------------------------------------------
+# What a sign requires of the driver, PM 13/2014 Tabel I to IV
+#
+# A warning sign names a hazard and a guidance sign gives information, so both
+# carry NoDuty. A prohibition or command sign posts one of the duties below.
+# The duty is the operative rule: the adjudicator charges a driver who breaks
+# it, and the catalogue says which sign posted it.
+# ---------------------------------------------------------------------------
+
+# The road user a restriction names. Any covers a ban on every vehicle.
+type Subject is Data:
+  Any{}
+  Motorcycle{}
+  Car{}
+  Truck{}
+  Bus{}
+  Public{}
+  Special{}
+  Trailer{}
+  ThreeWheel{}
+  Bicycle{}
+  Pedestrian{}
+  Cart{}
+  Becak{}
+  Pedati{}
+  Delman{}
+  HorseRider{}
+  NonMotorized{}
+
+type Duty is Data:
+  NoDuty{}
+  Stop{}
+  GiveWay{}
+  NoEntry{subjects: List<&2, Subject>}
+  NoStopping{}
+  NoParking{}
+  NoLeftTurn{}
+  NoRightTurn{}
+  NoUTurn{}
+  NoUTurnOrRight{}
+  NoOvertaking{}
+  NoCloseFollowing{metres: U32}
+  MaxSpeed{limit: U32}
+  MinSpeed{limit: U32}
+  KeepLeft{}
+  KeepRight{}
+  TurnLeft{}
+  TurnRight{}
+  GoStraight{}
+  ChoosePath{}
+  Roundabout{}
+  UseLane{subject: Subject}
+  UseChains{}
+  WeightLimit{limit: U32}
+  AxleLimit{limit: U32}
+  LengthLimit{limit: U32}
+  HeightLimit{limit: U32}
+  WidthLimit{limit: U32}
+  DimensionLimit{width: U32, length: U32, height: U32, axle: U32}
+  EndOfRestriction{}
+
+# ---------------------------------------------------------------------------
 # Driving licences, Perpol 5/2021 Pasal 3 ayat (2), 4, 8
 # ---------------------------------------------------------------------------
 

@@ -30,12 +30,13 @@ about. That is why the fifty behaviour laws each vary a single flag.
 4. **Precedence is explicit.** An officer's direction outranks a signal, a
    signal a sign, a sign a marking, and a marking the general rule.
    `tiers_follow_precedence` checks the catalogue entries that carry those tiers.
-5. **A scenario is one moment.** No history, no following distance, no closing
-   speed. Those need time, and they are out of the slice.
+5. **A scenario is one moment.** No history, no general following distance, no
+   closing speed. Those need time. A posted following-distance sign reads the
+   gap the sign act records, not a trace.
 
 ## Scenario
 
-A scenario is six records, so each constructor stays short enough to read.
+A scenario is six records and a sign act, so each constructor stays short enough to read.
 
 | Group | Fields | Meaning |
 | --- | --- | --- |
@@ -45,8 +46,9 @@ A scenario is six records, so each constructor stays short enough to read.
 | `Motion` | `speed`, `overtaking`, `overtake_side`, `front_signals_right`, `turning`, `indicates_turn`, `changing_lane`, `indicates_lane`, `racing`, `slowing`, `indicates_slow`, `stopping`, `parked_ok`, `emergency_stop`, `emergency_sign`, `leaves_accident`, `modified` | What the vehicle is doing |
 | `Priority` | `oncoming`, `oncoming_room`, `grade`, `yields_to_uphill`, `pedestrian_waiting`, `yields_to_pedestrian`, `yields_to_emergency`, `at_junction`, `yields_right` | Who has right of way |
 | `Papers` | `sim`, `sim_fits`, `stnk`, `kir`, `stops_at_terminal`, `manifest`, `passenger_insurance`, `crew_insurance` | Documents the driver holds |
+| `SignAct` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle` | The posted duty and the actions a sign rule reads |
 
-## The catalogue
+## The rule catalogue
 
 `R.charges` returns ids in ascending order, one per violation found. `months`,
 `days` and `fine` are the statutory maximum: imprisonment and fine in rupiah.
@@ -60,7 +62,7 @@ A scenario is six records, so each constructor stays short enough to read.
 | 5 | On a narrow grade, downhill yields to uphill | Pasal 111 | none stated |
 | 6 | Obey an officer before a signal | Pasal 104 ayat (3) | 1 month, Rp250,000 (Pasal 282) |
 | 7 | Stop at a red light | Pasal 106 ayat (4) huruf c | 2 months, Rp500,000 (Pasal 287 ayat (2)) |
-| 8 | Obey a prohibitive sign | Pasal 106 ayat (4) huruf a | 2 months, Rp500,000 (Pasal 287 ayat (1)) |
+| 8 | Obey a command or prohibition sign, including the duty it posts | Pasal 106 ayat (4) huruf a | 2 months, Rp500,000 (Pasal 287 ayat (1)) |
 | 9 | Obey a road marking | Pasal 106 ayat (4) huruf b | 2 months, Rp500,000 (Pasal 287 ayat (1)) |
 | 10 | Signal before turning | Pasal 112 ayat (1) | 1 month, Rp250,000 (Pasal 294) |
 | 11 | Signal before changing lane | Pasal 112 ayat (2) | 1 month, Rp250,000 (Pasal 295) |
@@ -104,14 +106,42 @@ A scenario is six records, so each constructor stays short enough to read.
 | 49 | Insure the crew | Pasal 237 ayat (2) | 6 months, Rp1,500,000 (Pasal 313) |
 | 50 | Let the priority vehicle through | Pasal 134 | 1 month, Rp250,000 (Pasal 287 ayat (4)) |
 
+## The sign catalogue and its rules
+
+`bend/signs.bend` transcribes every coded sign in PM 13/2014: 347 signs across
+Tabel I to VI, plus the five kinds of papan tambahan. Each entry carries its
+table, its group, its family, the regulation's meaning text, and an ordinal.
+
+A warning or guidance sign posts no duty. Every prohibition and command sign
+posts one operative rule in `rules()`: 109 entries mapping a sign code to a
+`Duty`. `posted(code)` returns that duty, or `NoDuty` for a sign that only
+warns or guides. The adjudicator applies the posted duty at rule 8, so a
+`III-3a` (larangan berhenti) sign charges a driver who stops, and a `III-4b`
+(larangan belok kiri) sign charges a driver who turns left.
+
+`law stopping_at_a_no_stopping_sign_is_charged` is the whole chain: the code
+names the sign, the rule table gives `NoStopping`, and `charges` returns rule 8
+with its two months and Rp500,000.
+
+```text
+law stopping_at_a_no_stopping_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_stopping(M.NoStopping{}, True{}))) == True{} : Bool }
+```
+
+The subject table is coarser than the leaf. A bicycle is the one non-motorized
+vehicle the scenario carries, and a public motor vehicle is the bus; a public
+car is not distinguished. A variable limit of zero means the leaf states the
+number and the model waits for a scenario to supply it.
+
 ## The other instruments
 
-The catalogue is about a driver in a moment. The other seven instruments say
-things a moment cannot express, so each has its own module and its own laws.
+The catalogue is about a driver in a moment. The other instruments say things a
+moment cannot express, so each has its own module and its own laws.
 
 | Module | Instrument | What it models |
 | --- | --- | --- |
-| `model.bend` | PM 111/2015, PM 13/2014, Perpol 5/2021, PP 79/2013 | Speed by zone, sign colours, licence classes and validity, road classes |
+| `model.bend` | PM 111/2015, PM 13/2014, Perpol 5/2021, PP 79/2013 | Speed by zone, sign families and duties, licence classes and validity, road classes |
+| `signs.bend` | PM 13/2014 | Every coded sign, the operative rule each prohibition or command sign posts, supplement kinds |
 | `network.bend` | PP 79/2013, PM 111/2015, PM 13/2014 | Road functions, class dimensions, where a limit may drop, sign placement |
 | `licence.bend` | Perpol 5/2021 | Requirements, health checks, test stages, pass mark, retakes |
 | `vehicle.bend` | UU 22/2009 Bab VII | Type test, periodic test, kit, technical items |
@@ -134,13 +164,14 @@ eight instruments currently run 1..N with no gap.
 
 | Gap | Why it is open | What closes it |
 | --- | --- | --- |
-| Following distance, hazard braking | Needs time, not a moment | A scenario as a short trace instead of a record |
+| General following distance, hazard braking | Needs time, not a moment | A scenario as a short trace instead of a record |
 | Passenger counts beyond 3 | No induction over `Nat` in the current proofs | A recursive lemma over `Nat`, or a bounded domain type |
 | Local limits and signs | Jurisdiction is not a field yet | `jurisdiction` and dated rule packages |
 | The third amendment to UU 22/2009 | Not enacted | New rule package with an effective date, old one kept |
 | Principles, transitions, declarative text | They state no requirement a moment can break | Out of scope by design; see `docs/taxonomy.md` |
 | Articles about permits and tariffs | They bind an operator's paperwork, not a driver | Modelled only where they change what is carried (`service.bend`) |
 | Fines in practice | Court and police practice vary from the statutory maximum | Out of scope; show the statutory maximum and say so |
+| Values printed on a leaf | A length, height, width, following distance or speed sign carries its number on the leaf; the rule table records a variable sign with a limit of zero | A scenario that supplies the number the leaf states |
 
 ## Why Bend
 

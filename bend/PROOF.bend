@@ -10,6 +10,7 @@ import ./vehicle.bend as V
 import ./network.bend as N
 import ./licence.bend as L
 import ./safety.bend as S
+import ./signs.bend as SG
 import ./service.bend as SV
 import ./works.bend as W
 import ./LAWS.bend as Laws
@@ -600,6 +601,338 @@ def Laws.a_national_route_number_is_a_hexagon():
   {==}
 
 def Laws.a_tourism_sign_is_brown():
+  {==}
+
+def Laws.each_sign_table_holds_its_stated_number(t):
+  match t:
+    case SG.Elektronik{}:
+      {==}
+    case SG.Peringatan{}:
+      {==}
+    case SG.Larangan{}:
+      {==}
+    case SG.Perintah{}:
+      {==}
+    case SG.Petunjuk{}:
+      {==}
+    case SG.PeringatanSementara{}:
+      {==}
+    case SG.PapanTambahan{}:
+      {==}
+
+def Laws.the_catalogue_holds_347_signs():
+  {==}
+
+def Laws.the_conventional_tables_hold_283_signs():
+  {==}
+
+def Laws.the_electronic_table_holds_64_piktograms():
+  {==}
+
+def Laws.the_catalogue_has_72_groups():
+  {==}
+
+def Laws.each_sign_group_holds_its_stated_number():
+  {==}
+
+def Laws.every_sign_has_a_meaning():
+  {==}
+
+def Laws.every_sign_code_is_unique():
+  {==}
+
+def Laws.every_sign_sits_in_its_family():
+  {==}
+
+def Laws.the_catalogue_is_numbered_without_a_gap():
+  {==}
+
+def Laws.the_papan_tambahan_has_five_kinds():
+  {==}
+
+def Laws.the_papan_tambahan_is_numbered():
+  {==}
+
+def Laws.the_catalogue_holds_158_warning_signs():
+  {==}
+
+def Laws.the_catalogue_holds_66_prohibition_signs():
+  {==}
+
+def Laws.the_catalogue_holds_43_command_signs():
+  {==}
+
+def Laws.the_catalogue_holds_80_guidance_signs():
+  {==}
+
+def Laws.the_four_families_cover_every_sign():
+  {==}
+
+def Laws.a_prohibition_sign_binds_the_driver():
+  {==}
+
+def Laws.a_command_sign_binds_the_driver():
+  {==}
+
+def Laws.a_warning_sign_states_no_duty():
+  {==}
+
+def Laws.a_guidance_sign_states_no_duty():
+  {==}
+
+def Laws.the_rule_table_holds_109_rules():
+  {==}
+
+def Laws.every_prohibition_or_command_sign_posts_a_rule():
+  {==}
+
+def Laws.every_sign_rule_names_a_catalogued_sign():
+  {==}
+
+def Laws.every_sign_rule_is_unique():
+  {==}
+
+def Laws.a_no_stopping_sign_posts_no_stopping():
+  {==}
+
+def Laws.a_no_parking_sign_posts_no_parking():
+  {==}
+
+def Laws.a_no_left_turn_sign_posts_no_left_turn():
+  {==}
+
+def Laws.a_stop_sign_posts_a_stop():
+  {==}
+
+def Laws.a_give_way_sign_posts_give_way():
+  {==}
+
+def Laws.a_keep_left_sign_posts_keep_left():
+  {==}
+
+def Laws.a_no_entry_sign_posts_no_entry():
+  {==}
+
+def Laws.a_max_speed_sign_posts_50():
+  {==}
+
+def Laws.a_min_speed_sign_posts_50():
+  {==}
+
+def Laws.a_no_right_turn_sign_posts_no_right_turn():
+  {==}
+
+def Laws.a_no_u_turn_sign_posts_no_u_turn():
+  {==}
+
+def Laws.a_no_overtaking_sign_posts_no_overtaking():
+  {==}
+
+def Laws.a_keep_right_sign_posts_keep_right():
+  {==}
+
+def Laws.a_turn_left_sign_posts_turn_left():
+  {==}
+
+def Laws.a_roundabout_sign_posts_roundabout():
+  {==}
+
+def Laws.a_chain_sign_posts_use_chains():
+  {==}
+
+def Laws.a_bus_lane_sign_posts_a_bus_lane():
+  {==}
+
+def Laws.a_warning_sign_posts_no_rule():
+  {==}
+
+def Laws.a_guidance_sign_posts_no_rule():
+  {==}
+
+def Laws.stopping_at_a_no_stopping_sign_is_charged():
+  {==}
+
+def Laws.driving_past_a_no_stopping_sign_is_not_charged():
+  {==}
+
+def Laws.stopping_without_a_no_stopping_sign_is_not_charged():
+  {==}
+
+def Laws.an_emergency_stop_at_a_no_stopping_sign_is_not_charged():
+  {==}
+
+def Laws.a_no_stopping_sign_costs_two_months_and_500000():
+  {==}
+
+def Laws.parking_at_a_no_parking_sign_is_charged():
+  {==}
+
+def Laws.a_brief_stop_at_a_no_parking_sign_is_not_charged():
+  {==}
+
+def Laws.turning_left_at_a_no_left_turn_sign_is_charged():
+  {==}
+
+def Laws.turning_right_at_a_no_left_turn_sign_is_not_charged():
+  {==}
+
+def Laws.turning_back_at_a_no_u_turn_sign_is_charged():
+  {==}
+
+def Laws.overtaking_at_a_no_overtaking_sign_is_charged():
+  {==}
+
+def Laws.not_overtaking_at_a_no_overtaking_sign_is_not_charged():
+  {==}
+
+def Laws.exceeding_a_40_sign_at_50_is_charged():
+  {==}
+
+def Laws.driving_at_30_past_a_40_sign_is_not_charged():
+  {==}
+
+def Laws.driving_below_a_50_minimum_is_charged():
+  {==}
+
+def Laws.driving_at_a_50_minimum_is_not_charged():
+  {==}
+
+def Laws.keeping_right_at_a_keep_left_sign_is_charged():
+  {==}
+
+def Laws.keeping_left_at_a_keep_left_sign_is_not_charged():
+  {==}
+
+def Laws.entering_a_no_car_sign_in_a_car_is_charged():
+  {==}
+
+def Laws.a_truck_may_pass_a_no_car_sign():
+  {==}
+
+def Laws.a_motorcycle_is_charged_at_a_no_motorcycle_sign():
+  {==}
+
+def Laws.a_motorcycle_may_pass_a_non_motorized_ban():
+  {==}
+
+def Laws.a_bicycle_is_charged_at_a_non_motorized_ban():
+  {==}
+
+def Laws.a_car_is_charged_at_a_no_entry_sign():
+  {==}
+
+def Laws.passing_a_stop_sign_without_stopping_is_charged():
+  {==}
+
+def Laws.stopping_at_a_stop_sign_is_not_charged():
+  {==}
+
+def Laws.failing_to_yield_at_a_give_way_sign_is_charged():
+  {==}
+
+def Laws.yielding_at_a_give_way_sign_is_not_charged():
+  {==}
+
+def Laws.driving_without_chains_at_a_chain_sign_is_charged():
+  {==}
+
+def Laws.a_45_tonne_vehicle_at_a_5_tonne_sign_is_charged():
+  {==}
+
+def Laws.a_4_tonne_vehicle_at_a_5_tonne_sign_is_not_charged():
+  {==}
+
+def Laws.a_bus_out_of_its_lane_at_a_bus_lane_sign_is_charged():
+  {==}
+
+def Laws.a_bus_in_its_lane_at_a_bus_lane_sign_is_not_charged():
+  {==}
+
+def Laws.following_20_metres_at_a_50_metre_sign_is_charged():
+  {==}
+
+def Laws.following_60_metres_at_a_50_metre_sign_is_not_charged():
+  {==}
+
+def Laws.a_4_3_metre_vehicle_at_a_4_2_metre_sign_is_charged():
+  {==}
+
+def Laws.a_10_metre_vehicle_at_a_9_metre_sign_is_charged():
+  {==}
+
+def Laws.a_sign_hangs_between_175_and_265_centimetres():
+  {==}
+
+def Laws.an_overhead_sign_hangs_at_least_500_centimetres():
+  {==}
+
+def Laws.a_chevron_hangs_at_120_centimetres():
+  {==}
+
+def Laws.a_warning_sign_stands_before_the_hazard():
+  {==}
+
+def Laws.a_warning_sign_stands_180_metres_before_a_hazard_over_100():
+  {==}
+
+def Laws.a_warning_sign_stands_100_metres_at_100():
+  {==}
+
+def Laws.a_warning_sign_stands_100_metres_before_a_hazard_over_80():
+  {==}
+
+def Laws.a_warning_sign_stands_80_metres_at_80():
+  {==}
+
+def Laws.a_warning_sign_stands_80_metres_before_a_hazard_over_60():
+  {==}
+
+def Laws.a_warning_sign_stands_50_metres_before_a_hazard_at_60():
+  {==}
+
+def Laws.a_parking_ban_runs_30_metres():
+  {==}
+
+def Laws.a_prohibition_starts_where_the_ban_starts():
+  {==}
+
+def Laws.a_command_stands_at_the_start_or_end_of_the_order():
+  {==}
+
+def Laws.a_supplement_sits_5_to_10_centimetres_below_the_leaf():
+  {==}
+
+def Laws.a_supplement_is_twice_as_wide_as_it_is_tall():
+  {==}
+
+def Laws.a_supplement_is_white_with_a_black_border():
+  {==}
+
+def Laws.a_supplement_is_not_allowed_on_five_kinds_of_sign():
+  {==}
+
+def Laws.a_pole_carries_at_most_two_leaves():
+  {==}
+
+def Laws.a_sign_is_maintained_every_six_months():
+  {==}
+
+def Laws.a_sign_is_removed_after_five_years():
+  {==}
+
+def Laws.a_sign_may_not_be_obstructed():
+  {==}
+
+def Laws.a_small_leaf_is_for_30():
+  {==}
+
+def Laws.a_medium_leaf_is_for_60():
+  {==}
+
+def Laws.a_large_leaf_is_for_80():
+  {==}
+
+def Laws.a_very_large_leaf_is_for_more_than_80():
   {==}
 
 def Laws.a_private_car_needs_no_periodic_test():

@@ -63,8 +63,20 @@ type Papers is Data:
   Papers{sim: Bool, sim_fits: Bool, stnk: Bool, kir: Bool, stops_at_terminal: Bool,
          manifest: Bool, passenger_insurance: Bool, crew_insurance: Bool}
 
+# The action a mandatory-direction sign asks for, and the extra facts a sign
+# rule reads that the rest of the scenario does not carry.
+type Turn is Data:
+  NoTurn{}
+  TurnLeft{}
+  TurnRight{}
+  TurnBack{}
+
+type SignAct is Data:
+  SignAct{sign: M.Duty, turn: Turn, parking: Bool, lane_ok: Bool, chains: Bool,
+          following_m: U32, v_width: U32, v_length: U32, v_height: U32, v_axle: U32}
+
 type Scenario is Data:
-  Scenario{road: Road, load: Payload, gear: Equipment, move: Motion, yield: Priority, docs: Papers}
+  Scenario{road: Road, load: Payload, gear: Equipment, move: Motion, yield: Priority, docs: Papers, act: SignAct}
 
 # ---------------------------------------------------------------------------
 # Rule catalogue
@@ -236,6 +248,220 @@ def more_than(count: U32, threshold: U32) -> Bool:
   U32.is_lt(threshold, count)
 
 # ---------------------------------------------------------------------------
+# What a posted sign requires
+#
+# A duty is a rule, not a caption: NoStopping fires when the driver stops,
+# NoLeftTurn when the driver turns left, MaxSpeed when the driver exceeds the
+# posted number. A limit of 0 means the sign states the value on the leaf and
+# the model does not carry it.
+# ---------------------------------------------------------------------------
+
+def turn_is_left(t: Turn) -> Bool:
+  match t:
+    case TurnLeft{}:
+      True{}
+    case _:
+      False{}
+
+def turn_is_right(t: Turn) -> Bool:
+  match t:
+    case TurnRight{}:
+      True{}
+    case _:
+      False{}
+
+def turn_is_back(t: Turn) -> Bool:
+  match t:
+    case TurnBack{}:
+      True{}
+    case _:
+      False{}
+
+def turn_is_straight(t: Turn) -> Bool:
+  match t:
+    case NoTurn{}:
+      True{}
+    case _:
+      False{}
+
+def over_tonnes_if(zero: Bool, limit: U32, kg: U32) -> Bool:
+  match zero:
+    case True{}:
+      False{}
+    case False{}:
+      U32.is_lt(U32.mul(limit, 1000), kg)
+
+def over_tonnes(+limit: U32, kg: U32) -> Bool:
+  over_tonnes_if(U32.is_zero(limit), limit, kg)
+
+def over_metres_if(zero: Bool, limit: U32, mm: U32) -> Bool:
+  match zero:
+    case True{}:
+      False{}
+    case False{}:
+      U32.is_lt(U32.mul(limit, 1000), mm)
+
+def over_metres(+limit: U32, mm: U32) -> Bool:
+  over_metres_if(U32.is_zero(limit), limit, mm)
+
+def over_speed_if(zero: Bool, limit: U32, speed: U32) -> Bool:
+  match zero:
+    case True{}:
+      False{}
+    case False{}:
+      U32.is_lt(limit, speed)
+
+def over_speed(+limit: U32, speed: U32) -> Bool:
+  over_speed_if(U32.is_zero(limit), limit, speed)
+
+def close_following_if(zero: Bool, metres: U32, actual: U32) -> Bool:
+  match zero:
+    case True{}:
+      False{}
+    case False{}:
+      U32.is_lt(actual, metres)
+
+def close_following(+metres: U32, actual: U32) -> Bool:
+  close_following_if(U32.is_zero(metres), metres, actual)
+
+def subject_tag(s: M.Subject) -> U32:
+  match s:
+    case M.Any{}:
+      0
+    case M.Motorcycle{}:
+      1
+    case M.Car{}:
+      2
+    case M.Truck{}:
+      3
+    case M.Bus{}:
+      4
+    case M.Public{}:
+      5
+    case M.Special{}:
+      6
+    case M.Trailer{}:
+      7
+    case M.ThreeWheel{}:
+      8
+    case M.Bicycle{}:
+      9
+    case M.Pedestrian{}:
+      10
+    case M.Cart{}:
+      11
+    case M.Becak{}:
+      12
+    case M.Pedati{}:
+      13
+    case M.Delman{}:
+      14
+    case M.HorseRider{}:
+      15
+    case M.NonMotorized{}:
+      16
+
+# A bicycle is the one non-motorized vehicle the scenario can carry, and a
+# public motor vehicle is the bus.
+def subject_bans_tag(v: Vehicle, +tag: U32) -> Bool:
+  match v:
+    case Motorcycle{}:
+      U32.is_eq(tag, 1)
+    case Car{}:
+      U32.is_eq(tag, 2)
+    case Truck{}:
+      U32.is_eq(tag, 3)
+    case Bus{}:
+      Bool.or(U32.is_eq(tag, 4), U32.is_eq(tag, 5))
+    case Bicycle{}:
+      Bool.or(U32.is_eq(tag, 9), U32.is_eq(tag, 16))
+
+def subject_bans_one(v: Vehicle, s: M.Subject) -> Bool:
+  match s:
+    case M.Any{}:
+      True{}
+    case _:
+      subject_bans_tag(v, subject_tag(s))
+
+def subject_banned(+v: Vehicle, subjects: List<&2, M.Subject>) -> Bool:
+  match subjects:
+    case Nil{}:
+      False{}
+    case h <> t:
+      Bool.or(subject_bans_one(v, h), subject_banned(v, t))
+
+def lane_violation(v: Vehicle, s: M.Subject, ok: Bool) -> Bool:
+  Bool.and(subject_bans_one(v, s), Bool.not(ok))
+
+def sign_violated(act: SignAct, side: Side, speed: U32, overtaking: Bool, stopping: Bool,
+                  emergency_stop: Bool, yields_right: Bool, vehicle: Vehicle, weight: U32) -> Bool:
+  match act:
+    case SignAct{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle}:
+      match sign:
+        case M.NoDuty{}:
+          False{}
+        case M.Stop{}:
+          Bool.not(stopping)
+        case M.GiveWay{}:
+          Bool.not(yields_right)
+        case M.NoEntry{subjects}:
+          subject_banned(vehicle, subjects)
+        case M.NoStopping{}:
+          Bool.and(Bool.or(stopping, parking), Bool.not(emergency_stop))
+        case M.NoParking{}:
+          parking
+        case M.NoLeftTurn{}:
+          turn_is_left(turn)
+        case M.NoRightTurn{}:
+          turn_is_right(turn)
+        case M.NoUTurn{}:
+          turn_is_back(turn)
+        case M.NoUTurnOrRight{}:
+          Bool.or(turn_is_back(turn), turn_is_right(turn))
+        case M.NoOvertaking{}:
+          overtaking
+        case M.NoCloseFollowing{metres}:
+          close_following(metres, following_m)
+        case M.MaxSpeed{limit}:
+          over_speed(limit, speed)
+        case M.MinSpeed{limit}:
+          U32.is_lt(speed, limit)
+        case M.KeepLeft{}:
+          side_is_right(side)
+        case M.KeepRight{}:
+          side_is_left(side)
+        case M.TurnLeft{}:
+          Bool.not(turn_is_left(turn))
+        case M.TurnRight{}:
+          Bool.not(turn_is_right(turn))
+        case M.GoStraight{}:
+          Bool.not(turn_is_straight(turn))
+        case M.ChoosePath{}:
+          turn_is_back(turn)
+        case M.Roundabout{}:
+          Bool.not(yields_right)
+        case M.UseLane{subject}:
+          lane_violation(vehicle, subject, lane_ok)
+        case M.UseChains{}:
+          Bool.not(chains)
+        case M.WeightLimit{limit}:
+          over_tonnes(limit, weight)
+        case M.AxleLimit{limit}:
+          over_tonnes(limit, v_axle)
+        case M.LengthLimit{limit}:
+          over_metres(limit, v_length)
+        case M.HeightLimit{limit}:
+          over_metres(limit, v_height)
+        case M.WidthLimit{limit}:
+          over_metres(limit, v_width)
+        case M.DimensionLimit{width, length, height, axle}:
+          Bool.or(U32.is_lt(width, v_width),
+          Bool.or(U32.is_lt(length, v_length),
+          Bool.or(U32.is_lt(height, v_height), U32.is_lt(U32.mul(axle, 1000), v_axle))))
+        case M.EndOfRestriction{}:
+          False{}
+
+# ---------------------------------------------------------------------------
 # Charges, one group per part of the statute. Ids stay in ascending order
 # across the concatenation.
 # ---------------------------------------------------------------------------
@@ -250,8 +476,9 @@ def pick(bs: List<Bool>, +next: U32) -> List<U32>:
 
 def charges_road(s: Scenario) -> List<U32>:
   match s:
-    case Scenario{road, load, gear, move, yield, docs}:
+    case Scenario{road, load, gear, move, yield, docs, act}:
       Road{+zone, +side, +police_directs, +obeys_officer, +signal_red, +sign_forbids, +marking_forbids, +railway_crossing, +crossing_closed, +roundabout, +emergency_vehicle, +goods_route_ok} = road
+      Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
       Priority{+oncoming, +oncoming_room, +grade, +yields_to_uphill, +pedestrian_waiting, +yields_to_pedestrian, +yields_to_emergency, +at_junction, +yields_right} = yield
       pick([
@@ -262,13 +489,13 @@ def charges_road(s: Scenario) -> List<U32>:
         Bool.and(grade_is_downhill(grade), Bool.not(yields_to_uphill)),
         Bool.and(police_directs, Bool.not(obeys_officer)),
         signal_red,
-        sign_forbids,
+        Bool.or(sign_forbids, sign_violated(act, side, speed, overtaking, stopping, emergency_stop, yields_right, vehicle, weight)),
         marking_forbids,
       ], 1)
 
 def charges_driver(s: Scenario) -> List<U32>:
   match s:
-    case Scenario{road, load, gear, move, yield, docs}:
+    case Scenario{road, load, gear, move, yield, docs, act}:
       Road{+zone, +side, +police_directs, +obeys_officer, +signal_red, +sign_forbids, +marking_forbids, +railway_crossing, +crossing_closed, +roundabout, +emergency_vehicle, +goods_route_ok} = road
       Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Equipment{+rider_helmet, +passenger_helmet, +seatbelt, +cabin, +night, +lights_on, +phone, +technical, +roadworthy, +spare_kit, +plate, +interference, +holds_vehicle} = gear
@@ -297,7 +524,7 @@ def charges_driver(s: Scenario) -> List<U32>:
 
 def charges_event(s: Scenario) -> List<U32>:
   match s:
-    case Scenario{road, load, gear, move, yield, docs}:
+    case Scenario{road, load, gear, move, yield, docs, act}:
       Road{+zone, +side, +police_directs, +obeys_officer, +signal_red, +sign_forbids, +marking_forbids, +railway_crossing, +crossing_closed, +roundabout, +emergency_vehicle, +goods_route_ok} = road
       Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
       Priority{+oncoming, +oncoming_room, +grade, +yields_to_uphill, +pedestrian_waiting, +yields_to_pedestrian, +yields_to_emergency, +at_junction, +yields_right} = yield
@@ -314,7 +541,7 @@ def charges_event(s: Scenario) -> List<U32>:
 
 def charges_vehicle(s: Scenario) -> List<U32>:
   match s:
-    case Scenario{road, load, gear, move, yield, docs}:
+    case Scenario{road, load, gear, move, yield, docs, act}:
       Road{+zone, +side, +police_directs, +obeys_officer, +signal_red, +sign_forbids, +marking_forbids, +railway_crossing, +crossing_closed, +roundabout, +emergency_vehicle, +goods_route_ok} = road
       Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Equipment{+rider_helmet, +passenger_helmet, +seatbelt, +cabin, +night, +lights_on, +phone, +technical, +roadworthy, +spare_kit, +plate, +interference, +holds_vehicle} = gear
@@ -335,7 +562,7 @@ def charges_vehicle(s: Scenario) -> List<U32>:
 
 def charges_service(s: Scenario) -> List<U32>:
   match s:
-    case Scenario{road, load, gear, move, yield, docs}:
+    case Scenario{road, load, gear, move, yield, docs, act}:
       Road{+zone, +side, +police_directs, +obeys_officer, +signal_red, +sign_forbids, +marking_forbids, +railway_crossing, +crossing_closed, +roundabout, +emergency_vehicle, +goods_route_ok} = road
       Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
@@ -470,26 +697,31 @@ def clean_yield() -> Priority:
 def clean_docs() -> Papers:
   Papers{True{}, True{}, True{}, True{}, True{}, True{}, True{}, True{}}
 
+# No posted sign, no turn, a car-sized vehicle, and every lane and chain duty
+# satisfied. A sign scenario changes the one field its rule reads.
+def clean_act() -> SignAct:
+  SignAct{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+
 def clean_car() -> Scenario:
-  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs()}
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def bike(passengers: U32, +rider_helmet: Bool, +pillion_helmet: Bool) -> Scenario:
   Scenario{clean_road(),
            Payload{Motorcycle{}, 200, 150, passengers, False{}, False{}, False{}, False{}, True{}},
            Equipment{rider_helmet, pillion_helmet, True{}, False{}, False{}, True{}, False{}, True{}, True{}, True{}, True{}, False{}, False{}},
-           clean_move(), clean_yield(), clean_docs()}
+           clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def car_red_light_phone() -> Scenario:
   Scenario{Road{M.Urban{}, Left{}, False{}, True{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, True{}},
            clean_load(),
            Equipment{True{}, True{}, False{}, True{}, False{}, True{}, True{}, True{}, True{}, True{}, True{}, False{}, False{}},
-           clean_move(), clean_yield(), clean_docs()}
+           clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def car_speeding() -> Scenario:
   Scenario{Road{M.Residential{}, Left{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, False{}, True{}},
            clean_load(), clean_gear(),
            Motion{45, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, False{}, False{}},
-           clean_yield(), clean_docs()}
+           clean_yield(), clean_docs(), clean_act()}
 
 def bike_night_downhill() -> Scenario:
   Scenario{clean_road(),
@@ -497,41 +729,41 @@ def bike_night_downhill() -> Scenario:
            Equipment{True{}, True{}, True{}, False{}, True{}, False{}, False{}, True{}, True{}, True{}, True{}, False{}, False{}},
            clean_move(),
            Priority{False{}, True{}, Downhill{}, False{}, True{}, False{}, True{}, False{}, True{}},
-           clean_docs()}
+           clean_docs(), clean_act()}
 
 def car_right_lane() -> Scenario:
   Scenario{Road{M.Urban{}, Right{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, False{}, True{}},
-           clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs()}
+           clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def car_overtake_left() -> Scenario:
   Scenario{clean_road(), clean_load(), clean_gear(),
            Motion{50, True{}, Left{}, True{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, False{}, False{}},
-           clean_yield(), clean_docs()}
+           clean_yield(), clean_docs(), clean_act()}
 
 def car_turning_no_docs() -> Scenario:
   Scenario{clean_road(), clean_load(), clean_gear(),
            Motion{30, False{}, Right{}, False{}, True{}, False{}, False{}, True{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, False{}, False{}},
            clean_yield(),
-           Papers{False{}, True{}, False{}, True{}, True{}, True{}, True{}, True{}}}
+           Papers{False{}, True{}, False{}, True{}, True{}, True{}, True{}, True{}}, clean_act()}
 def bike_passengers(p: U32) -> Scenario:
   Scenario{clean_road(),
            Payload{Motorcycle{}, 200, 150, p, False{}, False{}, False{}, False{}, True{}},
-           clean_gear(), clean_move(), clean_yield(), clean_docs()}
+           clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 def truck_overloaded() -> Scenario:
   Scenario{clean_road(),
            Payload{Truck{}, 8000, 0, 0, False{}, True{}, False{}, False{}, True{}},
-           clean_gear(), clean_move(), clean_yield(), clean_docs()}
+           clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def bus_uninsured() -> Scenario:
   Scenario{clean_road(),
            Payload{Bus{}, 9000, 0, 12, False{}, False{}, False{}, False{}, True{}},
            clean_gear(), clean_move(), clean_yield(),
-           Papers{True{}, True{}, True{}, True{}, True{}, True{}, False{}, False{}}}
+           Papers{True{}, True{}, True{}, True{}, True{}, True{}, False{}, False{}}, clean_act()}
 
 def truck_carrying_people() -> Scenario:
   Scenario{clean_road(),
            Payload{Truck{}, 8000, 0, 3, False{}, False{}, True{}, False{}, True{}},
-           clean_gear(), clean_move(), clean_yield(), clean_docs()}
+           clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def Bool.same(a: Bool, b: Bool) -> Bool:
   match a b:
@@ -657,22 +889,22 @@ def rule_count() -> Nat:
 # ---------------------------------------------------------------------------
 
 def with_road(r: Road) -> Scenario:
-  Scenario{r, clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs()}
+  Scenario{r, clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def with_load(l: Payload) -> Scenario:
-  Scenario{clean_road(), l, clean_gear(), clean_move(), clean_yield(), clean_docs()}
+  Scenario{clean_road(), l, clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def with_gear(g: Equipment) -> Scenario:
-  Scenario{clean_road(), clean_load(), g, clean_move(), clean_yield(), clean_docs()}
+  Scenario{clean_road(), clean_load(), g, clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def with_move(m: Motion) -> Scenario:
-  Scenario{clean_road(), clean_load(), clean_gear(), m, clean_yield(), clean_docs()}
+  Scenario{clean_road(), clean_load(), clean_gear(), m, clean_yield(), clean_docs(), clean_act()}
 
 def with_priority(p: Priority) -> Scenario:
-  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), p, clean_docs()}
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), p, clean_docs(), clean_act()}
 
 def with_docs(d: Papers) -> Scenario:
-  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), d}
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), d, clean_act()}
 
 # Road knobs
 def road_side(s: Side) -> Road:
@@ -754,6 +986,10 @@ def move_stopping(on: Bool, ok: Bool) -> Motion:
 def move_stop_emergency(on: Bool, sign: Bool) -> Motion:
   Motion{40, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, False{}, True{}, on, sign, False{}, False{}}
 
+def move_stopping_emergency(on: Bool, emergency: Bool) -> Motion:
+  Motion{40, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, on, True{}, emergency, True{}, False{}, False{}}
+
+
 def move_accident(leaves: Bool) -> Motion:
   Motion{40, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, leaves, False{}}
 
@@ -777,7 +1013,7 @@ def pri_junction(at: Bool, yields: Bool) -> Priority:
 # the roundabout flag on the road and the give-way flag on the priority.
 def with_junction(at: Bool, round: Bool, yields: Bool) -> Scenario:
   Scenario{Road{M.Urban{}, Left{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, round, False{}, True{}},
-           clean_load(), clean_gear(), clean_move(), pri_junction(at, yields), clean_docs()}
+           clean_load(), clean_gear(), clean_move(), pri_junction(at, yields), clean_docs(), clean_act()}
 
 def pri_emergency(yields: Bool) -> Priority:
   Priority{False{}, True{}, Flat{}, True{}, False{}, True{}, yields, False{}, True{}}
@@ -785,7 +1021,7 @@ def pri_emergency(yields: Bool) -> Priority:
 # The priority vehicle arrives on the road; the driver answers with a yield.
 def with_emergency(comes: Bool, yields: Bool) -> Scenario:
   Scenario{Road{M.Urban{}, Left{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, comes, True{}},
-           clean_load(), clean_gear(), clean_move(), pri_emergency(yields), clean_docs()}
+           clean_load(), clean_gear(), clean_move(), pri_emergency(yields), clean_docs(), clean_act()}
 
 # Papers knobs
 def docs_sim(ok: Bool) -> Papers:
@@ -798,42 +1034,115 @@ def docs_kir(ok: Bool) -> Papers:
   Papers{True{}, True{}, True{}, ok, True{}, True{}, True{}, True{}}
 def with_bike(passengers: U32, rider: Bool, pillion: Bool) -> Scenario:
   Scenario{clean_road(), load_motorcycle(passengers), gear_helmet(rider, pillion),
-           clean_move(), clean_yield(), clean_docs()}
+           clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def with_bike_technical(ok: Bool) -> Scenario:
   Scenario{clean_road(), load_motorcycle(0),
            Equipment{True{}, True{}, True{}, False{}, False{}, True{}, False{}, ok, True{}, True{}, True{}, False{}, False{}},
-           clean_move(), clean_yield(), clean_docs()}
+           clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def with_bicycle(holds: Bool) -> Scenario:
   Scenario{clean_road(), load_vehicle(Bicycle{}),
            Equipment{True{}, True{}, True{}, False{}, False{}, True{}, False{}, True{}, True{}, True{}, True{}, False{}, holds},
-           clean_move(), clean_yield(), clean_docs()}
+           clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def with_truck_route(ok: Bool) -> Scenario:
   Scenario{Road{M.Urban{}, Left{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, False{}, ok},
-           load_vehicle(Truck{}), clean_gear(), clean_move(), clean_yield(), clean_docs()}
+           load_vehicle(Truck{}), clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
 
 def with_truck_manifest(ok: Bool) -> Scenario:
   Scenario{clean_road(), load_vehicle(Truck{}), clean_gear(), clean_move(), clean_yield(),
-           Papers{True{}, True{}, True{}, True{}, True{}, ok, True{}, True{}}}
+           Papers{True{}, True{}, True{}, True{}, True{}, ok, True{}, True{}}, clean_act()}
 
 def with_bus_stop(ok: Bool) -> Scenario:
   Scenario{clean_road(), load_vehicle(Bus{}), clean_gear(),
-           move_stopping(True{}, ok), clean_yield(), clean_docs()}
+           move_stopping(True{}, ok), clean_yield(), clean_docs(), clean_act()}
 
 def with_bus_terminal(ok: Bool) -> Scenario:
   Scenario{clean_road(), load_vehicle(Bus{}), clean_gear(), clean_move(), clean_yield(),
-           Papers{True{}, True{}, True{}, True{}, ok, True{}, True{}, True{}}}
+           Papers{True{}, True{}, True{}, True{}, ok, True{}, True{}, True{}}, clean_act()}
 
 def with_bus_insurance(passengers: Bool, crew: Bool) -> Scenario:
   Scenario{clean_road(), load_vehicle(Bus{}), clean_gear(), clean_move(), clean_yield(),
-           Papers{True{}, True{}, True{}, True{}, True{}, True{}, passengers, crew}}
+           Papers{True{}, True{}, True{}, True{}, True{}, True{}, passengers, crew}, clean_act()}
 
 def with_bike_lights(on: Bool) -> Scenario:
   Scenario{clean_road(), load_motorcycle(0),
            Equipment{True{}, True{}, True{}, False{}, False{}, on, False{}, True{}, True{}, True{}, True{}, False{}, False{}},
-           clean_move(), clean_yield(), clean_docs()}
+           clean_move(), clean_yield(), clean_docs(), clean_act()}
+
+# Sign knobs. Each builder posts one duty and leaves every other action lawful,
+# so the verdict isolates the rule the sign states.
+def act_sign(d: M.Duty) -> SignAct:
+  SignAct{d, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+
+def act_parking(d: M.Duty, on: Bool) -> SignAct:
+  SignAct{d, NoTurn{}, on, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+
+def act_turn(d: M.Duty, t: Turn) -> SignAct:
+  SignAct{d, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+
+def act_chains(d: M.Duty, on: Bool) -> SignAct:
+  SignAct{d, NoTurn{}, False{}, True{}, on, 100, 1800, 4500, 1500, 1500}
+
+def act_lane(d: M.Duty, ok: Bool) -> SignAct:
+  SignAct{d, NoTurn{}, False{}, ok, True{}, 100, 1800, 4500, 1500, 1500}
+
+def act_following(d: M.Duty, metres: U32) -> SignAct:
+  SignAct{d, NoTurn{}, False{}, True{}, True{}, metres, 1800, 4500, 1500, 1500}
+
+def act_size(d: M.Duty, width: U32, length: U32, height: U32, axle: U32) -> SignAct:
+  SignAct{d, NoTurn{}, False{}, True{}, True{}, 100, width, length, height, axle}
+
+def sign_car(d: M.Duty) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_stopping(d: M.Duty, on: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), move_stopping(on, True{}), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_stopping_emergency(d: M.Duty, on: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), move_stopping_emergency(on, True{}), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_parking(d: M.Duty, on: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_parking(d, on)}
+
+def sign_turn(d: M.Duty, t: Turn) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_turn(d, t)}
+
+def sign_speed(d: M.Duty, v: U32) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), move_speed(v), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_side(d: M.Duty, s: Side) -> Scenario:
+  Scenario{road_side(s), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_vehicle(d: M.Duty, v: Vehicle) -> Scenario:
+  Scenario{clean_road(), load_vehicle(v), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_chains(d: M.Duty, on: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_chains(d, on)}
+
+def sign_lane(d: M.Duty, ok: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_lane(d, ok)}
+
+def sign_following(d: M.Duty, metres: U32) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_following(d, metres)}
+
+def sign_size(d: M.Duty, width: U32, length: U32, height: U32, axle: U32) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_size(d, width, length, height, axle)}
+
+def sign_overtaking(d: M.Duty, on: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), move_overtake(on, Right{}, False{}), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_priority(d: M.Duty, yields: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), pri_junction(False{}, yields), clean_docs(), act_sign(d)}
+
+def sign_weight(d: M.Duty, weight: U32) -> Scenario:
+  Scenario{clean_road(),
+           Payload{Car{}, weight, 0, 0, False{}, False{}, False{}, False{}, True{}},
+           clean_gear(), clean_move(), clean_yield(), clean_docs(), act_sign(d)}
+
+def sign_lane_vehicle(d: M.Duty, v: Vehicle, ok: Bool) -> Scenario:
+  Scenario{clean_road(), load_vehicle(v), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_lane(d, ok)}
 
 # ---------------------------------------------------------------------------
 # Precedence and completeness

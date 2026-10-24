@@ -11,6 +11,7 @@ import ./vehicle.bend as V
 import ./network.bend as N
 import ./licence.bend as L
 import ./safety.bend as S
+import ./signs.bend as SG
 import ./service.bend as SV
 import ./works.bend as W
 
@@ -488,6 +489,338 @@ law a_national_route_number_is_a_hexagon:
 
 law a_tourism_sign_is_brown:
   { M.same_colour(N.tourism_base_is_brown(), M.Brown{}) == True{} : Bool }
+
+# ---------------------------------------------------------------------------
+# PM 13/2014 — the catalogue: every sign the seven Lampiran tables list
+# ---------------------------------------------------------------------------
+
+law the_catalogue_holds_347_signs:
+  { SG.sign_count() == 347 : U32 }
+
+law the_conventional_tables_hold_283_signs:
+  { SG.conventional_count() == 283 : U32 }
+
+law the_electronic_table_holds_64_piktograms:
+  { SG.count_table(SG.Elektronik{}, SG.signs()) == 64 : U32 }
+
+law each_sign_table_holds_its_stated_number:
+  for t: SG.Table
+  { SG.count_table(t, SG.signs()) == SG.table_size(t) : U32 }
+
+law the_catalogue_has_72_groups:
+  { SG.group_count() == 72 : U32 }
+
+law each_sign_group_holds_its_stated_number:
+  { SG.groups_sized(SG.groups(), SG.signs()) == True{} : Bool }
+
+law every_sign_has_a_meaning:
+  { SG.all_meaningful(SG.signs()) == True{} : Bool }
+
+law every_sign_code_is_unique:
+  { SG.no_duplicate_codes(SG.signs()) == True{} : Bool }
+
+law every_sign_sits_in_its_family:
+  { SG.all_family_ok(SG.signs()) == True{} : Bool }
+
+law the_catalogue_is_numbered_without_a_gap:
+  { SG.numbered(SG.signs(), 1) == True{} : Bool }
+
+law the_papan_tambahan_has_five_kinds:
+  { SG.supplement_count() == 5 : U32 }
+
+law the_papan_tambahan_is_numbered:
+  { SG.supplements_numbered(SG.supplements(), 1) == True{} : Bool }
+
+law the_catalogue_holds_158_warning_signs:
+  { SG.warning_count() == 158 : U32 }
+
+law the_catalogue_holds_66_prohibition_signs:
+  { SG.prohibition_count() == 66 : U32 }
+
+law the_catalogue_holds_43_command_signs:
+  { SG.command_count() == 43 : U32 }
+
+law the_catalogue_holds_80_guidance_signs:
+  { SG.guidance_count() == 80 : U32 }
+
+law the_four_families_cover_every_sign:
+  { U32.add(SG.warning_count(), U32.add(SG.prohibition_count(), U32.add(SG.command_count(), SG.guidance_count()))) == SG.sign_count() : U32 }
+
+law a_prohibition_sign_binds_the_driver:
+  { SG.binds_driver(M.Prohibition{}) == True{} : Bool }
+
+law a_command_sign_binds_the_driver:
+  { SG.binds_driver(M.Command{}) == True{} : Bool }
+
+law a_warning_sign_states_no_duty:
+  { SG.binds_driver(M.Warning{}) == False{} : Bool }
+
+law a_guidance_sign_states_no_duty:
+  { SG.binds_driver(M.Guidance{}) == False{} : Bool }
+
+# ---------------------------------------------------------------------------
+# PM 13/2014 — the operative rule each sign posts, and the charge it produces
+# ---------------------------------------------------------------------------
+
+law the_rule_table_holds_109_rules:
+  { SG.rule_count() == 109 : U32 }
+
+law every_prohibition_or_command_sign_posts_a_rule:
+  { SG.binding_rules_ok(SG.signs(), SG.rules()) == True{} : Bool }
+
+law every_sign_rule_names_a_catalogued_sign:
+  { SG.rules_catalogued(SG.rules(), SG.signs()) == True{} : Bool }
+
+law every_sign_rule_is_unique:
+  { SG.rule_codes_unique(SG.rules()) == True{} : Bool }
+
+law a_no_stopping_sign_posts_no_stopping:
+  { SG.is_no_stopping(SG.posted("III-3a")) == True{} : Bool }
+
+law a_no_parking_sign_posts_no_parking:
+  { SG.is_no_parking(SG.posted("III-3b")) == True{} : Bool }
+
+law a_no_left_turn_sign_posts_no_left_turn:
+  { SG.is_no_left_turn(SG.posted("III-4b")) == True{} : Bool }
+
+law a_stop_sign_posts_a_stop:
+  { SG.is_stop(SG.posted("III-1a")) == True{} : Bool }
+
+law a_give_way_sign_posts_give_way:
+  { SG.is_give_way(SG.posted("III-1b")) == True{} : Bool }
+
+law a_keep_left_sign_posts_keep_left:
+  { SG.is_keep_left(SG.posted("IV-1a")) == True{} : Bool }
+
+law a_no_entry_sign_posts_no_entry:
+  { SG.is_no_entry(SG.posted("III-2a1")) == True{} : Bool }
+
+law a_max_speed_sign_posts_50:
+  { SG.max_speed_limit(SG.posted("III-4h")) == 50 : U32 }
+
+law a_min_speed_sign_posts_50:
+  { SG.min_speed_limit(SG.posted("IV-4")) == 50 : U32 }
+
+law a_no_right_turn_sign_posts_no_right_turn:
+  { SG.same_duty_kind(SG.posted("III-4c"), M.NoRightTurn{}) == True{} : Bool }
+
+law a_no_u_turn_sign_posts_no_u_turn:
+  { SG.same_duty_kind(SG.posted("III-4e"), M.NoUTurn{}) == True{} : Bool }
+
+law a_no_overtaking_sign_posts_no_overtaking:
+  { SG.same_duty_kind(SG.posted("III-4d"), M.NoOvertaking{}) == True{} : Bool }
+
+law a_keep_right_sign_posts_keep_right:
+  { SG.same_duty_kind(SG.posted("IV-1b"), M.KeepRight{}) == True{} : Bool }
+
+law a_turn_left_sign_posts_turn_left:
+  { SG.same_duty_kind(SG.posted("IV-1c"), M.TurnLeft{}) == True{} : Bool }
+
+law a_roundabout_sign_posts_roundabout:
+  { SG.same_duty_kind(SG.posted("IV-1f"), M.Roundabout{}) == True{} : Bool }
+
+law a_chain_sign_posts_use_chains:
+  { SG.same_duty_kind(SG.posted("IV-5"), M.UseChains{}) == True{} : Bool }
+
+law a_bus_lane_sign_posts_a_bus_lane:
+  { SG.same_duty_kind(SG.posted("IV-6a2"), M.UseLane{M.Bus{}}) == True{} : Bool }
+
+law a_warning_sign_posts_no_rule:
+  { SG.is_no_duty(SG.posted("II-1a")) == True{} : Bool }
+
+law a_guidance_sign_posts_no_rule:
+  { SG.is_no_duty(SG.posted("V-1a")) == True{} : Bool }
+
+law stopping_at_a_no_stopping_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_stopping(M.NoStopping{}, True{}))) == True{} : Bool }
+
+law driving_past_a_no_stopping_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_stopping(M.NoStopping{}, False{}))) == False{} : Bool }
+
+law stopping_without_a_no_stopping_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_stopping(M.NoDuty{}, True{}))) == False{} : Bool }
+
+law an_emergency_stop_at_a_no_stopping_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_stopping_emergency(M.NoStopping{}, True{}))) == False{} : Bool }
+
+law a_no_stopping_sign_costs_two_months_and_500000:
+  { Bool.and(R.contains(8, R.charges(R.sign_stopping(M.NoStopping{}, True{}))),
+             Bool.and(U32.is_eq(R.months_of(8), 2), U32.is_eq(R.fine_of(8), 500000))) == True{} : Bool }
+
+law parking_at_a_no_parking_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_parking(M.NoParking{}, True{}))) == True{} : Bool }
+
+law a_brief_stop_at_a_no_parking_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_parking(M.NoParking{}, False{}))) == False{} : Bool }
+
+law turning_left_at_a_no_left_turn_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_turn(M.NoLeftTurn{}, R.TurnLeft{}))) == True{} : Bool }
+
+law turning_right_at_a_no_left_turn_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_turn(M.NoLeftTurn{}, R.TurnRight{}))) == False{} : Bool }
+
+law turning_back_at_a_no_u_turn_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_turn(M.NoUTurn{}, R.TurnBack{}))) == True{} : Bool }
+
+law overtaking_at_a_no_overtaking_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_overtaking(M.NoOvertaking{}, True{}))) == True{} : Bool }
+
+law not_overtaking_at_a_no_overtaking_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_overtaking(M.NoOvertaking{}, False{}))) == False{} : Bool }
+
+law exceeding_a_40_sign_at_50_is_charged:
+  { R.contains(8, R.charges(R.sign_speed(M.MaxSpeed{40}, 50))) == True{} : Bool }
+
+law driving_at_30_past_a_40_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_speed(M.MaxSpeed{40}, 30))) == False{} : Bool }
+
+law driving_below_a_50_minimum_is_charged:
+  { R.contains(8, R.charges(R.sign_speed(M.MinSpeed{50}, 40))) == True{} : Bool }
+
+law driving_at_a_50_minimum_is_not_charged:
+  { R.contains(8, R.charges(R.sign_speed(M.MinSpeed{50}, 50))) == False{} : Bool }
+
+law keeping_right_at_a_keep_left_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_side(M.KeepLeft{}, R.Right{}))) == True{} : Bool }
+
+law keeping_left_at_a_keep_left_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_side(M.KeepLeft{}, R.Left{}))) == False{} : Bool }
+
+law entering_a_no_car_sign_in_a_car_is_charged:
+  { R.contains(8, R.charges(R.sign_vehicle(M.NoEntry{[M.Car{}]}, R.Car{}))) == True{} : Bool }
+
+law a_truck_may_pass_a_no_car_sign:
+  { R.contains(8, R.charges(R.sign_vehicle(M.NoEntry{[M.Car{}]}, R.Truck{}))) == False{} : Bool }
+
+law a_motorcycle_is_charged_at_a_no_motorcycle_sign:
+  { R.contains(8, R.charges(R.sign_vehicle(M.NoEntry{[M.Motorcycle{}]}, R.Motorcycle{}))) == True{} : Bool }
+
+law a_motorcycle_may_pass_a_non_motorized_ban:
+  { R.contains(8, R.charges(R.sign_vehicle(M.NoEntry{[M.NonMotorized{}]}, R.Motorcycle{}))) == False{} : Bool }
+
+law a_bicycle_is_charged_at_a_non_motorized_ban:
+  { R.contains(8, R.charges(R.sign_vehicle(M.NoEntry{[M.NonMotorized{}]}, R.Bicycle{}))) == True{} : Bool }
+
+law a_car_is_charged_at_a_no_entry_sign:
+  { R.contains(8, R.charges(R.sign_vehicle(M.NoEntry{[M.Any{}]}, R.Car{}))) == True{} : Bool }
+
+law passing_a_stop_sign_without_stopping_is_charged:
+  { R.contains(8, R.charges(R.sign_stopping(M.Stop{}, False{}))) == True{} : Bool }
+
+law stopping_at_a_stop_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_stopping(M.Stop{}, True{}))) == False{} : Bool }
+
+law failing_to_yield_at_a_give_way_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_priority(M.GiveWay{}, False{}))) == True{} : Bool }
+
+law yielding_at_a_give_way_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_priority(M.GiveWay{}, True{}))) == False{} : Bool }
+
+law driving_without_chains_at_a_chain_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_chains(M.UseChains{}, False{}))) == True{} : Bool }
+
+law a_45_tonne_vehicle_at_a_5_tonne_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_weight(M.WeightLimit{5}, 45000))) == True{} : Bool }
+
+law a_4_tonne_vehicle_at_a_5_tonne_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_weight(M.WeightLimit{5}, 4000))) == False{} : Bool }
+
+law a_bus_out_of_its_lane_at_a_bus_lane_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_lane_vehicle(M.UseLane{M.Bus{}}, R.Bus{}, False{}))) == True{} : Bool }
+
+law a_bus_in_its_lane_at_a_bus_lane_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_lane_vehicle(M.UseLane{M.Bus{}}, R.Bus{}, True{}))) == False{} : Bool }
+
+law following_20_metres_at_a_50_metre_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_following(M.NoCloseFollowing{50}, 20))) == True{} : Bool }
+
+law following_60_metres_at_a_50_metre_sign_is_not_charged:
+  { R.contains(8, R.charges(R.sign_following(M.NoCloseFollowing{50}, 60))) == False{} : Bool }
+
+law a_4_3_metre_vehicle_at_a_4_2_metre_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_size(M.DimensionLimit{2500, 18000, 4200, 10}, 1800, 4500, 4300, 1500))) == True{} : Bool }
+
+law a_10_metre_vehicle_at_a_9_metre_sign_is_charged:
+  { R.contains(8, R.charges(R.sign_size(M.LengthLimit{9}, 1800, 10000, 1500, 1500))) == True{} : Bool }
+
+# ---------------------------------------------------------------------------
+# PM 13/2014 — where a sign hangs, and what it must carry
+# ---------------------------------------------------------------------------
+
+law a_sign_hangs_between_175_and_265_centimetres:
+  { Bool.and(U32.is_eq(N.sign_min_height_cm(), 175), U32.is_eq(N.sign_max_height_cm(), 265)) == True{} : Bool }
+
+law an_overhead_sign_hangs_at_least_500_centimetres:
+  { N.overhead_min_height_cm() == 500 : U32 }
+
+law a_chevron_hangs_at_120_centimetres:
+  { N.chevron_height_cm() == 120 : U32 }
+
+law a_warning_sign_stands_before_the_hazard:
+  { N.warning_stands_before_the_hazard() == True{} : Bool }
+
+law a_warning_sign_stands_180_metres_before_a_hazard_over_100:
+  { N.warning_distance_m(120) == 180 : U32 }
+
+law a_warning_sign_stands_100_metres_at_100:
+  { N.warning_distance_m(100) == 100 : U32 }
+
+law a_warning_sign_stands_100_metres_before_a_hazard_over_80:
+  { N.warning_distance_m(90) == 100 : U32 }
+
+law a_warning_sign_stands_80_metres_at_80:
+  { N.warning_distance_m(80) == 80 : U32 }
+
+law a_warning_sign_stands_80_metres_before_a_hazard_over_60:
+  { N.warning_distance_m(70) == 80 : U32 }
+
+law a_warning_sign_stands_50_metres_before_a_hazard_at_60:
+  { N.warning_distance_m(60) == 50 : U32 }
+
+law a_parking_ban_runs_30_metres:
+  { N.parking_ban_extent_m() == 30 : U32 }
+
+law a_prohibition_starts_where_the_ban_starts:
+  { N.prohibition_starts_at_the_ban() == True{} : Bool }
+
+law a_command_stands_at_the_start_or_end_of_the_order:
+  { N.command_stands_at_the_order() == True{} : Bool }
+
+law a_supplement_sits_5_to_10_centimetres_below_the_leaf:
+  { Bool.and(U32.is_eq(N.supplement_gap_min_cm(), 5), U32.is_eq(N.supplement_gap_max_cm(), 10)) == True{} : Bool }
+
+law a_supplement_is_twice_as_wide_as_it_is_tall:
+  { U32.mul(N.supplement_ratio_tall(), 2) == N.supplement_ratio_wide() : U32 }
+
+law a_supplement_is_white_with_a_black_border:
+  { Bool.and(M.same_colour(N.supplement_base(), M.White{}), M.same_colour(N.supplement_border(), M.Black{})) == True{} : Bool }
+
+law a_supplement_is_not_allowed_on_five_kinds_of_sign:
+  { N.supplement_forbidden_count() == 5 : U32 }
+
+law a_pole_carries_at_most_two_leaves:
+  { N.max_leaves_per_pole() == 2 : U32 }
+
+law a_sign_is_maintained_every_six_months:
+  { N.maintenance_months() == 6 : U32 }
+
+law a_sign_is_removed_after_five_years:
+  { N.technical_life_years() == 5 : U32 }
+
+law a_sign_may_not_be_obstructed:
+  { N.sign_may_not_be_obstructed() == True{} : Bool }
+
+law a_small_leaf_is_for_30:
+  { N.same_leaf_size(N.leaf_size_for(30), N.LeafSmall{}) == True{} : Bool }
+
+law a_medium_leaf_is_for_60:
+  { N.same_leaf_size(N.leaf_size_for(60), N.LeafMedium{}) == True{} : Bool }
+
+law a_large_leaf_is_for_80:
+  { N.same_leaf_size(N.leaf_size_for(80), N.LeafLarge{}) == True{} : Bool }
+
+law a_very_large_leaf_is_for_more_than_80:
+  { N.same_leaf_size(N.leaf_size_for(100), N.LeafVeryLarge{}) == True{} : Bool }
 
 # ===========================================================================
 # UU 22/2009 — the vehicle
