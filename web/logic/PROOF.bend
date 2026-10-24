@@ -411,3 +411,31 @@ law the_town_has_a_bend:
 
 def the_town_has_a_bend():
   {==}
+
+# ---------------------------------------------------------------------------
+# The street between two junctions
+# ---------------------------------------------------------------------------
+
+law a_street_starts_at_its_first_node:
+  { T.at(T.curve_of(3, 3, T.East{}, T.seed_of_town()), 0) == T.site(3, 3, T.seed_of_town()) : T.Pt }
+
+def a_street_starts_at_its_first_node():
+  {==}
+
+law a_street_ends_at_its_second_node:
+  { T.at(T.curve_of(3, 3, T.East{}, T.seed_of_town()), 1024) == T.site(4, 3, T.seed_of_town()) : T.Pt }
+
+def a_street_ends_at_its_second_node():
+  {==}
+
+law every_street_stays_inside_the_town:
+  { T.samples_inside(T.samples(3, 3, T.East{}, T.seed_of_town())) == True{} : Bool }
+
+def every_street_stays_inside_the_town():
+  {==}
+
+law a_street_is_drawn_in_nine_points:
+  { T.sample_count(T.samples(3, 3, T.East{}, T.seed_of_town())) == 9 : U32 }
+
+def a_street_is_drawn_in_nine_points():
+  {==}

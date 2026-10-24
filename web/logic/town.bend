@@ -29,9 +29,10 @@ def pitch_cm() -> U32:
   7000
 
 # The first node sits this far from the town's edge, so the outermost bend of
-# the field stays inside the canvas.
+# the field and the curve handles beyond it stay inside the canvas, and no
+# coordinate can wrap below zero.
 def margin_cm() -> U32:
-  6000
+  8000
 
 # The field moves a node by at most this much, each way.
 def amp_cm() -> U32:
@@ -293,6 +294,200 @@ def end_of(i: U32, j: U32, d: Dir, seed: U32) -> Pt:
       site(U32.add(i, 1), j, seed)
     case West{}:
       site(U32.sub(i, 1), j, seed)
+
+# ===========================================================================
+# The street between two junctions
+#
+# A Catmull-Rom spline through the nodes: a segment's handles point a sixth of
+# the way to the neighbour beyond each end, so the tangent is continuous at
+# every junction and a row reads as one road, not a run of chords.
+# ===========================================================================
+
+# A difference in centimetres, for the curve. `diff` answers metres, which is
+# what the angle tests want; a curve wants the centimetres.
+def gap_cm(near: U32, far: U32) -> Signed:
+  +raw = U32.sub(far, near)
+  +down = U32.is_gt(raw, 2147483647)
+  Signed{Bool.pick(U32, down, U32.sub(0, raw), raw), down}
+
+# A point a fraction `t` of the way from a to b, in thousand-and-twenty-fourths.
+def lerp(+a: U32, +b: U32, t: U32) -> U32:
+  +d = gap_cm(a, b)
+  place(a, U32.div(U32.mul(span(d), t), 1024), below(d))
+
+def sixth(a: U32, b: U32) -> Signed:
+  +d = gap_cm(a, b)
+  Signed{U32.div(span(d), 6), below(d)}
+
+def push(p: Pt, +dx: Signed, +dz: Signed) -> Pt:
+  match p:
+    case Pt{x, z}:
+      Pt{place(x, span(dx), below(dx)), place(z, span(dz), below(dz))}
+
+def minus_one(+k: U32) -> U32:
+  U32.sub(k, U32.min(k, 1))
+
+def minus_two(+k: U32) -> U32:
+  U32.sub(k, U32.min(k, 2))
+
+def plus_one(+k: U32, limit: U32) -> U32:
+  U32.min(U32.add(k, 1), limit)
+
+def plus_two(+k: U32, limit: U32) -> U32:
+  U32.min(U32.add(k, 2), limit)
+
+# The node one step behind the start of a link.
+def behind(+i: U32, +j: U32, d: Dir, +seed: U32) -> Pt:
+  match d:
+    case East{}:
+      site(minus_one(i), j, seed)
+    case West{}:
+      site(plus_one(i, U32.sub(cols(), 1)), j, seed)
+    case South{}:
+      site(i, minus_one(j), seed)
+    case North{}:
+      site(i, plus_one(j, U32.sub(rows(), 1)), seed)
+
+# The node one step beyond the end of a link.
+def onward(+i: U32, +j: U32, d: Dir, +seed: U32) -> Pt:
+  match d:
+    case East{}:
+      site(plus_two(i, U32.sub(cols(), 1)), j, seed)
+    case West{}:
+      site(minus_two(i), j, seed)
+    case South{}:
+      site(i, plus_two(j, U32.sub(rows(), 1)), seed)
+    case North{}:
+      site(i, minus_two(j), seed)
+
+def handle_a(p0: Pt, p1: Pt, p2: Pt) -> Pt:
+  match p0:
+    case Pt{x0, z0}:
+      match p1:
+        case Pt{x1, z1}:
+          match p2:
+            case Pt{x2, z2}:
+              push(Pt{x1, z1}, sixth(x0, x2), sixth(z0, z2))
+
+def step_back(p: Pt, dx: Signed, dz: Signed) -> Pt:
+  match p:
+    case Pt{x, z}:
+      match dx:
+        case Signed{sx, down_x}:
+          match dz:
+            case Signed{sz, down_z}:
+              Pt{place(x, sx, Bool.not(down_x)), place(z, sz, Bool.not(down_z))}
+
+def handle_b(p1: Pt, p2: Pt, p3: Pt) -> Pt:
+  match p1:
+    case Pt{x1, z1}:
+      match p2:
+        case Pt{x2, z2}:
+          match p3:
+            case Pt{x3, z3}:
+              step_back(Pt{x2, z2}, sixth(x1, x3), sixth(z1, z3))
+
+type Curve is Data:
+  Curve{start: Pt, out: Pt, back: Pt, end: Pt}
+
+def curve_of(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Curve:
+  +p0 = behind(i, j, d, seed)
+  +p1 = site(i, j, seed)
+  +p2 = end_of(i, j, d, seed)
+  +p3 = onward(i, j, d, seed)
+  Curve{p1, handle_a(p0, p1, p2), handle_b(p1, p2, p3), p2}
+
+def bezier(a: Pt, b: Pt, c: Pt, e: Pt, +t: U32) -> Pt:
+  match a:
+    case Pt{+ax, +az}:
+      match b:
+        case Pt{+bx, +bz}:
+          match c:
+            case Pt{+cx, +cz}:
+              match e:
+                case Pt{+ex, +ez}:
+                  +abx = lerp(ax, bx, t)
+                  +abz = lerp(az, bz, t)
+                  +bcx = lerp(bx, cx, t)
+                  +bcz = lerp(bz, cz, t)
+                  +cex = lerp(cx, ex, t)
+                  +cez = lerp(cz, ez, t)
+                  +abcx = lerp(abx, bcx, t)
+                  +abcz = lerp(abz, bcz, t)
+                  +bcex = lerp(bcx, cex, t)
+                  +bcez = lerp(bcz, cez, t)
+                  Pt{lerp(abcx, bcex, t), lerp(abcz, bcez, t)}
+
+def at(c: Curve, +t: U32) -> Pt:
+  match c:
+    case Curve{start, out, back, end}:
+      bezier(start, out, back, end, t)
+
+type Sample is Data:
+  Sample{x: U32, z: U32, dx: Signed, dz: Signed}
+
+# How many steps a street is drawn in: eight, one every nine metres.
+def measures() -> U32:
+  8
+
+# The way forward: the step to the next sample, or to this one from the last at
+# the end of the street.
+def carry(+forward: Signed, +backward: Signed) -> Signed:
+  match forward:
+    case Signed{fs, fd}:
+      match backward:
+        case Signed{bs, bd}:
+          Bool.pick(Signed, U32.is_eq(fs, 0), Signed{bs, Bool.not(bd)}, Signed{fs, fd})
+
+# The point, and the way it heads: forward from the last sample to the next.
+def sample_of(here: Pt, back: Pt, there: Pt) -> Sample:
+  match here:
+    case Pt{+hx, +hz}:
+      match back:
+        case Pt{+lx, +lz}:
+          match there:
+            case Pt{+rx, +rz}:
+              Sample{hx, hz, carry(gap_cm(hx, rx), gap_cm(hx, lx)),
+                     carry(gap_cm(hz, rz), gap_cm(hz, lz))}
+
+# One point on a street, and the way it is heading: `k` from 0 to `measures`.
+def sample_at(+i: U32, +j: U32, +d: Dir, +k: U32, +seed: U32) -> Sample:
+  +c = curve_of(i, j, d, seed)
+  +step = U32.div(1024, measures())
+  +t = U32.div(U32.mul(k, 1024), measures())
+  +lo = Bool.pick(U32, U32.is_eq(k, 0), 0, U32.sub(t, step))
+  +hi = Bool.pick(U32, U32.is_eq(k, measures()), t, U32.add(t, step))
+  sample_of(at(c, t), at(c, lo), at(c, hi))
+
+def gather(fuel: Nat, +k: U32, +i: U32, +j: U32, +d: Dir, +seed: U32) -> List<Sample>:
+  match fuel:
+    case 0n:
+      Nil{}
+    case 1n+p:
+      sample_at(i, j, d, k, seed) <> gather(p, U32.add(k, 1), i, j, d, seed)
+
+def samples(+i: U32, +j: U32, +d: Dir, +seed: U32) -> List<Sample>:
+  gather(U32.to_nat(U32.add(measures(), 1)), 0, i, j, d, seed)
+
+# Every sample of a street falls inside the canvas.
+def sample_inside(s: Sample) -> Bool:
+  match s:
+    case Sample{x, z, dx, dz}:
+      Bool.and(U32.is_le(x, 90000), U32.is_le(z, 90000))
+
+def sample_count(xs: List<Sample>) -> U32:
+  match xs:
+    case Nil{}:
+      0
+    case +h <> t:
+      U32.add(1, sample_count(t))
+
+def samples_inside(xs: List<Sample>) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case +h <> t:
+      Bool.and(sample_inside(h), samples_inside(t))
 
 def branches(+i: U32, +j: U32) -> U32:
   U32.add(U32.add(Bool.to_u32(has(i, j, North{})), Bool.to_u32(has(i, j, East{}))),
