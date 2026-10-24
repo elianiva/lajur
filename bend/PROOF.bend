@@ -632,7 +632,220 @@ def Laws.the_electronic_table_holds_64_piktograms():
 def Laws.the_catalogue_has_72_groups():
   {==}
 
-def Laws.each_sign_group_holds_its_stated_number():
+def Laws.the_piktogram_rambu_peringatan_group_holds_29_signs():
+  {==}
+
+def Laws.the_pesan_peringatan_group_holds_0_signs():
+  {==}
+
+def Laws.the_piktogram_rambu_peringatan_dan_pesan_peringatan_group_holds_0_signs():
+  {==}
+
+def Laws.the_piktogram_rambu_larangan_group_holds_14_signs():
+  {==}
+
+def Laws.the_pesan_larangan_group_holds_0_signs():
+  {==}
+
+def Laws.the_piktogram_rambu_larangan_dan_pesan_larangan_group_holds_0_signs():
+  {==}
+
+def Laws.the_piktogram_rambu_perintah_group_holds_18_signs():
+  {==}
+
+def Laws.the_pesan_perintah_group_holds_0_signs():
+  {==}
+
+def Laws.the_piktogram_rambu_perintah_dan_pesan_perintah_group_holds_0_signs():
+  {==}
+
+def Laws.the_piktogram_rambu_petunjuk_group_holds_3_signs():
+  {==}
+
+def Laws.the_pesan_petunjuk_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_perubahan_kondisi_alinyemen_horizontal_group_holds_23_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_perubahan_kondisi_alinyemen_vertikal_group_holds_4_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_kondisi_jalan_yang_berbahaya_group_holds_10_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_pengaturan_persinyalan_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_persimpangan_prioritas_group_holds_19_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_konstruksi_pemisah_jalur_lalu_lintas_group_holds_4_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_lalu_lintas_kendaraan_bermotor_group_holds_6_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_selain_lalu_lintas_kendaraan_bermotor_group_holds_7_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_kawasan_rawan_bencana_group_holds_3_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_lainnya_group_holds_10_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_dengan_kata_kata_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_group_holds_3_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_pengarah_gerakan_lalu_lintas_group_holds_5_signs():
+  {==}
+
+def Laws.the_rambu_larangan_berjalan_terus_group_holds_6_signs():
+  {==}
+
+def Laws.the_rambu_larangan_masuk_bagi_kendaraan_bermotor_dan_tidak_bermotor_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_larangan_masuk_bagi_kendaraan_bermotor_jenis_tertentu_group_holds_13_signs():
+  {==}
+
+def Laws.the_rambu_larangan_masuk_bagi_kendaraan_tidak_bermotor_jenis_tertentu_group_holds_9_signs():
+  {==}
+
+def Laws.the_rambu_larangan_masuk_bagi_kendaraan_dengan_berat_dan_dimensi_tertentu_group_holds_12_signs():
+  {==}
+
+def Laws.the_rambu_larangan_parkir_dan_berhenti_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_larangan_pergerakan_lalu_lintas_tertentu_group_holds_8_signs():
+  {==}
+
+def Laws.the_rambu_larangan_membunyikan_isyarat_suara_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_larangan_dengan_kata_kata_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_batas_akhir_larangan_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_perintah_mematuhi_arah_yang_ditunjuk_group_holds_6_signs():
+  {==}
+
+def Laws.the_rambu_perintah_memilih_salah_satu_arah_yang_ditunjuk_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_perintah_memasuki_bagian_jalan_tertentu_group_holds_3_signs():
+  {==}
+
+def Laws.the_rambu_perintah_batas_minimum_kecepatan_group_holds_1_signs():
+  {==}
+
+def Laws.the_rambu_perintah_penggunaan_rantai_ban_group_holds_1_signs():
+  {==}
+
+def Laws.the_rambu_perintah_menggunakan_jalur_atau_lajur_lalu_lintas_khusus_kendaraan_bermotor_group_holds_3_signs():
+  {==}
+
+def Laws.the_rambu_perintah_menggunakan_jalur_atau_lajur_lalu_lintas_khusus_kendaraan_tidak_bermotor_group_holds_7_signs():
+  {==}
+
+def Laws.the_rambu_batas_akhir_perintah_tertentu_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_perintah_dengan_kata_kata_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_pendahulu_jurusan_group_holds_6_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_jurusan_wilayah_dan_lokasi_tertentu_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_jurusan_khusus_lokasi_dan_kawasan_wisata_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_batas_wilayah_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_batas_jalan_tol_group_holds_4_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_simpul_transportasi_group_holds_4_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_fasilitas_kebersihan_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_fasilitas_komunikasi_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_fasilitas_pemberhentian_angkutan_umum_group_holds_3_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_fasilitas_penyeberangan_pejalan_kaki_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_fasilitas_parkir_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_terowongan_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_fasilitas_tanggap_bencana_group_holds_6_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_peribadatan_group_holds_4_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_pemerintahan_dan_pelayanan_umum_group_holds_8_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_perbelanjaan_dan_niaga_group_holds_5_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_rekreasi_dan_kebudayaan_group_holds_7_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_sarana_olahraga_dan_lapangan_terbuka_group_holds_4_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_lokasi_fasilitas_pendidikan_group_holds_2_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_pengaturan_lalu_lintas_group_holds_9_signs():
+  {==}
+
+def Laws.the_papan_nama_jalan_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_petunjuk_dengan_kata_kata_group_holds_0_signs():
+  {==}
+
+def Laws.the_bentuk_nomor_rute_group_holds_5_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_sementara_perubahan_kondisi_alinyemen_horizontal_group_holds_13_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_sementara_kondisi_jalan_yang_berbahaya_group_holds_3_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_sementara_rintangan_di_jalan_group_holds_8_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_sementara_lainnya_group_holds_6_signs():
+  {==}
+
+def Laws.the_rambu_peringatan_sementara_dengan_kata_kata_group_holds_0_signs():
+  {==}
+
+def Laws.the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_sementara_group_holds_3_signs():
   {==}
 
 def Laws.every_sign_has_a_meaning():

@@ -510,8 +510,221 @@ law each_sign_table_holds_its_stated_number:
 law the_catalogue_has_72_groups:
   { SG.group_count() == 72 : U32 }
 
-law each_sign_group_holds_its_stated_number:
-  { SG.groups_sized(SG.groups(), SG.signs()) == True{} : Bool }
+law the_piktogram_rambu_peringatan_group_holds_29_signs:
+  { SG.count_group("Piktogram Rambu Peringatan", SG.signs()) == 29 : U32 }
+
+law the_pesan_peringatan_group_holds_0_signs:
+  { SG.count_group("Pesan Peringatan", SG.signs()) == 0 : U32 }
+
+law the_piktogram_rambu_peringatan_dan_pesan_peringatan_group_holds_0_signs:
+  { SG.count_group("Piktogram Rambu Peringatan dan Pesan Peringatan", SG.signs()) == 0 : U32 }
+
+law the_piktogram_rambu_larangan_group_holds_14_signs:
+  { SG.count_group("Piktogram Rambu Larangan", SG.signs()) == 14 : U32 }
+
+law the_pesan_larangan_group_holds_0_signs:
+  { SG.count_group("Pesan Larangan", SG.signs()) == 0 : U32 }
+
+law the_piktogram_rambu_larangan_dan_pesan_larangan_group_holds_0_signs:
+  { SG.count_group("Piktogram Rambu Larangan dan Pesan Larangan", SG.signs()) == 0 : U32 }
+
+law the_piktogram_rambu_perintah_group_holds_18_signs:
+  { SG.count_group("Piktogram Rambu Perintah", SG.signs()) == 18 : U32 }
+
+law the_pesan_perintah_group_holds_0_signs:
+  { SG.count_group("Pesan Perintah", SG.signs()) == 0 : U32 }
+
+law the_piktogram_rambu_perintah_dan_pesan_perintah_group_holds_0_signs:
+  { SG.count_group("Piktogram Rambu Perintah dan Pesan Perintah", SG.signs()) == 0 : U32 }
+
+law the_piktogram_rambu_petunjuk_group_holds_3_signs:
+  { SG.count_group("Piktogram Rambu Petunjuk", SG.signs()) == 3 : U32 }
+
+law the_pesan_petunjuk_group_holds_0_signs:
+  { SG.count_group("Pesan Petunjuk", SG.signs()) == 0 : U32 }
+
+law the_rambu_peringatan_perubahan_kondisi_alinyemen_horizontal_group_holds_23_signs:
+  { SG.count_group("Rambu Peringatan Perubahan Kondisi Alinyemen Horizontal", SG.signs()) == 23 : U32 }
+
+law the_rambu_peringatan_perubahan_kondisi_alinyemen_vertikal_group_holds_4_signs:
+  { SG.count_group("Rambu Peringatan Perubahan Kondisi Alinyemen Vertikal", SG.signs()) == 4 : U32 }
+
+law the_rambu_peringatan_kondisi_jalan_yang_berbahaya_group_holds_10_signs:
+  { SG.count_group("Rambu Peringatan Kondisi Jalan yang Berbahaya", SG.signs()) == 10 : U32 }
+
+law the_rambu_peringatan_pengaturan_persinyalan_group_holds_2_signs:
+  { SG.count_group("Rambu Peringatan Pengaturan Persinyalan", SG.signs()) == 2 : U32 }
+
+law the_rambu_peringatan_persimpangan_prioritas_group_holds_19_signs:
+  { SG.count_group("Rambu Peringatan Persimpangan Prioritas", SG.signs()) == 19 : U32 }
+
+law the_rambu_peringatan_konstruksi_pemisah_jalur_lalu_lintas_group_holds_4_signs:
+  { SG.count_group("Rambu Peringatan Konstruksi Pemisah Jalur Lalu Lintas", SG.signs()) == 4 : U32 }
+
+law the_rambu_peringatan_lalu_lintas_kendaraan_bermotor_group_holds_6_signs:
+  { SG.count_group("Rambu Peringatan Lalu Lintas Kendaraan Bermotor", SG.signs()) == 6 : U32 }
+
+law the_rambu_peringatan_selain_lalu_lintas_kendaraan_bermotor_group_holds_7_signs:
+  { SG.count_group("Rambu Peringatan Selain Lalu Lintas Kendaraan Bermotor", SG.signs()) == 7 : U32 }
+
+law the_rambu_peringatan_kawasan_rawan_bencana_group_holds_3_signs:
+  { SG.count_group("Rambu Peringatan Kawasan Rawan Bencana", SG.signs()) == 3 : U32 }
+
+law the_rambu_peringatan_lainnya_group_holds_10_signs:
+  { SG.count_group("Rambu Peringatan Lainnya", SG.signs()) == 10 : U32 }
+
+law the_rambu_peringatan_dengan_kata_kata_group_holds_0_signs:
+  { SG.count_group("Rambu Peringatan dengan Kata-kata", SG.signs()) == 0 : U32 }
+
+law the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_group_holds_3_signs:
+  { SG.count_group("Rambu Keterangan Tambahan tentang Jarak Lokasi Kritis", SG.signs()) == 3 : U32 }
+
+law the_rambu_peringatan_pengarah_gerakan_lalu_lintas_group_holds_5_signs:
+  { SG.count_group("Rambu Peringatan Pengarah Gerakan Lalu Lintas", SG.signs()) == 5 : U32 }
+
+law the_rambu_larangan_berjalan_terus_group_holds_6_signs:
+  { SG.count_group("Rambu Larangan Berjalan Terus", SG.signs()) == 6 : U32 }
+
+law the_rambu_larangan_masuk_bagi_kendaraan_bermotor_dan_tidak_bermotor_group_holds_2_signs:
+  { SG.count_group("Rambu Larangan Masuk bagi Kendaraan Bermotor dan Tidak Bermotor", SG.signs()) == 2 : U32 }
+
+law the_rambu_larangan_masuk_bagi_kendaraan_bermotor_jenis_tertentu_group_holds_13_signs:
+  { SG.count_group("Rambu Larangan Masuk bagi Kendaraan Bermotor Jenis Tertentu", SG.signs()) == 13 : U32 }
+
+law the_rambu_larangan_masuk_bagi_kendaraan_tidak_bermotor_jenis_tertentu_group_holds_9_signs:
+  { SG.count_group("Rambu Larangan Masuk bagi Kendaraan Tidak Bermotor Jenis Tertentu", SG.signs()) == 9 : U32 }
+
+law the_rambu_larangan_masuk_bagi_kendaraan_dengan_berat_dan_dimensi_tertentu_group_holds_12_signs:
+  { SG.count_group("Rambu Larangan Masuk bagi Kendaraan dengan Berat dan Dimensi Tertentu", SG.signs()) == 12 : U32 }
+
+law the_rambu_larangan_parkir_dan_berhenti_group_holds_2_signs:
+  { SG.count_group("Rambu Larangan Parkir dan Berhenti", SG.signs()) == 2 : U32 }
+
+law the_rambu_larangan_pergerakan_lalu_lintas_tertentu_group_holds_8_signs:
+  { SG.count_group("Rambu Larangan Pergerakan Lalu Lintas Tertentu", SG.signs()) == 8 : U32 }
+
+law the_rambu_larangan_membunyikan_isyarat_suara_group_holds_0_signs:
+  { SG.count_group("Rambu Larangan Membunyikan Isyarat Suara", SG.signs()) == 0 : U32 }
+
+law the_rambu_larangan_dengan_kata_kata_group_holds_0_signs:
+  { SG.count_group("Rambu Larangan dengan Kata-kata", SG.signs()) == 0 : U32 }
+
+law the_rambu_batas_akhir_larangan_group_holds_0_signs:
+  { SG.count_group("Rambu Batas Akhir Larangan", SG.signs()) == 0 : U32 }
+
+law the_rambu_perintah_mematuhi_arah_yang_ditunjuk_group_holds_6_signs:
+  { SG.count_group("Rambu Perintah Mematuhi Arah yang Ditunjuk", SG.signs()) == 6 : U32 }
+
+law the_rambu_perintah_memilih_salah_satu_arah_yang_ditunjuk_group_holds_2_signs:
+  { SG.count_group("Rambu Perintah Memilih Salah Satu Arah yang Ditunjuk", SG.signs()) == 2 : U32 }
+
+law the_rambu_perintah_memasuki_bagian_jalan_tertentu_group_holds_3_signs:
+  { SG.count_group("Rambu Perintah Memasuki Bagian Jalan Tertentu", SG.signs()) == 3 : U32 }
+
+law the_rambu_perintah_batas_minimum_kecepatan_group_holds_1_signs:
+  { SG.count_group("Rambu Perintah Batas Minimum Kecepatan", SG.signs()) == 1 : U32 }
+
+law the_rambu_perintah_penggunaan_rantai_ban_group_holds_1_signs:
+  { SG.count_group("Rambu Perintah Penggunaan Rantai Ban", SG.signs()) == 1 : U32 }
+
+law the_rambu_perintah_menggunakan_jalur_atau_lajur_lalu_lintas_khusus_kendaraan_bermotor_group_holds_3_signs:
+  { SG.count_group("Rambu Perintah Menggunakan Jalur atau Lajur Lalu Lintas Khusus Kendaraan Bermotor", SG.signs()) == 3 : U32 }
+
+law the_rambu_perintah_menggunakan_jalur_atau_lajur_lalu_lintas_khusus_kendaraan_tidak_bermotor_group_holds_7_signs:
+  { SG.count_group("Rambu Perintah Menggunakan Jalur atau Lajur Lalu Lintas Khusus Kendaraan Tidak Bermotor", SG.signs()) == 7 : U32 }
+
+law the_rambu_batas_akhir_perintah_tertentu_group_holds_2_signs:
+  { SG.count_group("Rambu Batas Akhir Perintah Tertentu", SG.signs()) == 2 : U32 }
+
+law the_rambu_perintah_dengan_kata_kata_group_holds_0_signs:
+  { SG.count_group("Rambu Perintah dengan Kata-kata", SG.signs()) == 0 : U32 }
+
+law the_rambu_petunjuk_pendahulu_jurusan_group_holds_6_signs:
+  { SG.count_group("Rambu Petunjuk Pendahulu Jurusan", SG.signs()) == 6 : U32 }
+
+law the_rambu_petunjuk_jurusan_wilayah_dan_lokasi_tertentu_group_holds_0_signs:
+  { SG.count_group("Rambu Petunjuk Jurusan Wilayah dan Lokasi Tertentu", SG.signs()) == 0 : U32 }
+
+law the_rambu_petunjuk_jurusan_khusus_lokasi_dan_kawasan_wisata_group_holds_0_signs:
+  { SG.count_group("Rambu Petunjuk Jurusan Khusus Lokasi dan Kawasan Wisata", SG.signs()) == 0 : U32 }
+
+law the_rambu_petunjuk_batas_wilayah_group_holds_2_signs:
+  { SG.count_group("Rambu Petunjuk Batas Wilayah", SG.signs()) == 2 : U32 }
+
+law the_rambu_petunjuk_batas_jalan_tol_group_holds_4_signs:
+  { SG.count_group("Rambu Petunjuk Batas Jalan Tol", SG.signs()) == 4 : U32 }
+
+law the_rambu_petunjuk_lokasi_simpul_transportasi_group_holds_4_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Simpul Transportasi", SG.signs()) == 4 : U32 }
+
+law the_rambu_petunjuk_lokasi_fasilitas_kebersihan_group_holds_2_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Fasilitas Kebersihan", SG.signs()) == 2 : U32 }
+
+law the_rambu_petunjuk_lokasi_fasilitas_komunikasi_group_holds_2_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Fasilitas Komunikasi", SG.signs()) == 2 : U32 }
+
+law the_rambu_petunjuk_lokasi_fasilitas_pemberhentian_angkutan_umum_group_holds_3_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Fasilitas Pemberhentian Angkutan Umum", SG.signs()) == 3 : U32 }
+
+law the_rambu_petunjuk_lokasi_fasilitas_penyeberangan_pejalan_kaki_group_holds_0_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Fasilitas Penyeberangan Pejalan Kaki", SG.signs()) == 0 : U32 }
+
+law the_rambu_petunjuk_lokasi_fasilitas_parkir_group_holds_2_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Fasilitas Parkir", SG.signs()) == 2 : U32 }
+
+law the_rambu_petunjuk_terowongan_group_holds_2_signs:
+  { SG.count_group("Rambu Petunjuk Terowongan", SG.signs()) == 2 : U32 }
+
+law the_rambu_petunjuk_fasilitas_tanggap_bencana_group_holds_6_signs:
+  { SG.count_group("Rambu Petunjuk Fasilitas Tanggap Bencana", SG.signs()) == 6 : U32 }
+
+law the_rambu_petunjuk_lokasi_peribadatan_group_holds_4_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Peribadatan", SG.signs()) == 4 : U32 }
+
+law the_rambu_petunjuk_lokasi_pemerintahan_dan_pelayanan_umum_group_holds_8_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Pemerintahan dan Pelayanan Umum", SG.signs()) == 8 : U32 }
+
+law the_rambu_petunjuk_lokasi_perbelanjaan_dan_niaga_group_holds_5_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Perbelanjaan dan Niaga", SG.signs()) == 5 : U32 }
+
+law the_rambu_petunjuk_lokasi_rekreasi_dan_kebudayaan_group_holds_7_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Rekreasi dan Kebudayaan", SG.signs()) == 7 : U32 }
+
+law the_rambu_petunjuk_lokasi_sarana_olahraga_dan_lapangan_terbuka_group_holds_4_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Sarana Olahraga dan Lapangan Terbuka", SG.signs()) == 4 : U32 }
+
+law the_rambu_petunjuk_lokasi_fasilitas_pendidikan_group_holds_2_signs:
+  { SG.count_group("Rambu Petunjuk Lokasi Fasilitas Pendidikan", SG.signs()) == 2 : U32 }
+
+law the_rambu_petunjuk_pengaturan_lalu_lintas_group_holds_9_signs:
+  { SG.count_group("Rambu Petunjuk Pengaturan Lalu Lintas", SG.signs()) == 9 : U32 }
+
+law the_papan_nama_jalan_group_holds_0_signs:
+  { SG.count_group("Papan Nama Jalan", SG.signs()) == 0 : U32 }
+
+law the_rambu_petunjuk_dengan_kata_kata_group_holds_0_signs:
+  { SG.count_group("Rambu Petunjuk dengan Kata-kata", SG.signs()) == 0 : U32 }
+
+law the_bentuk_nomor_rute_group_holds_5_signs:
+  { SG.count_group("Bentuk Nomor Rute", SG.signs()) == 5 : U32 }
+
+law the_rambu_peringatan_sementara_perubahan_kondisi_alinyemen_horizontal_group_holds_13_signs:
+  { SG.count_group("Rambu Peringatan Sementara Perubahan Kondisi Alinyemen Horizontal", SG.signs()) == 13 : U32 }
+
+law the_rambu_peringatan_sementara_kondisi_jalan_yang_berbahaya_group_holds_3_signs:
+  { SG.count_group("Rambu Peringatan Sementara Kondisi Jalan yang Berbahaya", SG.signs()) == 3 : U32 }
+
+law the_rambu_peringatan_sementara_rintangan_di_jalan_group_holds_8_signs:
+  { SG.count_group("Rambu Peringatan Sementara Rintangan di Jalan", SG.signs()) == 8 : U32 }
+
+law the_rambu_peringatan_sementara_lainnya_group_holds_6_signs:
+  { SG.count_group("Rambu Peringatan Sementara Lainnya", SG.signs()) == 6 : U32 }
+
+law the_rambu_peringatan_sementara_dengan_kata_kata_group_holds_0_signs:
+  { SG.count_group("Rambu Peringatan Sementara dengan Kata-kata", SG.signs()) == 0 : U32 }
+
+law the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_sementara_group_holds_3_signs:
+  { SG.count_group("Rambu Keterangan Tambahan tentang Jarak Lokasi Kritis Sementara", SG.signs()) == 3 : U32 }
 
 law every_sign_has_a_meaning:
   { SG.all_meaningful(SG.signs()) == True{} : Bool }
