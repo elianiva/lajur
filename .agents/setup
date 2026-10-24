@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# Prepares a fresh orb to check the laws: Bend, Lean for `bend --verdict`, and
+# the corpus toolchain. Idempotent, non-interactive, and safe to run twice.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root"
+
+bend_version=2.0.39
+lean_toolchain="$(cat lean-toolchain)"
+
+start=$SECONDS
+step_start=$SECONDS
+step() {
+  step_start=$SECONDS
+  printf '\n== %s\n' "$*"
+}
+done_step() { printf '   %ss\n' "$((SECONDS - step_start))"; }
+warn() { printf '   warning: %s\n' "$*" >&2; }
+
+# Bend and Lean install into $HOME, outside the default PATH.
+export PATH="$HOME/.bend/bin:$HOME/.elan/bin:$PATH"
+export BEND_NO_TELEMETRY=1
+
+# A new orb starts from the base template, so the login shell needs the
+# toolchain directories even before this script runs again.
+profile="$HOME/.bash_profile"
+profile_marker="# lajur: Bend and Lean toolchain"
+if ! grep -Fqx "$profile_marker" "$profile" 2>/dev/null; then
+  step "Adding the toolchain to ~/.bash_profile"
+  cat >>"$profile" <<'EOF'
+
+# lajur: Bend and Lean toolchain
+export PATH="$HOME/.bend/bin:$HOME/.elan/bin:$PATH"
+export BEND_NO_TELEMETRY=1
+EOF
+  done_step
+fi
+
+step "Installing tesseract for the OCR step"
+tesseract_packages=(tesseract-ocr tesseract-ocr-ind)
+missing=()
+for package in "${tesseract_packages[@]}"; do
+  dpkg -s "$package" >/dev/null 2>&1 || missing+=("$package")
+done
+if [ ${#missing[@]} -eq 0 ]; then
+  echo "   already installed"
+elif ! sudo -n apt-get install -y --no-install-recommends "${missing[@]}"; then
+  sudo -n apt-get update -qq
+  sudo -n apt-get install -y --no-install-recommends "${missing[@]}"
+fi
+done_step
+
+step "Installing Bend $bend_version"
+if bend version 2>/dev/null | grep -qx "bend $bend_version"; then
+  echo "   already installed"
+else
+  curl -fsSL https://bend-lang.com/install.sh | sh
+  hash -r
+  installed="$(bend version 2>/dev/null || true)"
+  if [ "$installed" != "bend $bend_version" ]; then
+    warn "install.sh gave '${installed:-no bend}', not bend $bend_version."
+    warn "Bump bend_version here and the version in README.md to match it."
+  fi
+fi
+done_step
+
+step "Installing Lean $lean_toolchain for --verdict"
+if [ ! -x "$HOME/.elan/bin/elan" ]; then
+  curl -fsSL https://elan.lean-lang.org/elan-init.sh |
+    sh -s -- -y --default-toolchain "$lean_toolchain"
+  hash -r
+fi
+if elan toolchain list 2>/dev/null | grep -Fxq "$lean_toolchain"; then
+  echo "   already installed"
+else
+  elan toolchain install "$lean_toolchain"
+fi
+done_step
+
+# bend runs its kernel with a 4 GiB stack. Under the default heuristic
+# overcommit a smaller orb refuses that mapping and the kernel aborts, so let
+# the machine commit more than its RAM. `.agents/resume` reapplies this after
+# a pause, because a restored snapshot gets a fresh kernel.
+step "Allowing the kernel's 4 GiB stack"
+if [ "$(cat /proc/sys/vm/overcommit_memory 2>/dev/null)" = 1 ]; then
+  echo "   already set"
+elif sudo -n sysctl -w vm.overcommit_memory=1 >/dev/null 2>&1; then
+  echo "   set vm.overcommit_memory=1"
+else
+  warn "cannot set vm.overcommit_memory; bend --verdict will abort on this orb"
+fi
+done_step
+
+step "Installing the corpus toolchain"
+if [ -x .venv/bin/python ] && .venv/bin/python -c 'import pymupdf' 2>/dev/null; then
+  echo "   .venv already has pymupdf"
+else
+  export PATH="$HOME/.local/bin:$PATH"
+  command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+  hash -r
+  uv venv .venv
+  uv pip install --python .venv/bin/python pymupdf
+fi
+done_step
+
+step "Checking every module"
+checked=0
+for file in bend/*.bend; do
+  case "$file" in
+    bend/LAWS.bend | bend/PROOF.bend) continue ;;
+  esac
+  if ! output="$(bend --check-only "$file" 2>&1)"; then
+    printf '%s\n' "$output"
+    exit 1
+  fi
+  checked=$((checked + 1))
+done
+printf '   %d modules check\n' "$checked"
+done_step
+
+step "Proving the laws"
+(cd bend && bend PROOF.bend)
+done_step
+
+# The first verdict builds BendTT from Lean, which takes about 35 seconds.
+# Priming it here keeps that cost out of the first agent command.
+step "Re-checking the proofs with the Lean kernel"
+if verdict_output="$(cd bend && bend PROOF.bend --verdict 2>&1)"; then
+  printf '%s\n' "$verdict_output"
+else
+  printf '%s\n' "$verdict_output" >&2
+  case "$verdict_output" in
+    *"BendTT infrastructure"*)
+      warn "the Lean kernel is unavailable; the laws themselves still check" ;;
+    *) exit 1 ;;
+  esac
+fi
+done_step
+
+printf '\nsetup finished in %ss\n' "$((SECONDS - start))"

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Runs after activation and on every wake. Fast and idempotent: only repairs
+# what a restored snapshot loses. Never installs dependencies.
+set -euo pipefail
+
+# bend runs its kernel with a 4 GiB stack. A restored snapshot gets a fresh
+# kernel with the default heuristic overcommit, which refuses that mapping on
+# a small orb and aborts the kernel. `.agents/setup` explains the setting.
+if [ "$(cat /proc/sys/vm/overcommit_memory 2>/dev/null)" != 1 ]; then
+  sudo -n sysctl -w vm.overcommit_memory=1 >/dev/null 2>&1 ||
+    printf 'resume: cannot set vm.overcommit_memory; bend --verdict will abort\n' >&2
+fi

@@ -15,8 +15,15 @@ jobs:
         run: |
           curl -fsSL https://bend-lang.com/install.sh | sh
           echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
+      - name: Install Lean
+        run: |
+          curl -fsSL https://elan.lean-lang.org/elan-init.sh |
+            sh -s -- -y --default-toolchain "$(cat lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       - name: Report the toolchain
-        run: bend version
+        run: |
+          bend version
+          lean --version
       - name: Check every module
         working-directory: bend
         run: |
@@ -28,3 +35,6 @@ jobs:
       - name: Prove the laws
         working-directory: bend
         run: bend PROOF.bend
+      - name: Re-check the proofs with the Lean kernel
+        working-directory: bend
+        run: bend PROOF.bend --verdict

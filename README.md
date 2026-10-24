@@ -5,7 +5,8 @@
 Indonesian traffic law as named claims a compiler checks, next to the statutes
 they come from.
 
-Status: 8 instruments, 50 scenario rules, 176 laws. All proofs check with Bend 2.0.39.
+Status: 8 instruments, 50 scenario rules, 176 laws. All proofs check with Bend
+2.0.39, and the Lean 4.34.0 kernel accepts the verdict.
 
 ## The idea
 
@@ -118,9 +119,22 @@ Expected output:
 ALL PROOFS CHECK
 ```
 
-`bend PROOF.bend --verdict` re-checks the proofs with Bend's Lean kernel. It
-needs Lean 4.34.0 and was not run here, so the current evidence is Bend's own
-checker only.
+`bend PROOF.bend --verdict` re-checks every proof with Bend's Lean kernel. It
+needs Lean 4.34.0, which `lean-toolchain` pins:
+
+```sh
+curl -fsSL https://elan.lean-lang.org/elan-init.sh |
+  sh -s -- -y --default-toolchain "$(cat lean-toolchain)"
+export PATH="$HOME/.elan/bin:$PATH"
+
+cd bend
+bend PROOF.bend --verdict
+```
+
+CI runs both checks on every push.
+
+A fresh Amp orb gets this toolchain from `.agents/setup`, which also installs
+the venv the corpus tools use and tesseract for the OCR step.
 
 ## Rebuild the corpus index
 

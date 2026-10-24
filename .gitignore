@@ -2,3 +2,4 @@
 *.bendtt
 __pycache__/
 .venv/
+.amp/portals/*
