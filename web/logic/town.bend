@@ -694,3 +694,348 @@ def green_of(c: Control, d: Dir, tick: U32) -> Bool:
 
 def green(i: U32, j: U32, d: Dir, tick: U32) -> Bool:
   green_of(control(i, j), d, tick)
+
+# ===========================================================================
+# Street furniture at the junction
+#
+# Each approach carries what the statute puts there: a stop line and a head at
+# a signal, a give-way line and its sign where a road must give priority, and
+# the priority warning on the road that is given it (PM 13/2014 Pasal 61 pairs
+# the two signs, one on each side of the give-way).
+# ===========================================================================
+
+type Street is Data:
+  Ring{}
+  Collector{}
+  Local{}
+
+def row_street(on_first: Bool, on_last: Bool, major: Bool) -> Street:
+  match on_first:
+    case True{}:
+      Ring{}
+    case False{}:
+      match on_last:
+        case True{}:
+          Ring{}
+        case False{}:
+          match major:
+            case True{}:
+              Collector{}
+            case False{}:
+              Local{}
+
+# The street an approach belongs to. East and west run along row j; north and
+# south run along column i; the first and last of each is the ring.
+def street_of(+i: U32, +j: U32, d: Dir) -> Street:
+  match d:
+    case East{}:
+      row_street(U32.is_eq(j, 0), U32.is_eq(j, U32.sub(rows(), 1)), major_row(j))
+    case West{}:
+      row_street(U32.is_eq(j, 0), U32.is_eq(j, U32.sub(rows(), 1)), major_row(j))
+    case North{}:
+      row_street(U32.is_eq(i, 0), U32.is_eq(i, U32.sub(cols(), 1)), major_col(i))
+    case South{}:
+      row_street(U32.is_eq(i, 0), U32.is_eq(i, U32.sub(cols(), 1)), major_col(i))
+
+# Half the carriageway, in centimetres: fourteen metres across on the ring,
+# nine on a collector, six on a local street.
+def half_cm(s: Street) -> U32:
+  match s:
+    case Ring{}:
+      700
+    case Collector{}:
+      450
+    case Local{}:
+      300
+
+type Mark is Data:
+  StopLine{}
+  GiveWayLine{}
+  NoLine{}
+
+type Post is Data:
+  PriorityWarning{}
+  GiveWaySign{}
+  StopSign{}
+  NoSign{}
+
+type Approach is Data:
+  Approach{d: Dir, present: Bool, half: U32, mark: Mark, line_cm: U32, zebra_cm: U32,
+           head: Bool, post: Post}
+
+def opposite(d: Dir) -> Dir:
+  match d:
+    case North{}:
+      South{}
+    case South{}:
+      North{}
+    case East{}:
+      West{}
+    case West{}:
+      East{}
+
+def is_eq_dir(a: Dir, b: Dir) -> Bool:
+  match a:
+    case North{}:
+      match b:
+        case North{}:
+          True{}
+        case _:
+          False{}
+    case South{}:
+      match b:
+        case South{}:
+          True{}
+        case _:
+          False{}
+    case East{}:
+      match b:
+        case East{}:
+          True{}
+        case _:
+          False{}
+    case West{}:
+      match b:
+        case West{}:
+          True{}
+        case _:
+          False{}
+
+def minor_of(+i: U32, +j: U32, d: Dir) -> Bool:
+  match d:
+    case North{}:
+      Bool.not(major_col(i))
+    case South{}:
+      Bool.not(major_col(i))
+    case East{}:
+      Bool.not(major_row(j))
+    case West{}:
+      Bool.not(major_row(j))
+
+# Which approach must give way, when one of them must. At a four-way with a
+# main road the minor road does; at a perpendicular T the stem does; at a skew
+# T nobody is posted, because the statute's rule there is the general yield to
+# the left (Pasal 113 ayat (1) huruf d) and not a sign.
+def gives_way(shape: Shape, minor: Bool, stem: Bool) -> Bool:
+  match shape:
+    case FourMajor{}:
+      minor
+    case StraightT{}:
+      stem
+    case FourEqual{}:
+      False{}
+    case SkewT{}:
+      False{}
+    case Bend{}:
+      False{}
+
+# Whether the junction posts a give-way at all. A skew T and an equal
+# four-way do not: their rule is the general one, and PM 13/2014 Pasal 61 pairs
+# a priority warning with a give-way sign, so a junction with one sign carries
+# the other.
+def has_give_way(control: Control, shape: Shape) -> Bool:
+  match control:
+    case Signal{}:
+      False{}
+    case Roundabout{}:
+      True{}
+    case Uncontrolled{}:
+      match shape:
+        case FourMajor{}:
+          True{}
+        case StraightT{}:
+          True{}
+        case _:
+          False{}
+
+def mark_of(control: Control, gives: Bool) -> Mark:
+  match control:
+    case Signal{}:
+      StopLine{}
+    case Roundabout{}:
+      GiveWayLine{}
+    case Uncontrolled{}:
+      match gives:
+        case True{}:
+          GiveWayLine{}
+        case False{}:
+          NoLine{}
+
+def post_of(control: Control, gives: Bool, given: Bool) -> Post:
+  match control:
+    case Signal{}:
+      NoSign{}
+    case Roundabout{}:
+      GiveWaySign{}
+    case Uncontrolled{}:
+      match gives:
+        case True{}:
+          GiveWaySign{}
+        case False{}:
+          match given:
+            case True{}:
+              PriorityWarning{}
+            case False{}:
+              NoSign{}
+
+def signal_head(control: Control) -> Bool:
+  match control:
+    case Signal{}:
+      True{}
+    case Roundabout{}:
+      False{}
+    case Uncontrolled{}:
+      False{}
+
+# The line stands two metres off the carriageway it is crossing; the crossing
+# further back than the line. A local street with no line has no crossing.
+def line_cm(half: U32) -> U32:
+  U32.add(half, 200)
+
+def crossing_cm(control: Control, street: Street, half: U32) -> U32:
+  match control:
+    case Signal{}:
+      U32.add(half, 900)
+    case Roundabout{}:
+      0
+    case Uncontrolled{}:
+      match street:
+        case Ring{}:
+          U32.add(half, 900)
+        case Collector{}:
+          U32.add(half, 900)
+        case Local{}:
+          0
+
+def approach_of(d: Dir, present: Bool, +half: U32, street: Street, +c: Control,
+                +gives: Bool, +given: Bool) -> Approach:
+  Approach{d, present, half, mark_of(c, gives), line_cm(half), crossing_cm(c, street, half),
+           signal_head(c), post_of(c, gives, given)}
+
+def approach_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Approach:
+  +c = control(i, j)
+  +s = shape(i, j, seed)
+  +street = street_of(i, j, d)
+  +gone = missing_of(has(i, j, North{}), has(i, j, East{}),
+                     has(i, j, South{}), has(i, j, West{}))
+  +stem = is_eq_dir(d, opposite(gone))
+  +gives = gives_way(s, minor_of(i, j, d), stem)
+  +given = Bool.and(has_give_way(c, s), Bool.not(gives))
+  approach_of(d, has(i, j, d), half_cm(street), street, c, gives, given)
+
+# The four approaches of a junction. One that has no street is still answered,
+# so the list is the same shape everywhere and the renderer can walk it.
+def approaches(+i: U32, +j: U32, +seed: U32) -> List<Approach>:
+  [ approach_at(i, j, North{}, seed)
+  , approach_at(i, j, East{}, seed)
+  , approach_at(i, j, South{}, seed)
+  , approach_at(i, j, West{}, seed)
+  ]
+
+# ---------------------------------------------------------------------------
+# Reading the furniture back, so a law can state what a junction carries.
+# ---------------------------------------------------------------------------
+
+def mark_is(m: Mark, want: Mark) -> Bool:
+  match m:
+    case StopLine{}:
+      match want:
+        case StopLine{}:
+          True{}
+        case _:
+          False{}
+    case GiveWayLine{}:
+      match want:
+        case GiveWayLine{}:
+          True{}
+        case _:
+          False{}
+    case NoLine{}:
+      match want:
+        case NoLine{}:
+          True{}
+        case _:
+          False{}
+
+def post_is(p: Post, want: Post) -> Bool:
+  match p:
+    case PriorityWarning{}:
+      match want:
+        case PriorityWarning{}:
+          True{}
+        case _:
+          False{}
+    case GiveWaySign{}:
+      match want:
+        case GiveWaySign{}:
+          True{}
+        case _:
+          False{}
+    case StopSign{}:
+      match want:
+        case StopSign{}:
+          True{}
+        case _:
+          False{}
+    case NoSign{}:
+      match want:
+        case NoSign{}:
+          True{}
+        case _:
+          False{}
+
+# A street that is not there carries nothing, so it is skipped.
+def every_mark(xs: List<Approach>, +want: Mark) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case +h <> t:
+      match h:
+        case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
+          +ok = Bool.or(Bool.not(present), mark_is(mark, want))
+          Bool.and(ok, every_mark(t, want))
+
+def every_post(xs: List<Approach>, +want: Post) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case +h <> t:
+      match h:
+        case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
+          +ok = Bool.or(Bool.not(present), post_is(post, want))
+          Bool.and(ok, every_post(t, want))
+
+def every_head(xs: List<Approach>) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case +h <> t:
+      match h:
+        case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
+          Bool.and(Bool.or(Bool.not(present), head), every_head(t))
+
+def every_line_behind_the_kerb(xs: List<Approach>) -> Bool:
+  match xs:
+    case Nil{}:
+      True{}
+    case +h <> t:
+      match h:
+        case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
+          +ok = Bool.or(Bool.not(present), U32.is_lt(half, line_cm))
+          Bool.and(ok, every_line_behind_the_kerb(t))
+
+def gives_of(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Bool:
+  +gone = missing_of(has(i, j, North{}), has(i, j, East{}),
+                     has(i, j, South{}), has(i, j, West{}))
+  gives_way(shape(i, j, seed), minor_of(i, j, d), is_eq_dir(d, opposite(gone)))
+
+def mark_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Mark:
+  mark_of(control(i, j), gives_of(i, j, d, seed))
+
+def post_in(a: Approach) -> Post:
+  match a:
+    case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
+      post
+
+def post_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Post:
+  post_in(approach_at(i, j, d, seed))

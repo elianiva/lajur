@@ -439,3 +439,55 @@ law a_street_is_drawn_in_nine_points:
 
 def a_street_is_drawn_in_nine_points():
   {==}
+
+# ---------------------------------------------------------------------------
+# What each approach carries
+# ---------------------------------------------------------------------------
+
+law a_signalised_approach_has_a_stop_line:
+  { T.every_mark(T.approaches(4, 0, T.seed_of_town()), T.StopLine{}) == True{} : Bool }
+
+def a_signalised_approach_has_a_stop_line():
+  {==}
+
+law a_signalised_approach_has_a_head:
+  { T.every_head(T.approaches(4, 0, T.seed_of_town())) == True{} : Bool }
+
+def a_signalised_approach_has_a_head():
+  {==}
+
+law a_bundaran_gives_way_from_every_approach:
+  { T.every_mark(T.approaches(4, 4, T.seed_of_town()), T.GiveWayLine{}) == True{} : Bool }
+
+def a_bundaran_gives_way_from_every_approach():
+  {==}
+
+law a_skew_t_posts_nothing:
+  { T.every_post(T.approaches(3, 0, T.seed_of_town()), T.NoSign{}) == True{} : Bool }
+
+def a_skew_t_posts_nothing():
+  {==}
+
+law a_perpendicular_t_stops_its_stem:
+  { T.mark_at(1, 0, T.South{}, T.seed_of_town()) == T.GiveWayLine{} : T.Mark }
+
+def a_perpendicular_t_stops_its_stem():
+  {==}
+
+law the_warning_stands_across_from_the_give_way:
+  { T.post_at(1, 0, T.East{}, T.seed_of_town()) == T.PriorityWarning{} : T.Post }
+
+def the_warning_stands_across_from_the_give_way():
+  {==}
+
+law the_minor_road_carries_the_give_way_sign:
+  { T.post_at(1, 4, T.North{}, T.seed_of_town()) == T.GiveWaySign{} : T.Post }
+
+def the_minor_road_carries_the_give_way_sign():
+  {==}
+
+law every_line_stands_behind_the_kerb:
+  { T.every_line_behind_the_kerb(T.approaches(1, 4, T.seed_of_town())) == True{} : Bool }
+
+def every_line_stands_behind_the_kerb():
+  {==}
