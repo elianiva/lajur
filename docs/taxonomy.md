@@ -50,7 +50,7 @@ Across the eight instruments, `corpus/provisions.json` holds 2081 provisions:
 PM 13/2014, 167 from Perpol 5/2021, 149 from PP 37/2017, 92 from PP 30/2021 and
 23 from PM 111/2015.
 
-The Bend model states 282 laws over them. The count per instrument is in the
+The Bend model states 358 laws over them. The count per instrument is in the
 [README](../README.md#what-is-modelled).
 
 The 347 coded signs are a category 1 definition table. The 109 operative sign

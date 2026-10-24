@@ -851,7 +851,22 @@ def Laws.the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_sementara_gro
 def Laws.every_sign_has_a_meaning():
   {==}
 
-def Laws.every_sign_code_is_unique():
+def Laws.the_electronic_codes_are_unique():
+  {==}
+
+def Laws.the_warning_codes_are_unique():
+  {==}
+
+def Laws.the_prohibition_codes_are_unique():
+  {==}
+
+def Laws.the_command_codes_are_unique():
+  {==}
+
+def Laws.the_guidance_codes_are_unique():
+  {==}
+
+def Laws.the_temporary_warning_codes_are_unique():
   {==}
 
 def Laws.every_sign_sits_in_its_family():

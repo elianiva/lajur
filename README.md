@@ -5,7 +5,7 @@
 Indonesian traffic law as named claims a compiler checks, next to the statutes
 they come from.
 
-Status: 8 instruments, 50 scenario rules, 109 sign rules, 282 laws. All proofs check with Bend
+Status: 8 instruments, 50 scenario rules, 109 sign rules, 358 laws. All proofs check with Bend
 2.0.39, and the Lean 4.34.0 kernel accepts the verdict.
 
 ## The idea
@@ -97,7 +97,7 @@ Seven more modules hold what a moment cannot express:
 | --- | --- | --- |
 | UU 22/2009 | 68 + 13 | 51 behaviour laws over 50 rules, 9 penalties, 8 catalogue properties, and the vehicle: type test, periodic test, kit, technical items |
 | Perpol 5/2021 | 32 | Classes, ages, validity, health checks, test stages, pass mark, retakes |
-| PM 13/2014 | 119 | 347 signs, 109 operative sign rules, families, colours, placement, heights, warning distances, supplements |
+| PM 13/2014 | 195 | 347 signs, 109 operative sign rules, families, colours, placement, heights, warning distances, supplements |
 | PP 30/2021 with UU 22/2009 | 12 | Impact analysis, approval authority, warnings, terminals, papers, insurance |
 | PP 37/2017 | 11 | Pillars, plan periods, safety system elements, ratios |
 | PP 79/2013 | 10 | Functions, class dimensions, axle load, signing |
@@ -182,7 +182,7 @@ Not covered:
 ## Roadmap
 
 1. **v0.** 19 rules, 9 scenarios, 10 laws, one instrument.
-2. **v1, this commit.** 8 instruments, 50 scenario rules, 109 sign rules, 282 laws, one per requirement,
+2. **v1, this commit.** 8 instruments, 50 scenario rules, 109 sign rules, 358 laws, one per requirement,
    with the corpus indexed by page.
 3. **v1.1.** Scenario JSON, a TypeScript port of the adjudicator, and a harness
    that runs the same corpus in both. The game needs the port; the proofs keep

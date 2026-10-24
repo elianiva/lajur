@@ -1024,41 +1024,26 @@ def all_family_ok(xs: List<&2, Sign>) -> Bool:
         case Sign{code, +table, group, +family, meaning, ordinal}:
           Bool.and(table_family_ok(table, family), all_family_ok(tl))
 
-def code_is(+c: String, s: Sign) -> Bool:
-  match s:
-    case Sign{+hc, table, group, family, meaning, ordinal}:
-      String.eq(c, hc)
-
-def dup_go(+c: String, xs: List<&2, Sign>) -> Bool:
+def table_code_in(+t: Table, +code: String, xs: List<&2, Sign>) -> Bool:
   match xs:
     case Nil{}:
       False{}
     case h <> tl:
-      Bool.or(code_is(c, h), dup_go(c, tl))
+      match h:
+        case Sign{+hc, +table, group, family, meaning, ordinal}:
+          Bool.or(Bool.and(same_table(t, table), String.eq(code, hc)), table_code_in(t, code, tl))
 
-def dup_step(h: Sign, +tl: List<&2, Sign>, rest: Bool) -> Bool:
-  match h:
-    case Sign{+hc, table, group, family, meaning, ordinal}:
-      Bool.or(dup_go(hc, tl), rest)
-
-def has_duplicate(xs: List<&2, Sign>) -> Bool:
+def table_has_duplicate(+t: Table, xs: List<&2, Sign>) -> Bool:
   match xs:
     case Nil{}:
       False{}
     case h <> +tl:
-      dup_step(h, tl, has_duplicate(tl))
+      match h:
+        case Sign{+code, +table, group, family, meaning, ordinal}:
+          Bool.or(Bool.and(same_table(t, table), table_code_in(t, code, tl)), table_has_duplicate(t, tl))
 
-def no_duplicate_codes(xs: List<&2, Sign>) -> Bool:
-  Bool.not(has_duplicate(xs))
-
-def groups_sized(gs: List<&2, Group>, +xs: List<&2, Sign>) -> Bool:
-  match gs:
-    case Nil{}:
-      True{}
-    case g <> gt:
-      match g:
-        case Group{+name, table, size}:
-          Bool.and(U32.is_eq(count_group(name, xs), size), groups_sized(gt, xs))
+def table_codes_unique(t: Table, xs: List<&2, Sign>) -> Bool:
+  Bool.not(table_has_duplicate(t, xs))
 
 def supplements_numbered(xs: List<&2, Supplement>, +expected: U32) -> Bool:
   match xs:

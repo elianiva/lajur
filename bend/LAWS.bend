@@ -729,8 +729,23 @@ law the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_sementara_group_ho
 law every_sign_has_a_meaning:
   { SG.all_meaningful(SG.signs()) == True{} : Bool }
 
-law every_sign_code_is_unique:
-  { SG.no_duplicate_codes(SG.signs()) == True{} : Bool }
+law the_electronic_codes_are_unique:
+  { SG.table_codes_unique(SG.Elektronik{}, SG.signs()) == True{} : Bool }
+
+law the_warning_codes_are_unique:
+  { SG.table_codes_unique(SG.Peringatan{}, SG.signs()) == True{} : Bool }
+
+law the_prohibition_codes_are_unique:
+  { SG.table_codes_unique(SG.Larangan{}, SG.signs()) == True{} : Bool }
+
+law the_command_codes_are_unique:
+  { SG.table_codes_unique(SG.Perintah{}, SG.signs()) == True{} : Bool }
+
+law the_guidance_codes_are_unique:
+  { SG.table_codes_unique(SG.Petunjuk{}, SG.signs()) == True{} : Bool }
+
+law the_temporary_warning_codes_are_unique:
+  { SG.table_codes_unique(SG.PeringatanSementara{}, SG.signs()) == True{} : Bool }
 
 law every_sign_sits_in_its_family:
   { SG.all_family_ok(SG.signs()) == True{} : Bool }
