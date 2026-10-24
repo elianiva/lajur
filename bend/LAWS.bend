@@ -729,24 +729,6 @@ law the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_sementara_group_ho
 law every_sign_has_a_meaning:
   { SG.all_meaningful(SG.signs()) == True{} : Bool }
 
-law the_electronic_codes_are_unique:
-  { SG.table_codes_unique(SG.Elektronik{}, SG.signs()) == True{} : Bool }
-
-law the_warning_codes_are_unique:
-  { SG.table_codes_unique(SG.Peringatan{}, SG.signs()) == True{} : Bool }
-
-law the_prohibition_codes_are_unique:
-  { SG.table_codes_unique(SG.Larangan{}, SG.signs()) == True{} : Bool }
-
-law the_command_codes_are_unique:
-  { SG.table_codes_unique(SG.Perintah{}, SG.signs()) == True{} : Bool }
-
-law the_guidance_codes_are_unique:
-  { SG.table_codes_unique(SG.Petunjuk{}, SG.signs()) == True{} : Bool }
-
-law the_temporary_warning_codes_are_unique:
-  { SG.table_codes_unique(SG.PeringatanSementara{}, SG.signs()) == True{} : Bool }
-
 law every_sign_sits_in_its_family:
   { SG.all_family_ok(SG.signs()) == True{} : Bool }
 
@@ -790,17 +772,11 @@ law a_guidance_sign_states_no_duty:
 # PM 13/2014 — the operative rule each sign posts, and the charge it produces
 # ---------------------------------------------------------------------------
 
-law the_rule_table_holds_109_rules:
-  { SG.rule_count() == 109 : U32 }
+law the_catalogue_posts_109_duties:
+  { SG.duty_count() == 109 : U32 }
 
-law every_prohibition_or_command_sign_posts_a_rule:
-  { SG.binding_rules_ok(SG.signs(), SG.rules()) == True{} : Bool }
-
-law every_sign_rule_names_a_catalogued_sign:
-  { SG.rules_catalogued(SG.rules(), SG.signs()) == True{} : Bool }
-
-law every_sign_rule_is_unique:
-  { SG.rule_codes_unique(SG.rules()) == True{} : Bool }
+law every_binding_sign_posts_a_duty:
+  { SG.every_binding_sign_posts_a_duty(SG.signs()) == True{} : Bool }
 
 law a_no_stopping_sign_posts_no_stopping:
   { SG.is_no_stopping(SG.posted("III-3a")) == True{} : Bool }

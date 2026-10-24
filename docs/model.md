@@ -112,12 +112,12 @@ A scenario is six records and a sign act, so each constructor stays short enough
 Tabel I to VI, plus the five kinds of papan tambahan. Each entry carries its
 table, its group, its family, the regulation's meaning text, and an ordinal.
 
-A warning or guidance sign posts no duty. Every prohibition and command sign
-posts one operative rule in `rules()`: 109 entries mapping a sign code to a
-`Duty`. `posted(code)` returns that duty, or `NoDuty` for a sign that only
-warns or guides. The adjudicator applies the posted duty at rule 8, so a
-`III-3a` (larangan berhenti) sign charges a driver who stops, and a `III-4b`
-(larangan belok kiri) sign charges a driver who turns left.
+A warning or guidance sign carries `NoDuty`. Every prohibition and command
+sign carries one operative rule in its `duty` field: 109 signs carry a duty.
+`posted(code)` returns that duty, or `NoDuty` for a sign that only warns or
+guides. The adjudicator applies the posted duty at rule 8, so a `III-3a`
+(larangan berhenti) sign charges a driver who stops, and a `III-4b` (larangan
+belok kiri) sign charges a driver who turns left.
 
 `law stopping_at_a_no_stopping_sign_is_charged` is the whole chain: the code
 names the sign, the rule table gives `NoStopping`, and `charges` returns rule 8

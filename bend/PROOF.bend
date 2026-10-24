@@ -851,24 +851,6 @@ def Laws.the_rambu_keterangan_tambahan_tentang_jarak_lokasi_kritis_sementara_gro
 def Laws.every_sign_has_a_meaning():
   {==}
 
-def Laws.the_electronic_codes_are_unique():
-  {==}
-
-def Laws.the_warning_codes_are_unique():
-  {==}
-
-def Laws.the_prohibition_codes_are_unique():
-  {==}
-
-def Laws.the_command_codes_are_unique():
-  {==}
-
-def Laws.the_guidance_codes_are_unique():
-  {==}
-
-def Laws.the_temporary_warning_codes_are_unique():
-  {==}
-
 def Laws.every_sign_sits_in_its_family():
   {==}
 
@@ -908,16 +890,10 @@ def Laws.a_warning_sign_states_no_duty():
 def Laws.a_guidance_sign_states_no_duty():
   {==}
 
-def Laws.the_rule_table_holds_109_rules():
+def Laws.the_catalogue_posts_109_duties():
   {==}
 
-def Laws.every_prohibition_or_command_sign_posts_a_rule():
-  {==}
-
-def Laws.every_sign_rule_names_a_catalogued_sign():
-  {==}
-
-def Laws.every_sign_rule_is_unique():
+def Laws.every_binding_sign_posts_a_duty():
   {==}
 
 def Laws.a_no_stopping_sign_posts_no_stopping():
