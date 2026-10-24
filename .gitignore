@@ -1,2 +1,4 @@
 .DS_Store
 *.bendtt
+__pycache__/
+.venv/

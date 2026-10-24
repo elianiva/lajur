@@ -17,9 +17,14 @@ jobs:
           echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
       - name: Report the toolchain
         run: bend version
-      - name: Check the rules
+      - name: Check every module
         working-directory: bend
-        run: bend rules.bend
-      - name: Check the proofs
+        run: |
+          for f in *.bend; do
+            case "$f" in LAWS.bend|PROOF.bend) continue;; esac
+            echo "== $f"
+            bend --check-only "$f"
+          done
+      - name: Prove the laws
         working-directory: bend
         run: bend PROOF.bend
