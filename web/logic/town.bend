@@ -1039,3 +1039,253 @@ def post_in(a: Approach) -> Post:
 
 def post_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Post:
   post_in(approach_at(i, j, d, seed))
+
+# ===========================================================================
+# Blocks and lots
+#
+# A block is filled from its south street northwards: a frontage row facing
+# the street, a gang, a row facing back, and so on until the block runs out.
+# Nothing is tested for overlap, because nothing can overlap: every row owns a
+# band of depth and every lot owns a share of its row's width.
+# ===========================================================================
+
+# Integer square root by Newton's method, from above. Thirty-two steps reach
+# the root of any thirty-two-bit number.
+def root(fuel: Nat, +n: U32, +x: U32) -> U32:
+  match fuel:
+    case 0n:
+      x
+    case 1n+p:
+      +next = U32.div(U32.add(x, U32.div(n, U32.max(x, 1))), 2)
+      root(p, n, Bool.pick(U32, U32.is_le(x, next), x, next))
+
+# Newton from the number itself, capped, converges inside twenty steps.
+def sqrt(+n: U32) -> U32:
+  root(20n, n, U32.min(n, 65535))
+
+def length(a: Pt, b: Pt) -> U32:
+  match a:
+    case Pt{ax, az}:
+      match b:
+        case Pt{bx, bz}:
+          +dx = U32.sub(bx, ax)
+          +dz = U32.sub(bz, az)
+          sqrt(U32.add(U32.mul(dx, dx), U32.mul(dz, dz)))
+
+def span_of(s: Signed) -> U32:
+  match s:
+    case Signed{size, down}:
+      size
+
+# A direction as a step of 1024, sign kept.
+def unit(a: U32, b: U32, wide: U32) -> Signed:
+  +d = gap_cm(a, b)
+  Signed{U32.div(U32.mul(span_of(d), 1024), U32.max(wide, 1)), below(d)}
+
+def push_along(base: U32, u: Signed, dist: U32) -> U32:
+  match u:
+    case Signed{size, down}:
+      place(base, U32.div(U32.mul(size, dist), 1024), down)
+
+type Frame is Data:
+  Frame{origin: Pt, ux: Signed, uz: Signed, nx: Signed, nz: Signed}
+
+# The block's own axes: along its south street, and into the block.
+def chord(ax: U32, az: U32, bx: U32, bz: U32) -> U32:
+  +dx = U32.sub(bx, ax)
+  +dz = U32.sub(bz, az)
+  sqrt(U32.add(U32.mul(dx, dx), U32.mul(dz, dz)))
+
+def inwards_x(ux: Signed, uz: Signed) -> Signed:
+  match uz:
+    case Signed{size, down}:
+      Signed{size, Bool.not(down)}
+
+def inwards_z(ux: Signed, uz: Signed) -> Signed:
+  match ux:
+    case Signed{size, down}:
+      Signed{size, down}
+
+def frame_from(a: Pt, b: Pt) -> Frame:
+  match a:
+    case Pt{+ax, +az}:
+      match b:
+        case Pt{+bx, +bz}:
+          +wide = chord(ax, az, bx, bz)
+          +ux = unit(ax, bx, wide)
+          +uz = unit(az, bz, wide)
+          Frame{Pt{ax, az}, ux, uz, inwards_x(ux, uz), inwards_z(ux, uz)}
+
+def frame_of(+i: U32, +j: U32, +seed: U32) -> Frame:
+  frame_from(site(i, j, seed), site(U32.add(i, 1), j, seed))
+
+def negate(s: Signed) -> Signed:
+  match s:
+    case Signed{size, down}:
+      Signed{size, Bool.not(down)}
+
+# The inward normal is the along direction turned a quarter clockwise, which is
+# what walking the block south, east, north, west always gives.
+def in_frame(f: Frame, +along: U32, +depth: U32) -> Pt:
+  match f:
+    case Frame{origin, ux, uz, nx, nz}:
+      match origin:
+        case Pt{ox, oz}:
+          +x = push_along(push_along(ox, ux, along), nx, depth)
+          +z = push_along(push_along(oz, uz, along), nz, depth)
+          Pt{x, z}
+
+# A block's south street and north street, which are rows j and j+1.
+def south_half(+i: U32, +j: U32) -> U32:
+  half_cm(street_of(i, j, East{}))
+
+def north_half(+i: U32, +j: U32) -> U32:
+  half_cm(street_of(i, U32.add(j, 1), East{}))
+
+def pavement_cm() -> U32:
+  150
+
+def row_depth_cm() -> U32:
+  1200
+
+def gang_cm() -> U32:
+  300
+
+def block_depth(+i: U32, +j: U32, +seed: U32) -> U32:
+  length(site(i, j, seed), site(i, U32.add(j, 1), seed))
+
+def block_width(+i: U32, +j: U32, +seed: U32) -> U32:
+  length(site(i, j, seed), site(U32.add(i, 1), j, seed))
+
+# The block as a bilinear patch: a point is found by travelling `u` along the
+# south edge and `v` from there to the north edge. Nothing can leave the block,
+# because every u and v leaves a point inside the four corners.
+def mix_pt(p: Pt, q: Pt, +t: U32) -> Pt:
+  match p:
+    case Pt{px, pz}:
+      match q:
+        case Pt{qx, qz}:
+          Pt{lerp(px, qx, t), lerp(pz, qz, t)}
+
+def quad_point(a: Pt, b: Pt, c: Pt, d: Pt, +u: U32, +v: U32) -> Pt:
+  +low = mix_pt(a, b, u)
+  +high = mix_pt(d, c, u)
+  mix_pt(low, high, v)
+
+# From the south kerb across the pavement, as a fraction of the block's depth.
+def front_v(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.div(U32.mul(U32.add(south_half(i, j), pavement_cm()), 1024), block_depth(i, j, seed))
+
+def row_v(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.div(U32.mul(row_depth_cm(), 1024), block_depth(i, j, seed))
+
+def gang_v(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.div(U32.mul(gang_cm(), 1024), block_depth(i, j, seed))
+
+# How many rows fit between the two pavements.
+def rows_in(+i: U32, +j: U32, +seed: U32) -> U32:
+  +room = U32.sub(block_depth(i, j, seed),
+                  U32.add(U32.add(U32.add(south_half(i, j), north_half(i, j)),
+                                  U32.mul(2, pavement_cm())), 200))
+  +each = U32.add(row_depth_cm(), gang_cm())
+  U32.min(U32.max(U32.div(U32.add(room, gang_cm()), each), 1), 4)
+
+# A row's lots are seven hundred centimetres each, at least one and at most
+# twelve, and they share the width exactly.
+def lots_in(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.min(U32.max(U32.div(block_width(i, j, seed), 700), 1), 12)
+
+def lot_width(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.div(block_width(i, j, seed), lots_in(i, j, seed))
+
+type LotKind is Data:
+  Ruko{}
+  Warung{}
+  House{}
+  Kos{}
+  Petak{}
+
+def kind_at(frontage: Bool, shop: Bool, house: Bool, rooms: Bool) -> LotKind:
+  match frontage:
+    case True{}:
+      match shop:
+        case True{}:
+          Ruko{}
+        case False{}:
+          Warung{}
+    case False{}:
+      match house:
+        case True{}:
+          House{}
+        case False{}:
+          match rooms:
+            case True{}:
+              Kos{}
+            case False{}:
+              Petak{}
+
+def kind_of(+i: U32, +j: U32, +row: U32, +k: U32, +seed: U32) -> LotKind:
+  +roll = U32.mod(mix(U32.add(k, U32.mul(row, 31)), U32.add(seed, U32.mul(i, 7))), 100)
+  kind_at(U32.is_eq(row, 0), U32.is_lt(roll, 55), U32.is_lt(roll, 45), U32.is_lt(roll, 70))
+
+type Lot is Data:
+  Lot{x: U32, z: U32, fx: Signed, fz: Signed, w: U32, d: U32, kind: LotKind}
+
+def facing(row: U32) -> Bool:
+  U32.is_eq(U32.mod(row, 2), 0)
+
+# A front faces the street: an even row faces back down the inward normal, an
+# odd row faces along it, across the gang.
+def face_x(f: Frame, even: Bool) -> Signed:
+  match f:
+    case Frame{origin, ux, uz, nx, nz}:
+      match even:
+        case True{}:
+          negate(nx)
+        case False{}:
+          nx
+
+def face_z(f: Frame, even: Bool) -> Signed:
+  match f:
+    case Frame{origin, ux, uz, nx, nz}:
+      match even:
+        case True{}:
+          negate(nz)
+        case False{}:
+          nz
+
+def lot_from(here: Pt, +f: Frame, +face: Bool, w: U32, depth: U32, kind: LotKind) -> Lot:
+  match here:
+    case Pt{x, z}:
+      Lot{x, z, face_x(f, face), face_z(f, face), w, depth, kind}
+
+# One lot: its footprint centre, the way its front looks, its width and depth.
+def lot_at(+i: U32, +j: U32, +row: U32, +k: U32, +seed: U32) -> Lot:
+  +lots = lots_in(i, j, seed)
+  +u = U32.div(U32.mul(U32.add(U32.mul(k, 2), 1), 1024), U32.mul(lots, 2))
+  +start = U32.add(front_v(i, j, seed), U32.mul(row, U32.add(row_v(i, j, seed), gang_v(i, j, seed))))
+  +v = U32.add(start, U32.div(row_v(i, j, seed), 2))
+  +here = quad_point(site(i, j, seed), site(U32.add(i, 1), j, seed),
+                     site(U32.add(i, 1), U32.add(j, 1), seed), site(i, U32.add(j, 1), seed), u, v)
+  lot_from(here, frame_of(i, j, seed), facing(row), lot_width(i, j, seed), row_depth_cm(),
+           kind_of(i, j, row, k, seed))
+
+# ---------------------------------------------------------------------------
+# Reading the lots back, so a law can walk a block.
+# ---------------------------------------------------------------------------
+
+def lot_inside(l: Lot) -> Bool:
+  match l:
+    case Lot{+x, +z, fx, fz, w, d, kind}:
+      Bool.and(U32.is_lt(0, x), Bool.and(U32.is_lt(x, 90000),
+      Bool.and(U32.is_lt(0, z), U32.is_lt(z, 90000))))
+
+# One lot from each row of a block, walked by counting rows down.
+def rows_inside_block(fuel: Nat, +row: U32, +i: U32, +j: U32, +seed: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+p:
+      +live = U32.is_lt(row, rows_in(i, j, seed))
+      +ok = Bool.or(Bool.not(live), lot_inside(lot_at(i, j, row, 0, seed)))
+      Bool.and(ok, rows_inside_block(p, U32.add(row, 1), i, j, seed))

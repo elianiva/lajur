@@ -491,3 +491,31 @@ law every_line_stands_behind_the_kerb:
 
 def every_line_stands_behind_the_kerb():
   {==}
+
+# ---------------------------------------------------------------------------
+# Blocks and lots
+# ---------------------------------------------------------------------------
+
+law a_block_holds_at_least_one_row:
+  { U32.is_le(1, T.rows_in(3, 3, T.seed_of_town())) == True{} : Bool }
+
+def a_block_holds_at_least_one_row():
+  {==}
+
+law a_block_holds_at_least_one_lot:
+  { U32.is_le(1, T.lots_in(3, 3, T.seed_of_town())) == True{} : Bool }
+
+def a_block_holds_at_least_one_lot():
+  {==}
+
+law a_frontage_row_is_twelve_metres_deep:
+  { T.row_depth_cm() == 1200 : U32 }
+
+def a_frontage_row_is_twelve_metres_deep():
+  {==}
+
+law every_row_lands_inside_the_town:
+  { T.rows_inside_block(4n, 0, 3, 3, T.seed_of_town()) == True{} : Bool }
+
+def every_row_lands_inside_the_town():
+  {==}
