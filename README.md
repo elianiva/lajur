@@ -161,10 +161,14 @@ cd bend
 bend PROOF.bend --verdict
 ```
 
+The kernel maps a 4 GiB stack, so a machine with less RAM than that also needs
+`sudo sysctl -w vm.overcommit_memory=1`.
+
 CI runs both checks on every push.
 
-A fresh Amp orb gets this toolchain from `.agents/setup`, which also installs
-the venv the corpus tools use and tesseract for the OCR step.
+A fresh Amp orb gets Bend 2.0.39 from `.agents/setup`, which also installs the
+venv the corpus tools use and tesseract for the OCR step. Setup runs no proofs:
+run `bend PROOF.bend` when you change a law, and leave the verdict to CI.
 
 ## Rebuild the corpus index
 

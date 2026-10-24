@@ -10,8 +10,9 @@ bend PROOF.bend              # Bend's checker
 bend PROOF.bend --verdict    # the same proofs through the Lean kernel
 ```
 
-`.agents/setup` installs Bend 2.0.39 and Lean 4.34.0 in a fresh orb. Both checks
-run in CI on every push.
+Both checks run in CI on every push. `.agents/setup` installs Bend 2.0.39 in a
+fresh orb and runs no proofs; the verdict needs Lean 4.34.0, which only CI
+installs.
 
 ## The game
 

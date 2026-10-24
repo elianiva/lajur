@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Prepares a fresh orb to check the laws: Bend, Lean for `bend --verdict`, and
-# the corpus toolchain, plus the Vite+ JavaScript toolchain the orb carries.
+# Prepares a fresh orb to work on the laws: Bend, tesseract for the OCR step,
+# and the corpus toolchain, plus the Vite+ JavaScript toolchain the orb carries.
+# Setup proves nothing; CI runs both checks on every push.
 # Idempotent, non-interactive, and safe to run twice.
 set -euo pipefail
 
@@ -8,7 +9,6 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 bend_version=2.0.39
-lean_toolchain="$(cat lean-toolchain)"
 
 start=$SECONDS
 step_start=$SECONDS
@@ -19,20 +19,20 @@ step() {
 done_step() { printf '   %ss\n' "$((SECONDS - step_start))"; }
 warn() { printf '   warning: %s\n' "$*" >&2; }
 
-# Bend and Lean install into $HOME, outside the default PATH.
-export PATH="$HOME/.bend/bin:$HOME/.elan/bin:$PATH"
+# Bend installs into $HOME, outside the default PATH.
+export PATH="$HOME/.bend/bin:$PATH"
 export BEND_NO_TELEMETRY=1
 
 # A new orb starts from the base template, so the login shell needs the
-# toolchain directories even before this script runs again.
+# toolchain directory even before this script runs again.
 profile="$HOME/.bash_profile"
-profile_marker="# lajur: Bend and Lean toolchain"
+profile_marker="# lajur: Bend toolchain"
 if ! grep -Fqx "$profile_marker" "$profile" 2>/dev/null; then
   step "Adding the toolchain to ~/.bash_profile"
   cat >>"$profile" <<'EOF'
 
-# lajur: Bend and Lean toolchain
-export PATH="$HOME/.bend/bin:$HOME/.elan/bin:$PATH"
+# lajur: Bend toolchain
+export PATH="$HOME/.bend/bin:$PATH"
 export BEND_NO_TELEMETRY=1
 EOF
   done_step
@@ -66,19 +66,9 @@ else
 fi
 done_step
 
-step "Installing Lean $lean_toolchain for --verdict"
-if [ ! -x "$HOME/.elan/bin/elan" ]; then
-  curl -fsSL https://elan.lean-lang.org/elan-init.sh |
-    sh -s -- -y --default-toolchain "$lean_toolchain"
-  hash -r
-fi
-if elan toolchain list 2>/dev/null | grep -Fxq "$lean_toolchain"; then
-  echo "   already installed"
-else
-  elan toolchain install "$lean_toolchain"
-fi
-done_step
-
+# The rest of setup covers work around the laws: the corpus tools, the game and
+# the module checks. Proving is CI's job, so Lean is not installed here.
+#
 # Vite+ is here for work around the laws, not for the laws themselves. The orb
 # template already ships Node.js and package managers, so the installer keeps
 # those: managed mode would put its shims in front of them.
@@ -107,20 +97,6 @@ else
 fi
 done_step
 
-# bend runs its kernel with a 4 GiB stack. Under the default heuristic
-# overcommit a smaller orb refuses that mapping and the kernel aborts, so let
-# the machine commit more than its RAM. `.agents/resume` reapplies this after
-# a pause, because a restored snapshot gets a fresh kernel.
-step "Allowing the kernel's 4 GiB stack"
-if [ "$(cat /proc/sys/vm/overcommit_memory 2>/dev/null)" = 1 ]; then
-  echo "   already set"
-elif sudo -n sysctl -w vm.overcommit_memory=1 >/dev/null 2>&1; then
-  echo "   set vm.overcommit_memory=1"
-else
-  warn "cannot set vm.overcommit_memory; bend --verdict will abort on this orb"
-fi
-done_step
-
 step "Installing the corpus toolchain"
 if [ -x .venv/bin/python ] && .venv/bin/python -c 'import pymupdf' 2>/dev/null; then
   echo "   .venv already has pymupdf"
@@ -146,25 +122,6 @@ for file in bend/*.bend; do
   checked=$((checked + 1))
 done
 printf '   %d modules check\n' "$checked"
-done_step
-
-step "Proving the laws"
-(cd bend && bend PROOF.bend)
-done_step
-
-# The first verdict builds BendTT from Lean, which takes about 35 seconds.
-# Priming it here keeps that cost out of the first agent command.
-step "Re-checking the proofs with the Lean kernel"
-if verdict_output="$(cd bend && bend PROOF.bend --verdict 2>&1)"; then
-  printf '%s\n' "$verdict_output"
-else
-  printf '%s\n' "$verdict_output" >&2
-  case "$verdict_output" in
-    *"BendTT infrastructure"*)
-      warn "the Lean kernel is unavailable; the laws themselves still check" ;;
-    *) exit 1 ;;
-  esac
-fi
 done_step
 
 printf '\nsetup finished in %ss\n' "$((SECONDS - start))"
