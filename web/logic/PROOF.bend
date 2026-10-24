@@ -160,6 +160,36 @@ law a_lane_change_lights_the_indicator:
 def a_lane_change_lights_the_indicator():
   {==}
 
+law a_lane_change_takes_twenty_four_ticks:
+  { G.lane_change_ticks() == 24 : U32 }
+
+def a_lane_change_takes_twenty_four_ticks():
+  {==}
+
+law the_indicator_outlasts_the_lane_change:
+  { U32.is_lt(G.lane_change_ticks(), G.lamp_ticks()) == True{} : Bool }
+
+def the_indicator_outlasts_the_lane_change():
+  {==}
+
+law a_lane_change_counts_down:
+  { G.after_travel(G.travel(10, G.Inner{}, G.Outer{})) == 9 : U32 }
+
+def a_lane_change_counts_down():
+  {==}
+
+law a_tick_in_motion_holds_the_old_lane:
+  { G.arriving(G.travel(5, G.Inner{}, G.Outer{})) == G.Inner{} : G.Lane }
+
+def a_tick_in_motion_holds_the_old_lane():
+  {==}
+
+law the_last_tick_arrives:
+  { G.arriving(G.travel(1, G.Inner{}, G.Outer{})) == G.Outer{} : G.Lane }
+
+def the_last_tick_arrives():
+  {==}
+
 law the_indicator_goes_out:
   { G.still_on(True{}, G.ToLeft{}) == G.Off{} : G.Signal }
 

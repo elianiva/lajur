@@ -72,6 +72,10 @@ export interface Game {
   crashed(world: World): boolean;
   signal_state(world: World): Signal;
   lane_centre(world: World): number;
+  lane_move(world: World): number;
+  lane_target(world: World): Lane;
+  lane_change_ticks(): number;
+  lamp_ticks(): number;
   chunk_cm(): number;
   curve_at(cm: number, seed: number): Curve;
   curve_rate_of(curve: Curve): number;

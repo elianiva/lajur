@@ -27,6 +27,10 @@ export interface Snapshot {
   metres: number;
   crashed: boolean;
   signal: Signal["$"];
+  /** Ticks left in a lane change, and the lane it arrives in. */
+  moving: number;
+  lane: Lane["$"];
+  target: Lane["$"];
   charges: number[];
   traffic: CarView[];
   oncoming: CarView[];
@@ -61,6 +65,11 @@ export function fine(id: number): number {
 // half of the road, so their lanes sit at negative x.
 export function laneX(lane: Lane): number {
   return -game.lane_offset(lane) / 100;
+}
+
+/** One tick of the lane change, in the model's own count. */
+export function laneChangeTicks(): number {
+  return game.lane_change_ticks();
 }
 
 export function chunkMetres(): number {
@@ -111,8 +120,18 @@ function ids(list: World["charges"]): number[] {
 }
 
 export function snapshot(world: World): Snapshot {
+  // A manoeuvre is a count of ticks, not a jump: the car sits part way between
+  // the lane it left and the one it is taking, by the model's own arithmetic.
+  const moving = game.lane_move(world);
+  const target = game.lane_target(world);
+  const from = laneX(world.player.lane);
+  const to = laneX(target);
+  const done = 1 - Math.min(moving, game.lane_change_ticks()) / game.lane_change_ticks();
   return {
-    x: laneX(world.player.lane),
+    x: from + (to - from) * done,
+    moving,
+    lane: world.player.lane.$,
+    target: target.$,
     index: world.index,
     along: world.along,
     seed: world.seed,

@@ -177,7 +177,7 @@ type Signal is Data:
   ToRight{}
 
 type Player is Data:
-  Player{lane: Lane, speed: U32, signal: Signal, lamp: U32}
+  Player{lane: Lane, speed: U32, signal: Signal, lamp: U32, moving: U32, target: Lane}
 
 type Controls is Data:
   Controls{left: Bool, right: Bool, up: Bool, down: Bool}
@@ -205,10 +205,19 @@ def held_down(c: Controls) -> Bool:
 def pressed(now: Bool, before: Bool) -> Bool:
   Bool.and(now, Bool.not(before))
 
+# A lane change is a manoeuvre, not a teleport: twenty-four ticks of moving
+# across, with the indicator lit for every one of them. The lamp runs for
+# forty-five, so it cannot go out before the car arrives.
+def lane_change_ticks() -> U32:
+  24
+
+def lamp_ticks() -> U32:
+  45
+
 def lamp_after(+lamp: U32, moved: Bool) -> U32:
   match moved:
     case True{}:
-      45
+      lamp_ticks()
     case False{}:
       Bool.pick(U32, U32.is_eq(lamp, 0), 0, U32.sub(lamp, 1))
 
@@ -232,34 +241,82 @@ def still_on(empty: Bool, s: Signal) -> Signal:
 
 def lane_of(p: Player) -> Lane:
   match p:
-    case Player{lane, speed, signal, lamp}:
+    case Player{lane, speed, signal, lamp, moving, target}:
       lane
 
 def speed_of(p: Player) -> U32:
   match p:
-    case Player{lane, speed, signal, lamp}:
+    case Player{lane, speed, signal, lamp, moving, target}:
       speed
 
 def signal_of(p: Player) -> Signal:
   match p:
-    case Player{lane, speed, signal, lamp}:
+    case Player{lane, speed, signal, lamp, moving, target}:
       signal
 
+def moving_of(p: Player) -> U32:
+  match p:
+    case Player{lane, speed, signal, lamp, moving, target}:
+      moving
+
+def target_of(p: Player) -> Lane:
+  match p:
+    case Player{lane, speed, signal, lamp, moving, target}:
+      target
+
+# One tick of the manoeuvre: a car one tick from the end arrives, any other in
+# motion keeps its old lane.
+def pick_lane(moved: Bool, wanted: Lane, target: Lane) -> Lane:
+  match moved:
+    case True{}:
+      wanted
+    case False{}:
+      target
+
+# One tick of the manoeuvre: a car one tick from the end arrives, any other in
+# motion keeps its old lane, and the count runs down.
+def travel_by(last: Bool, +moving: U32, lane: Lane, target: Lane) -> U32 & Lane:
+  match last:
+    case True{}:
+      (0, target)
+    case False{}:
+      (U32.sub(moving, U32.min(moving, 1)), lane)
+
+def travel(+moving: U32, lane: Lane, target: Lane) -> U32 & Lane:
+  travel_by(U32.is_eq(moving, 1), moving, lane, target)
+
+def after_travel(pair: U32 & Lane) -> U32:
+  match pair:
+    case (left, lane):
+      left
+
+def arriving(pair: U32 & Lane) -> Lane:
+  match pair:
+    case (left, lane):
+      lane
+
+# A press starts a change only when the car is not already in one, so a second
+# tap cannot skip the manoeuvre the first one began.
 def player_next(p: Player, +held: Controls, +input: Controls) -> Player:
   match p:
-    case Player{lane, speed, signal, lamp}:
-      +leftward = pressed(held_left(input), held_left(held))
-      +rightward = Bool.and(pressed(held_right(input), held_right(held)),
-                            Bool.not(leftward))
+    case Player{+lane, speed, signal, lamp, +moving, target}:
+      +idle = U32.is_eq(moving, 0)
+      +leftward = Bool.and(pressed(held_left(input), held_left(held)), idle)
+      +rightward = Bool.and(Bool.and(pressed(held_right(input), held_right(held)),
+                                     Bool.not(leftward)), idle)
       +moved = Bool.or(leftward, rightward)
-      +lane2 = maybe_shift(maybe_shift(lane, leftward, Left{}), rightward, Right{})
+      +wanted = maybe_shift(maybe_shift(lane, leftward, Left{}), rightward, Right{})
+      +target2 = pick_lane(moved, wanted, target)
+      +moving2 = Bool.pick(U32, moved, lane_change_ticks(), moving)
       +speed2 = speed_next(speed, held_up(input), held_down(input))
       +lamp2 = lamp_after(lamp, moved)
       +fresh = signal_after(leftward, Left{}, signal_after(rightward, Right{}, signal))
-      Player{lane2, speed2, still_on(U32.is_eq(lamp2, 0), fresh), lamp2}
+      +signalled = still_on(U32.is_eq(lamp2, 0), fresh)
+      Player{arriving(travel(moving2, lane, target2)), speed2, signalled, lamp2,
+             after_travel(travel(moving2, lane, target2)), target2}
 
 def cruising(speed: U32) -> Player:
-  Player{Inner{}, speed, Off{}, 0}
+  Player{Inner{}, speed, Off{}, 0, 0, Inner{}}
 
 # ===========================================================================
 # Traffic
@@ -411,8 +468,8 @@ def signalling(s: Signal) -> Bool:
 
 def scenario_for(p: Player) -> R.Scenario:
   match p:
-    case Player{lane, speed, signal, lamp}:
-      +changing = signalling(signal)
+    case Player{lane, speed, signal, lamp, moving, target}:
+      +changing = Bool.or(signalling(signal), Bool.not(U32.is_eq(moving, 0)))
       # A scenario now carries the signs in force at the moment; the game has
       # no sign duty to add, so it names the clean act.
       R.Scenario{R.clean_road(), R.clean_load(), R.clean_gear(),
@@ -556,6 +613,12 @@ def crashed(w: World) -> Bool:
 
 def signal_state(w: World) -> Signal:
   signal_of(player_of(w))
+
+def lane_move(w: World) -> U32:
+  moving_of(player_of(w))
+
+def lane_target(w: World) -> Lane:
+  target_of(player_of(w))
 
 def lane_centre(w: World) -> U32:
   lane_offset(lane_of(player_of(w)))
