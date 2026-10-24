@@ -38,6 +38,8 @@ export default defineConfig({
   plugins: [lajurLogic()],
   server: { host: true, port, strictPort: true },
   preview: { host: true, port, strictPort: true },
+  // The game, and the lab that shows every asset in src/assets.
+  build: { rollupOptions: { input: { game: resolve("index.html"), lab: resolve("lab.html") } } },
   fmt: {},
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],

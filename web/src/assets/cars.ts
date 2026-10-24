@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { Body } from "../game.mjs";
+import { bodyLength } from "../bend.ts";
+import { box, type Shelf } from "./kit.ts";
 
 /**
  * Low-poly cars. Shape, colour and proportions only: position, heading and
@@ -56,17 +58,6 @@ const beam = new THREE.MeshStandardMaterial({
 const wheelGeometry = new THREE.CylinderGeometry(0.34, 0.34, 0.26, 8);
 wheelGeometry.rotateZ(Math.PI / 2);
 
-const boxes = new Map<string, THREE.BoxGeometry>();
-
-function box(width: number, height: number, depth: number): THREE.BoxGeometry {
-  const key = `${width}:${height}:${depth}`;
-  const cached = boxes.get(key);
-  if (cached) return cached;
-  const geometry = new THREE.BoxGeometry(width, height, depth);
-  boxes.set(key, geometry);
-  return geometry;
-}
-
 export interface CarMesh {
   group: THREE.Group;
   wheels: THREE.Mesh[];
@@ -89,6 +80,7 @@ function piece(
 
 function wheel(parent: THREE.Group, x: number, z: number): THREE.Mesh {
   const mesh = new THREE.Mesh(wheelGeometry, rubber);
+  mesh.name = "wheel";
   mesh.position.set(x, 0.34, z);
   mesh.castShadow = true;
   parent.add(mesh);
@@ -187,3 +179,15 @@ export function buildCar(body: Body["$"], colour: number, length: number): CarMe
   });
   return car;
 }
+
+const BODIES: Body["$"][] = ["Sedan", "Hatch", "Taxi", "Van", "Bus", "Truck"];
+
+// Lengths come from the model, so the lab shows the envelope the game collides.
+export const shelf: Shelf = {
+  title: "Cars",
+  assets: BODIES.map((body) => ({
+    name: body,
+    build: (seed: number) =>
+      buildCar(body, trafficColour(Math.floor(seed * 97)), bodyLength(body)).group,
+  })),
+};

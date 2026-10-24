@@ -2,7 +2,7 @@ import * as THREE from "three";
 import "./style.css";
 import { Hud } from "./hud.ts";
 import { Keyboard } from "./input.ts";
-import { buildCar, PLAYER_COLOUR } from "./render/cars.ts";
+import { buildCar, PLAYER_COLOUR } from "./assets/cars.ts";
 import { RoadPath } from "./render/path.ts";
 import { RoadView } from "./render/road.ts";
 import { Traffic } from "./render/traffic.ts";

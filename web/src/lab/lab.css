@@ -1,0 +1,80 @@
+:root {
+  --ink: #1b2130;
+  --paper: #efe6cf;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #b8cdc7;
+}
+
+#stage canvas {
+  display: block;
+}
+
+.labels {
+  position: absolute;
+  inset: 0;
+}
+
+#bar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+#bar button {
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--ink);
+  border: 3px solid var(--paper);
+  padding: 12px 18px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+#bar button:hover {
+  background: #2a3348;
+}
+
+#bar button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+#bar button[hidden] {
+  display: none;
+}
+
+.tag,
+.row {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--ink);
+  border: 2px solid var(--paper);
+  padding: 4px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.row {
+  font-size: 15px;
+  padding: 6px 10px;
+}

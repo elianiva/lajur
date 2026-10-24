@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { buildCar, PLAYER_COLOUR, trafficColour, type CarMesh } from "./cars.ts";
+import { buildCar, PLAYER_COLOUR, trafficColour, type CarMesh } from "../assets/cars.ts";
 import type { CarView, Snapshot } from "../bend.ts";
 import type { RoadPath } from "./path.ts";
 
