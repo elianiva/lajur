@@ -1,0 +1,23 @@
+name: proofs
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  bend:
+    runs-on: ubuntu-latest
+    env:
+      BEND_NO_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bend
+        run: |
+          curl -fsSL https://bend-lang.com/install.sh | sh
+          echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
+      - name: Check the rules
+        working-directory: bend
+        run: bend rules.bend
+      - name: Check the proofs
+        working-directory: bend
+        run: bend PROOF.bend
