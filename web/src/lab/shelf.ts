@@ -11,10 +11,14 @@ import type { View } from "./view.ts";
 const VARIANTS = 3;
 const GAP = 1.6;
 const MARGIN = 1.4;
-const ROW_GAP = 7;
+const ROW_GAP = 12;
+/** Rows wrap past this width, so a long shelf stays on screen. */
+const WRAP = 320;
 
-const plinth = new THREE.MeshStandardMaterial({ color: 0xe9e1cb, roughness: 0.95 });
-const floor = new THREE.MeshStandardMaterial({ color: 0xc7cfb8, roughness: 1 });
+const plinth = new THREE.MeshStandardMaterial({ color: 0xfff6dd, roughness: 0.95 });
+plinth.name = "walk";
+const floor = new THREE.MeshStandardMaterial({ color: 0x9ccf86, roughness: 1 });
+floor.name = "ground";
 
 function label(text: string, className: string): CSS2DObject {
   const element = document.createElement("div");
@@ -36,8 +40,15 @@ export function shelfView(shelves: Shelf[], seed: number, spin: () => boolean): 
   shelves.forEach((shelf, row) => {
     let x = 0;
     let depth = 0;
+    const top = z;
 
     shelf.assets.forEach((asset, column) => {
+      if (x > WRAP) {
+        width = Math.max(width, x);
+        z += depth + ROW_GAP * 0.6;
+        x = 0;
+        depth = 0;
+      }
       const stand = new THREE.Group();
       let along = MARGIN;
       let deep = 0;
@@ -86,7 +97,7 @@ export function shelfView(shelves: Shelf[], seed: number, spin: () => boolean): 
     });
 
     const title = label(shelf.title, "row");
-    title.position.set(-2, 0, z + depth / 2);
+    title.position.set(-2, 0, top + 4);
     title.center.set(1, 0.5);
     group.add(title);
 

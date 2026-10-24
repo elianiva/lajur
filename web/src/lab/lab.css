@@ -13,7 +13,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #b8cdc7;
+  background: #86dcff;
 }
 
 #stage canvas {
@@ -25,7 +25,8 @@ body {
   inset: 0;
 }
 
-#bar {
+#bar,
+#looks {
   position: fixed;
   right: 16px;
   bottom: 16px;
@@ -33,7 +34,13 @@ body {
   gap: 8px;
 }
 
-#bar button {
+#looks {
+  right: auto;
+  left: 16px;
+}
+
+#bar button,
+#looks button {
   font: inherit;
   font-weight: 700;
   font-size: 14px;
@@ -47,11 +54,13 @@ body {
   cursor: pointer;
 }
 
-#bar button:hover {
+#bar button:hover,
+#looks button:hover {
   background: #2a3348;
 }
 
-#bar button[aria-pressed="true"] {
+#bar button[aria-pressed="true"],
+#looks button[aria-pressed="true"] {
   color: var(--ink);
   background: var(--paper);
 }
@@ -77,4 +86,8 @@ body {
 .row {
   font-size: 15px;
   padding: 6px 10px;
+}
+
+.far .tag {
+  display: none;
 }

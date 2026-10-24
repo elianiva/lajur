@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { MapControls } from "three/addons/controls/MapControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import type { Shelf } from "../assets/kit.ts";
+import { Ink, light, lookByKey, looks, restyle } from "../render/look.ts";
 import { shelfView } from "./shelf.ts";
 import { townView } from "./town.ts";
 import type { View } from "./view.ts";
@@ -23,16 +24,15 @@ const labels = new CSS2DRenderer();
 labels.domElement.className = "labels";
 stage.append(labels.domElement);
 
-const scene = new THREE.Scene();
-const sky = new THREE.Color(0xb8cdc7);
-scene.background = sky;
+const ink = new Ink(renderer);
 
-scene.add(new THREE.HemisphereLight(0xdcecff, 0x6d6552, 1.35));
-const sun = new THREE.DirectionalLight(0xfff0d2, 2.6);
+const scene = new THREE.Scene();
+const hemi = new THREE.HemisphereLight();
+scene.add(hemi);
+const sun = new THREE.DirectionalLight();
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.bias = -0.0005;
-sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
 
 // tiny.london's angle: a steep, fixed-lens bird's-eye view.
@@ -54,6 +54,7 @@ function resize(): void {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   labels.setSize(window.innerWidth, window.innerHeight);
+  ink.resize();
 }
 window.addEventListener("resize", resize);
 
@@ -62,6 +63,11 @@ let mode: Mode = location.hash === "#town" ? "town" : "shelf";
 let seed = 0.2024;
 let spinning = false;
 let view: View | null = null;
+// The look comes from ?look=, then the last one picked here; the game reads
+// the same key, so what you pick in the lab is what you drive.
+let look = lookByKey(
+  new URLSearchParams(location.search).get("look") ?? localStorage.getItem("lajur.look"),
+);
 
 function teardown(group: THREE.Object3D): void {
   group.traverse((node) => {
@@ -70,12 +76,8 @@ function teardown(group: THREE.Object3D): void {
   scene.remove(group);
 }
 
-function show(reframe: boolean): void {
-  if (view) teardown(view.group);
-  view = mode === "shelf" ? shelfView(shelves, seed, () => spinning) : townView(seed);
-  scene.add(view.group);
-
-  const bounds = view.bounds;
+/** Fit the sun's shadow to what is shown, from the look's direction. */
+function aim(bounds: THREE.Box3): void {
   const centre = bounds.getCenter(new THREE.Vector3()).setY(0);
   const reach = bounds.getSize(new THREE.Vector3()).length() / 2;
   const shadow = sun.shadow.camera;
@@ -84,8 +86,24 @@ function show(reframe: boolean): void {
   shadow.near = 1;
   shadow.far = reach * 5;
   shadow.updateProjectionMatrix();
+  // About two shadow texels: enough to keep acne off sloped roofs.
+  sun.shadow.normalBias = (reach * 4) / sun.shadow.mapSize.x;
   sun.target.position.copy(centre);
-  sun.position.copy(centre).add(new THREE.Vector3(-0.8, 2, 1).multiplyScalar(reach));
+  sun.position
+    .copy(centre)
+    .add(new THREE.Vector3(...look.sunFrom).normalize().multiplyScalar(reach * 2));
+}
+
+function show(reframe: boolean): void {
+  if (view) teardown(view.group);
+  view = mode === "shelf" ? shelfView(shelves, seed, () => spinning) : townView(seed);
+  scene.add(view.group);
+  restyle(view.group, look);
+
+  const bounds = view.bounds;
+  const centre = bounds.getCenter(new THREE.Vector3()).setY(0);
+  const reach = bounds.getSize(new THREE.Vector3()).length() / 2;
+  aim(bounds);
 
   if (reframe) {
     // Look from the south, a little to the east, and fit the content's
@@ -108,6 +126,16 @@ function show(reframe: boolean): void {
     const aspect = window.innerWidth / window.innerHeight;
     frame = Math.max(size.y, size.x / aspect) * 1.12;
     resize();
+
+    // ?at=x,z,zoom frames one spot, so a view can be shared as a link.
+    const at = new URLSearchParams(location.search).get("at")?.split(",").map(Number);
+    if (at?.length === 3 && at.every(Number.isFinite)) {
+      const shift = new THREE.Vector3(at[0]!, 0, at[1]!).sub(controls.target);
+      controls.target.add(shift);
+      camera.position.add(shift);
+      camera.zoom = at[2]!;
+      camera.updateProjectionMatrix();
+    }
   }
 
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
@@ -115,6 +143,32 @@ function show(reframe: boolean): void {
   }
   document.querySelector<HTMLButtonElement>("#spin")!.hidden = mode !== "shelf";
 }
+
+const picker = document.querySelector<HTMLElement>("#looks")!;
+for (const option of looks) {
+  const button = document.createElement("button");
+  button.textContent = option.name;
+  button.dataset.look = option.key;
+  button.addEventListener("click", () => {
+    look = option;
+    localStorage.setItem("lajur.look", look.key);
+    applyLook();
+    if (view) {
+      restyle(view.group, look);
+      aim(view.bounds);
+    }
+  });
+  picker.append(button);
+}
+
+function applyLook(): void {
+  light(scene, hemi, sun, look);
+  ink.setLook(look);
+  for (const button of picker.querySelectorAll<HTMLButtonElement>("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.look === look.key));
+  }
+}
+applyLook();
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
   button.addEventListener("click", () => {
@@ -141,6 +195,8 @@ renderer.setAnimationLoop((now) => {
   previous = now;
   view?.update(dt);
   controls.update();
-  renderer.render(scene, camera);
+  // Asset tags only once they have room; row titles always.
+  labels.domElement.classList.toggle("far", camera.zoom < 1.6);
+  ink.render(scene, camera);
   labels.render(scene, camera);
 });

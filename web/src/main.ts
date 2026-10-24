@@ -7,6 +7,7 @@ import { RoadPath } from "./render/path.ts";
 import { RoadView } from "./render/road.ts";
 import { Traffic } from "./render/traffic.ts";
 import { advance, bodyLength, restart, snapshot, start } from "./bend.ts";
+import { Ink, light, lookByKey, restyle } from "./render/look.ts";
 
 const VIEW_HEIGHT = 46;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -23,10 +24,15 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 stage.append(renderer.domElement);
 
+const ink = new Ink(renderer);
+// The look picked in the lab (or ?look=) is the look you drive.
+const look = lookByKey(
+  new URLSearchParams(location.search).get("look") ?? localStorage.getItem("lajur.look"),
+);
+ink.setLook(look);
+
 const scene = new THREE.Scene();
-const sky = new THREE.Color(0xb8cdc7);
-scene.background = sky;
-scene.fog = new THREE.Fog(sky, 90, 220);
+scene.fog = new THREE.Fog(look.sky, 90, 220);
 
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 600);
 
@@ -38,13 +44,15 @@ function resize(): void {
   camera.bottom = -VIEW_HEIGHT / 2;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  ink.resize();
 }
 window.addEventListener("resize", resize);
 resize();
 
-scene.add(new THREE.HemisphereLight(0xdcecff, 0x6d6552, 1.35));
+const hemi = new THREE.HemisphereLight();
+scene.add(hemi);
 
-const sun = new THREE.DirectionalLight(0xfff0d2, 2.6);
+const sun = new THREE.DirectionalLight();
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -42;
@@ -54,7 +62,9 @@ sun.shadow.camera.bottom = -42;
 sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 180;
 sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.05;
 scene.add(sun, sun.target);
+light(scene, hemi, sun, look);
 
 // The model first: it owns the seed, the road and every rule.
 let world = start();
@@ -83,10 +93,13 @@ function follow(dt: number): void {
 
   const offset = CAMERA_OFFSET.clone().applyAxisAngle(UP, -heading);
   camera.position.copy(traffic.position).add(offset);
-  const look = LOOK_AHEAD.clone().applyAxisAngle(UP, -heading).add(traffic.position);
-  camera.lookAt(look);
+  const ahead = LOOK_AHEAD.clone().applyAxisAngle(UP, -heading).add(traffic.position);
+  camera.lookAt(ahead);
 
-  const sunAt = new THREE.Vector3(-26, 46, 24).applyAxisAngle(UP, -heading);
+  const sunAt = new THREE.Vector3(...look.sunFrom)
+    .normalize()
+    .multiplyScalar(58)
+    .applyAxisAngle(UP, -heading);
   sun.position.copy(traffic.position).add(sunAt);
   sun.target.position.copy(traffic.position);
 }
@@ -108,7 +121,9 @@ function frame(now: number): void {
   if (keyboard.takeRestart()) world = restart(world);
   step(Math.round(elapsed));
 
-  renderer.render(scene, camera);
+  // Chunks stream in with the kit's materials; bring them into the look.
+  restyle(scene, look);
+  ink.render(scene, camera);
   requestAnimationFrame(frame);
 }
 

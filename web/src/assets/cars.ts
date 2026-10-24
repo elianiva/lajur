@@ -10,7 +10,9 @@ import { box, type Shelf } from "./kit.ts";
 
 export const PLAYER_COLOUR = 0xe0392b;
 
-const TRAFFIC_COLOURS = [0x4a76d8, 0xe9b53f, 0xe8e4d8, 0x2f9e8f, 0x8b5cc7, 0x3f8f4a, 0xdc7c3e];
+const TRAFFIC_COLOURS = [
+  0x3f8cff, 0xffc93c, 0xf7f4ea, 0x22c3a6, 0xa070ff, 0x52c75a, 0xff8a3d, 0xff6fa8, 0x5ad1ff,
+];
 
 export function trafficColour(index: number): number {
   return TRAFFIC_COLOURS[index % TRAFFIC_COLOURS.length]!;
@@ -27,6 +29,7 @@ function paint(colour: number): THREE.MeshStandardMaterial {
     metalness: 0.05,
     flatShading: true,
   });
+  material.name = "car";
   paints.set(colour, material);
   return material;
 }
@@ -44,6 +47,8 @@ const rubber = new THREE.MeshStandardMaterial({
   flatShading: true,
 });
 
+glass.name = "glass";
+
 const tail = new THREE.MeshStandardMaterial({
   color: 0xd8442f,
   emissive: 0x4d0f08,
@@ -54,6 +59,11 @@ const beam = new THREE.MeshStandardMaterial({
   emissive: 0x3a3220,
   roughness: 0.5,
 });
+tail.name = "accent";
+beam.name = "lamp";
+
+const trim = new THREE.MeshStandardMaterial({ color: 0x3a3d48, roughness: 0.8 });
+trim.name = "accent";
 
 const wheelGeometry = new THREE.CylinderGeometry(0.34, 0.34, 0.26, 8);
 wheelGeometry.rotateZ(Math.PI / 2);
@@ -166,6 +176,11 @@ function outline(body: Body["$"], colour: number, length: number): CarMesh {
       break;
     }
   }
+
+  // Bumpers front and back, a dark sill: the ink reads them as one silhouette.
+  const width = body === "Bus" ? 2.4 : body === "Truck" ? 2.2 : 1.9;
+  piece(group, [width, 0.22, 0.22], trim, [0, 0.42, -length / 2]);
+  piece(group, [width, 0.22, 0.22], trim, [0, 0.42, length / 2]);
 
   return { group, wheels, key: `${body}:${colour}:${Math.round(length)}` };
 }

@@ -1,7 +1,6 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { house, ruko, warung } from "../assets/buildings.ts";
-import { box, mats } from "../assets/kit.ts";
+import { bake, box, mats } from "../assets/kit.ts";
 import { cart, motorbike, powerPole } from "../assets/street.ts";
 import { banana, palm } from "../assets/trees.ts";
 import type { RoadPath } from "./path.ts";
@@ -84,45 +83,6 @@ function ribbon(
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   return geometry;
-}
-
-// --- baking ----------------------------------------------------------------
-
-/**
- * Merges a chunk's meshes into one mesh per material. A busy street is a
- * thousand little boxes; without this the draw calls, not the geometry, are
- * what the frame time goes to.
- */
-function bake(group: THREE.Group): THREE.Group {
-  group.updateMatrixWorld(true);
-  const buckets = new Map<THREE.Material, THREE.BufferGeometry[]>();
-
-  group.traverse((node) => {
-    if (!(node instanceof THREE.Mesh)) return;
-    const geometry = node.geometry.clone();
-    geometry.applyMatrix4(node.matrixWorld);
-    // A ribbon carries position and normal; a box also carries uv. Merging
-    // demands one attribute set per bucket, so drop everything but the two.
-    for (const name of Object.keys(geometry.attributes)) {
-      if (name !== "position" && name !== "normal") geometry.deleteAttribute(name);
-    }
-    if (!geometry.getAttribute("normal")) geometry.computeVertexNormals();
-    const bucket = buckets.get(node.material as THREE.Material) ?? [];
-    bucket.push(geometry);
-    buckets.set(node.material as THREE.Material, bucket);
-  });
-
-  const baked = new THREE.Group();
-  for (const [material, geometries] of buckets) {
-    const merged = mergeGeometries(geometries, false);
-    for (const geometry of geometries) geometry.dispose();
-    if (!merged) continue;
-    const mesh = new THREE.Mesh(merged, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    baked.add(mesh);
-  }
-  return baked;
 }
 
 // --- the view --------------------------------------------------------------
