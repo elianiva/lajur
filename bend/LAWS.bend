@@ -150,6 +150,21 @@ law stop_at_a_closed_crossing:
   for b: Bool
   { R.contains(25, R.charges(R.with_road(R.road_railway(b)))) == b : Bool }
 
+# Pasal 114 huruf b: a train coming stops the crossing even with the barrier up.
+law a_train_stops_the_crossing:
+  for b: Bool
+  { R.contains(25, R.charges(R.crossing_with(False{}, b))) == b : Bool }
+
+# Pasal 114 huruf c: the vehicle already on the crossing goes first.
+law the_crossing_belongs_to_the_vehicle_on_it:
+  for b: Bool
+  { R.contains(54, R.charges(R.crossing_in_use(True{}, b))) == Bool.not(b) : Bool }
+
+# Pasal 112 ayat (3): at a signal, a left turn waits for a sign or an arrow.
+law a_left_turn_waits_for_its_signal:
+  for b: Bool
+  { R.contains(53, R.charges(R.red_left_turn(b))) == Bool.not(b) : Bool }
+
 law no_racing:
   for b: Bool
   { R.contains(26, R.charges(R.with_move(R.move_racing(b)))) == b : Bool }

@@ -49,7 +49,7 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | `Motion` | `speed`, `overtaking`, `overtake_side`, `front_signals_right`, `turning`, `indicates_turn`, `changing_lane`, `indicates_lane`, `racing`, `slowing`, `indicates_slow`, `stopping`, `parked_ok`, `emergency_stop`, `emergency_sign`, `leaves_accident`, `modified` | What the vehicle is doing |
 | `Priority` | `oncoming`, `oncoming_room`, `grade`, `yields_to_uphill`, `pedestrian_waiting`, `yields_to_pedestrian`, `yields_to_emergency`, `at_junction`, `yields_right` | Who has right of way |
 | `Papers` | `sim`, `sim_fits`, `stnk`, `kir`, `stops_at_terminal`, `manifest`, `passenger_insurance`, `crew_insurance` | Documents the driver holds |
-| `Act` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle`, `lane`, `faster`, `sight_clear`, `room_ok` | The posted duty, the manoeuvre, and the facts a single rule reads that the six records do not carry |
+| `Act` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle`, `lane`, `faster`, `sight_clear`, `room_ok`, `train_coming`, `crossing_traffic`, `yields_to_crossing`, `left_turn_allowed` | The posted duty, the manoeuvre, and the facts a single rule reads that the six records do not carry |
 
 ## The rule catalogue
 
@@ -82,7 +82,7 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | 22 | Carry a licence | Pasal 106 ayat (5) huruf b | 1 month, Rp250,000 (Pasal 288 ayat (2)) |
 | 23 | Carry a registration | Pasal 106 ayat (5) huruf a | 2 months, Rp500,000 (Pasal 288 ayat (1)) |
 | 24 | Carry a test certificate | Pasal 106 ayat (5) huruf c | 2 months, Rp500,000 (Pasal 288 ayat (3)) |
-| 25 | Stop at a closed crossing | Pasal 114 | 3 months, Rp750,000 (Pasal 296) |
+| 25 | Stop at a crossing that is closed or has a train coming | Pasal 114 huruf a and b | 3 months, Rp750,000 (Pasal 296) |
 | 26 | No racing | Pasal 115 huruf b | 1 year, Rp3,000,000 (Pasal 297) |
 | 27 | Mark a breakdown (a motorcycle without a sidecar is exempt, Pasal 121 ayat (2)) | Pasal 121 ayat (1) | 2 months, Rp500,000 (Pasal 298) |
 | 28 | Stay after a crash | Pasal 231 ayat (1) | 3 years, Rp75,000,000 (Pasal 312) |
@@ -110,6 +110,8 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | 50 | Let the priority vehicle through | Pasal 134 | 1 month, Rp250,000 (Pasal 287 ayat (4)) |
 | 51 | A motorcycle, a goods vehicle or a non-motorised vehicle keeps the left lane | Pasal 108 ayat (3) | none stated |
 | 52 | The right lane serves a pass, a right turn, a U-turn or a faster vehicle | Pasal 108 ayat (4) | none stated |
+| 53 | A left turn at a signal waits for a sign or an arrow | Pasal 112 ayat (3) | none stated |
+| 54 | Give way to the vehicle already on the crossing | Pasal 114 huruf c | none stated |
 
 ## The sign catalogue and its rules
 

@@ -113,6 +113,27 @@ def Laws.an_obeyed_officer_outranks_a_marking(b):
     case False{}:
       {==}
 
+def Laws.a_train_stops_the_crossing(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.the_crossing_belongs_to_the_vehicle_on_it(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.a_left_turn_waits_for_its_signal(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.signal_before_turning(b):
   match b:
     case True{}:
