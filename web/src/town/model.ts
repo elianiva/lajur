@@ -295,14 +295,15 @@ export function coreLotAt(i: number, j: number, a: number, b: number): Lot {
 /** A street cut inside a block: a lokal street, a gang that links, or a stub that ends. */
 export interface Split {
   kind: "Through" | "Gang" | "Stub";
-  a: Pt;
-  b: Pt;
+  /** The cut's centre line, from the end it starts at to the end it stops at. */
+  line: Pt[];
   /** Half the carriageway, in centimetres. */
   half: number;
 }
 
 const SPLIT_KINDS = [undefined, "Through", "Gang", "Stub"] as const;
 const SPLIT_HALF = [0, 300, 150, 150];
+const CUT_STEPS = g.cut_steps() as number;
 
 /** The paths a block can be cut along; node 1 is the block itself. */
 export const SPLIT_PATHS = [1, 2, 3, 4, 5, 6, 7];
@@ -312,9 +313,12 @@ export function splitAt(i: number, j: number, p: number): Split | undefined {
   const code = g.split_code(i, j, p, SEED) as number;
   const kind = SPLIT_KINDS[code];
   if (!kind) return undefined;
-  const a = g.split_start(i, j, p, SEED) as Pt;
-  const b = g.split_end(i, j, p, SEED) as Pt;
-  return { kind, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z }, half: SPLIT_HALF[code]! };
+  const line: Pt[] = [];
+  for (let k = 0; k <= CUT_STEPS; k += 1) {
+    const at = g.split_point(i, j, p, k, SEED) as Pt;
+    line.push({ x: at.x, z: at.z });
+  }
+  return { kind, line, half: SPLIT_HALF[code]! };
 }
 
 /** Whether a frontage lot is built, or left out because a cut runs through it. */

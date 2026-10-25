@@ -117,8 +117,15 @@ declare const town: {
     seed: number,
   ): Constructor<"True" | "False">;
   split_code(i: number, j: number, p: number, seed: number): number;
-  split_start(i: number, j: number, p: number, seed: number): Point;
-  split_end(i: number, j: number, p: number, seed: number): Point;
+  cut_steps(): number;
+  split_point(i: number, j: number, p: number, k: number, seed: number): Point;
+  rect_of(
+    i: number,
+    j: number,
+    p: number,
+    seed: number,
+  ): { $: "Rect"; u0: number; u1: number; v0: number; v1: number };
+  patch(i: number, j: number, u: number, v: number, seed: number): Point;
 };
 
 export default town;

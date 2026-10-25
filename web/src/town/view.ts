@@ -680,24 +680,21 @@ export function townView(options: { buildings?: boolean; splits?: boolean } = {}
         for (const p of T.SPLIT_PATHS) {
           const cut = T.splitAt(i, j, p);
           if (!cut) continue;
-          const dx = cut.b.x - cut.a.x;
-          const dz = cut.b.z - cut.a.z;
-          const length = Math.hypot(dx, dz) || 1;
-          // The street it joins bows away from the chord the cut was measured
-          // to, so the cut runs on a few metres past its ends to meet the kerb.
-          const run = 400;
-          const ux = dx / length;
-          const uz = dz / length;
-          const from = { x: cut.a.x - ux * run, z: cut.a.z - uz * run };
-          const to = cut.kind === "Stub" ? cut.b : { x: cut.b.x + ux * run, z: cut.b.z + uz * run };
-          const nx = (-dz / length) * cut.half;
-          const nz = (dx / length) * cut.half;
-          const at = (q: T.Pt, side: number): V3 => [
-            (q.x + nx * side) * CM,
-            0.06,
-            (q.z + nz * side) * CM,
-          ];
-          asphalt.quad(at(from, -1), at(from, 1), at(to, 1), at(to, -1));
+          // Each point is pushed sideways along the normal of the chord
+          // through its neighbours, so the strip bends with the cut.
+          const edge = cut.line.map((q, k) => {
+            const back = cut.line[Math.max(k - 1, 0)]!;
+            const ahead = cut.line[Math.min(k + 1, cut.line.length - 1)]!;
+            const dx = ahead.x - back.x;
+            const dz = ahead.z - back.z;
+            const length = Math.hypot(dx, dz) || 1;
+            const nx = (-dz / length) * cut.half;
+            const nz = (dx / length) * cut.half;
+            return (side: number): V3 => [(q.x + nx * side) * CM, 0.06, (q.z + nz * side) * CM];
+          });
+          for (let k = 0; k + 1 < edge.length; k += 1) {
+            asphalt.quad(edge[k]!(-1), edge[k]!(1), edge[k + 1]!(1), edge[k + 1]!(-1));
+          }
         }
       }
     }
