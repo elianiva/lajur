@@ -172,6 +172,16 @@ and the index says where the law is written.
 body, how many articles were found, and any gap in the article sequence. All
 eight instruments currently run 1..N with no gap.
 
+## Citations
+
+`every_rule_names_its_article` proves that both numbers are present, not that
+the statute agrees with them. `tools/check_citations.py` reads
+`corpus/provisions.json` and asks the harder question: the provision the model
+names as the sanction must cite the article the model names as the duty, at the
+ayat it states, and state the same months, days and rupiah. CI runs it with
+the proofs. It is how rule 39 stopped citing Pasal 52, which no penalty
+provision names, for Pasal 50 ayat (1), the type-test duty Pasal 277 punishes.
+
 ## Gaps
 
 | Gap | Why it is open | What closes it |
@@ -203,5 +213,5 @@ divergence between the two is a test failure rather than a mystery.
 3. Add the value or predicate to the module for that instrument.
 4. State the law in `LAWS.bend`, named after the requirement.
 5. Prove it in `PROOF.bend`, usually `{==}`.
-6. Run `bend PROOF.bend`. If a law fails, decide which side is wrong before
+6. Run `bend PROOF.bend`, then `.venv/bin/python tools/check_citations.py`. If a law fails, decide which side is wrong before
    touching the other.

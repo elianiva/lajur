@@ -10,7 +10,14 @@ bend PROOF.bend              # Bend's checker
 bend PROOF.bend --verdict    # the same proofs through the Lean kernel
 ```
 
-Both checks run in CI on every push. `.agents/setup` installs Bend 2.0.39 in a
+Both checks run in CI on every push, after `tools/check_citations.py`, which
+checks that the article each rule names as its sanction really cites the
+article it names as its duty, with the stated numbers. Run it after touching
+the catalogue:
+
+```sh
+.venv/bin/python tools/check_citations.py
+``` `.agents/setup` installs Bend 2.0.39 in a
 fresh orb and runs no proofs; the verdict needs Lean 4.34.0, which only CI
 installs.
 

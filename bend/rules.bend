@@ -165,7 +165,7 @@ def catalogue() -> List<Rule>:
   , Rule{36, General{}, 2, 0, 500000, 106, 3, 285, 2}
   , Rule{37, General{}, 2, 0, 500000, 58, 0, 279, 0}
   , Rule{38, General{}, 1, 0, 250000, 57, 3, 278, 0}
-  , Rule{39, General{}, 12, 0, 24000000, 52, 2, 277, 0}
+  , Rule{39, General{}, 12, 0, 24000000, 50, 1, 277, 0}
   , Rule{40, General{}, 0, 15, 100000, 122, 1, 299, 0}
     # 41-50: freight, public service, and priority
   , Rule{41, General{}, 1, 0, 250000, 125, 0, 301, 0}

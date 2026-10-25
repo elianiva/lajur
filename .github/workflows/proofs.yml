@@ -32,6 +32,8 @@ jobs:
             echo "== $f"
             bend --check-only "$f"
           done
+      - name: Check every citation against the corpus
+        run: python3 tools/check_citations.py
       - name: Prove the laws
         working-directory: bend
         run: bend PROOF.bend

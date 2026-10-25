@@ -177,6 +177,14 @@ curl -fsSL https://elan.lean-lang.org/elan-init.sh |
 The kernel maps a 4 GiB stack, so a machine with less RAM also needs
 `sudo sysctl -w vm.overcommit_memory=1`.
 
+`tools/check_citations.py` runs with the proofs. It reads the catalogue against
+the corpus and fails when the article that punishes a rule does not cite the
+article that imposes it, or states other numbers:
+
+```sh
+.venv/bin/python tools/check_citations.py
+```
+
 The game has its own proofs, and its own build checks:
 
 ```sh
