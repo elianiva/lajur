@@ -45,6 +45,11 @@ release. Add a tool name to select part of the graph. For example, run
 ## The lab
 
 - `/lab.html` opens on the city (`Town`); `#shelf` shows every asset row.
+- `#world` is the generated world: `src/world/` makes it cell by cell, each
+  cell a function of (seed, i, j), so cells tile in any order. `cells.ts` is
+  the roads and blocks, `parcels.ts` the lots, courts and trees, and `plan.ts`
+  draws it as a flat SVG for a minimap or preview. It is TypeScript until it is
+  ported to `logic/`; the game does not read it. `vp run plan` checks it.
 - The city is drawn by the NPR studio: the look the game drives, plus five
   more in `src/lab/npr.ts`, sliders for their bands, shadow stain, rim,
   outline and grade, and the panel that binds them in `src/lab/studio.ts`.

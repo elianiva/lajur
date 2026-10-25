@@ -5,7 +5,11 @@ export interface View {
   group: THREE.Group;
   /** What is worth framing, in metres. */
   bounds: THREE.Box3;
-  update(dt: number): void;
+  update(dt: number, camera: THREE.OrthographicCamera): void;
+  /** How far the camera may zoom in; the lab's default is 12. */
+  maxZoom?: number;
+  /** Fit the sun's shadow to what is on screen, not to the whole view. */
+  shadowFollows?: boolean;
 }
 
 /** A small seeded generator, so a reroll is a number you can come back to. */

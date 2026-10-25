@@ -7,6 +7,7 @@ import { initialState, nprState, query, share } from "./npr.ts";
 import { shelfView } from "./shelf.ts";
 import { studio } from "./studio.ts";
 import { townView } from "./town.ts";
+import { worldView } from "./world.ts";
 import type { View } from "./view.ts";
 import "./lab.css";
 
@@ -70,8 +71,9 @@ function aspect(): number {
   return (window.innerWidth - inset) / window.innerHeight;
 }
 
-type Mode = "shelf" | "town";
-let mode: Mode = location.hash === "#shelf" ? "shelf" : "town";
+type Mode = "shelf" | "town" | "world";
+let mode: Mode =
+  location.hash === "#shelf" ? "shelf" : location.hash === "#world" ? "world" : "town";
 let seed = 0.2024;
 let spinning = false;
 let view: View | null = null;
@@ -82,7 +84,7 @@ let shelfLook = lookByKey(
   new URLSearchParams(location.search).get("look") ?? localStorage.getItem("lajur.look"),
 );
 
-const active = (): Look => (mode === "town" ? state.look : shelfLook);
+const active = (): Look => (mode === "shelf" ? shelfLook : state.look);
 
 let saving = 0;
 function remember(): void {
@@ -151,16 +153,26 @@ function dress(): void {
 
 function show(reframe: boolean): void {
   if (view) teardown(view.group);
-  picker.hidden = mode === "town";
+  picker.hidden = mode !== "shelf";
   panel.element.hidden = mode === "shelf";
   inset = panel.element.hidden ? 0 : panel.element.offsetWidth + 16;
-  view = mode === "shelf" ? shelfView(shelves, seed, () => spinning) : townView(seed);
+  view =
+    mode === "shelf"
+      ? shelfView(shelves, seed, () => spinning)
+      : mode === "world"
+        ? worldView(seed)
+        : townView(seed);
+  controls.maxZoom = view.maxZoom ?? 12;
   scene.add(view.group);
   dress();
 
   const bounds = view.bounds;
   const centre = bounds.getCenter(new THREE.Vector3()).setY(0);
   const reach = bounds.getSize(new THREE.Vector3()).length() / 2;
+  // The camera stands two reaches out; keep the whole view between its planes.
+  camera.near = -Math.max(1000, reach * 4);
+  camera.far = Math.max(2000, reach * 8);
+  camera.updateProjectionMatrix();
 
   if (reframe) {
     // Look from the south, a little to the east, low enough that the sides of
@@ -216,7 +228,7 @@ for (const option of looks) {
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
   button.addEventListener("click", () => {
     mode = button.dataset.mode as Mode;
-    const hash = mode === "town" ? "#town" : "#shelf";
+    const hash = `#${mode}`;
     history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
     show(true);
   });
@@ -233,13 +245,23 @@ spin.addEventListener("click", () => {
 
 show(true);
 
+const onScreen = new THREE.Box3();
 let previous = performance.now();
 renderer.setAnimationLoop((now) => {
   // A resumed tab or a slow first frame must not step the traffic backwards.
   const dt = Math.max(0, Math.min(now - previous, 100)) / 1000;
   previous = now;
-  view?.update(dt);
+  view?.update(dt, camera);
   controls.update();
+  if (view?.shadowFollows) {
+    // The shadow map covers what is on screen, so it stays sharp up close.
+    const half =
+      Math.hypot(camera.right - camera.left, camera.top - camera.bottom) / camera.zoom / 2;
+    const r = Math.min(half * 1.1, 1400);
+    onScreen.min.set(controls.target.x - r, 0, controls.target.z - r);
+    onScreen.max.set(controls.target.x + r, 0, controls.target.z + r);
+    aim(onScreen, active());
+  }
   // Asset tags only once they have room; row titles always.
   labels.domElement.classList.toggle("far", camera.zoom < 1.6);
   ink.render(scene, camera);
