@@ -517,9 +517,56 @@ def the_minor_road_carries_the_give_way_sign():
   {==}
 
 law every_line_stands_behind_the_kerb:
-  { T.every_line_behind_the_kerb(T.approaches(1, 4, T.seed_of_town())) == True{} : Bool }
+  { T.every_line_behind_the_box(T.approaches(1, 4, T.seed_of_town()), 1, 4) == True{} : Bool }
 
 def every_line_stands_behind_the_kerb():
+  {==}
+
+# ---------------------------------------------------------------------------
+# The junction box
+#
+# A street stops short of the node, and the ground between the stops is the
+# junction. The kerb return is what rounds that ground, and these laws hold it
+# to the band Bina Marga 08/PBM/2024 gives and hold every line behind it.
+# ---------------------------------------------------------------------------
+
+law a_kerb_return_clears_six_metres:
+  { U32.is_le(600, T.junction_radius_cm(3, 3, T.seed_of_town())) == True{} : Bool }
+
+def a_kerb_return_clears_six_metres():
+  {==}
+
+law a_kerb_return_stays_inside_its_band:
+  { U32.is_le(T.junction_radius_cm(0, 0, T.seed_of_town()), 1200) == True{} : Bool }
+
+def a_kerb_return_stays_inside_its_band():
+  {==}
+
+law a_kerb_return_moves_with_the_class:
+  { T.junction_rank(0, 0) == 2 : U32 }
+
+def a_kerb_return_moves_with_the_class():
+  {==}
+
+law a_mouth_clears_the_street_across_it:
+  { U32.is_le(T.cross_half(1, 4, T.North{}), T.mouth_cm(1, 4, T.North{}, T.seed_of_town())) == True{} : Bool }
+
+def a_mouth_clears_the_street_across_it():
+  {==}
+
+law a_line_stands_behind_the_box:
+  { U32.is_le(T.mouth_cm(1, 4, T.North{}, T.seed_of_town()),
+              T.line_at(1, 4, T.North{}, T.seed_of_town())) == True{} : Bool }
+
+def a_line_stands_behind_the_box():
+  {==}
+
+law a_corner_lot_clears_the_kerb_return:
+  { U32.is_le(U32.mul(3, T.junction_radius_cm(3, 3, T.seed_of_town())),
+              U32.mul(10, U32.sub(T.west_corner(3, 3, T.seed_of_town()),
+                                  T.half_cm(T.Local{})))) == True{} : Bool }
+
+def a_corner_lot_clears_the_kerb_return():
   {==}
 
 # ---------------------------------------------------------------------------

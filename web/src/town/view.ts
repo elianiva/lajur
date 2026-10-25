@@ -20,6 +20,8 @@ const CM = 0.01;
 const ASPHALT = 0;
 const PAINT = 0.02;
 const WALK = 0.16;
+/** Steps a kerb return is drawn in. */
+const FILLET = 6;
 
 type V3 = [number, number, number];
 
@@ -92,6 +94,56 @@ function alongStreet(samples: T.Sample[], distance: number): T.Sample {
 function normalAt(s: T.Sample): [number, number] {
   const length = Math.hypot(s.dx, s.dz) || 1;
   return [-s.dz / length, s.dx / length];
+}
+
+/** The street as drawn: from its mouth at one junction to its mouth at the
+ * other, so no ribbon reaches into the junction box. A sample the mouth has
+ * already passed is dropped, or the ribbon would double back on itself. */
+function trimmed(
+  samples: T.Sample[],
+  from: T.Pt,
+  to: T.Pt,
+  start: number,
+  end: number,
+): T.Sample[] {
+  const at = (k: number) =>
+    k === 0 ? 0 : Math.hypot(samples[k]!.x - samples[k - 1]!.x, samples[k]!.z - samples[k - 1]!.z);
+  let total = 0;
+  for (let k = 1; k < samples.length; k += 1) total += at(k);
+  const inside: T.Sample[] = [];
+  let walked = 0;
+  for (let k = 0; k < samples.length; k += 1) {
+    walked += at(k);
+    if (walked > start && walked < total - end) inside.push(samples[k]!);
+  }
+  const head: T.Sample = { ...samples[0]!, x: from.x, z: from.z };
+  const tail: T.Sample = { ...samples[samples.length - 1]!, x: to.x, z: to.z };
+  return [head, ...inside, tail];
+}
+
+/** A quadratic fillet from `a` to `b` bending towards `c`, the square corner. */
+function fillet(a: V3, c: V3, b: V3, t: number): V3 {
+  const u = 1 - t;
+  return [
+    u * u * a[0] + 2 * u * t * c[0] + t * t * b[0],
+    a[1],
+    u * u * a[2] + 2 * u * t * c[2] + t * t * b[2],
+  ];
+}
+
+/** The way an edge of the junction boundary faces at `k`: the side away from
+ * the node, which is where the pavement goes. */
+function edgeNormal(edge: V3[], k: number, centre: V3): [number, number] {
+  const a = edge[Math.max(0, k - 1)]!;
+  const b = edge[Math.min(edge.length - 1, k + 1)]!;
+  const dx = b[0] - a[0];
+  const dz = b[2] - a[2];
+  const length = Math.hypot(dx, dz) || 1;
+  const nx = -dz / length;
+  const nz = dx / length;
+  const p = edge[k]!;
+  const out = nx * (p[0] - centre[0]) + nz * (p[2] - centre[2]) > 0 ? 1 : -1;
+  return [nx * out, nz * out];
 }
 
 /** A strip along a street between two lateral offsets, in centimetres. */
@@ -168,22 +220,23 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
     for (let j = 0; j < T.ROWS; j += 1) {
       for (const d of ["East", "South"] as T.DirName[]) {
         if (!T.has(i, j, d)) continue;
-        const samples = T.samples(i, j, d);
+        const raw = T.samples(i, j, d);
+        const farI = i + step[d][0];
+        const farJ = j + step[d][1];
+        const samples = trimmed(
+          raw,
+          T.mouthMid(i, j, d),
+          T.mouthMid(farI, farJ, opposite[d]),
+          T.mouthCm(i, j, d),
+          T.mouthCm(farI, farJ, opposite[d]),
+        );
         const half = halfAt(i, j, d);
 
         strip(asphalt, samples, -half, half, ASPHALT);
         for (const side of [-1, 1] as const) {
-          strip(
-            walk,
-            samples,
-            side * half,
-            side * (half + T.PAVEMENT_CM),
-            WALK,
-            1,
-            samples.length - 1,
-          );
+          strip(walk, samples, side * half, side * (half + T.PAVEMENT_CM), WALK);
           // The kerb face, one quad per segment from the road up to the walk.
-          for (let k = 1; k + 1 < samples.length; k += 1) {
+          for (let k = 0; k + 1 < samples.length; k += 1) {
             const a = samples[k]!;
             const b = samples[k + 1]!;
             const na = normalAt(a);
@@ -221,7 +274,7 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
         ] as const) {
           const approach = T.approaches(nodeI, nodeJ).find((a) => a.d === towards);
           if (!approach || !approach.present) continue;
-          const stop = alongStreet(samples, approach.line);
+          const stop = alongStreet(raw, approach.line);
           const n = normalAt(stop);
           const width = approach.half - 30;
           const at = (offset: number): V3 => [
@@ -239,7 +292,7 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
             paint.quad(at(-width), at(width), push(width, thickness), push(-width, thickness));
           }
           if (approach.zebra > 0) {
-            const crossing = alongStreet(samples, approach.zebra);
+            const crossing = alongStreet(raw, approach.zebra);
             const cn = normalAt(crossing);
             const dirx = crossing.dx / 1024;
             const dirz = crossing.dz / 1024;
@@ -262,26 +315,78 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
     }
   }
 
-  // --- junction discs -------------------------------------------------------
+  // --- junctions ------------------------------------------------------------
+  //
+  // A junction is the ground the streets leave between their mouths, and its
+  // kerb is a fillet at each corner, tangent to both streets. The hub is one
+  // polygon: each approach's mouth from its right kerb to its left, then the
+  // fillet into the next mouth. The ribbons stop on the same segments, so the
+  // carriageway is continuous and nothing is drawn twice.
+
+  const around: T.DirName[] = ["North", "East", "South", "West"];
+  const point = (p: T.Pt): V3 => [p.x * CM, ASPHALT, p.z * CM];
 
   for (let i = 0; i < T.COLS; i += 1) {
     for (let j = 0; j < T.ROWS; j += 1) {
-      const at = T.site(i, j);
-      let radius = 0;
-      for (const approach of T.approaches(i, j)) {
-        if (approach.present) radius = Math.max(radius, approach.half);
+      const centre = point(T.site(i, j));
+      const hub: V3[] = [];
+      for (let q = 0; q < 4; q += 1) {
+        const d = around[q]!;
+        if (!T.has(i, j, d)) continue;
+        // Clockwise round the node a mouth runs from its left kerb to its
+        // right, and the edge that follows joins that right kerb to the next
+        // approach's left one.
+        const left = point(T.mouthSide(i, j, d, true));
+        const right = point(T.mouthSide(i, j, d, false));
+        hub.push(left, right);
+        let step = 1;
+        while (step < 4 && !T.has(i, j, around[(q + step) % 4]!)) step += 1;
+        const next = around[(q + step) % 4]!;
+        const far = point(T.mouthSide(i, j, next, true));
+
+        // A corner is a fillet round the square corner. Where the leg between
+        // two approaches is missing, the two kerbs are one straight kerb
+        // through the junction, and the pavement crosses with it.
+        const edge: V3[] = [];
+        if (step === 1) {
+          const corner = point(T.cornerBetween(i, j, d, next));
+          for (let s = 0; s <= FILLET; s += 1) edge.push(fillet(right, corner, far, s / FILLET));
+        } else {
+          edge.push(right, far);
+        }
+        for (let s = 1; s < edge.length; s += 1) hub.push(edge[s]!);
+
+        // The pavement follows the same edge, out to the walk's width, with
+        // the kerb face beneath it.
+        for (let s = 0; s + 1 < edge.length; s += 1) {
+          const p0 = edge[s]!;
+          const p1 = edge[s + 1]!;
+          const n0 = edgeNormal(edge, s, centre);
+          const n1 = edgeNormal(edge, s + 1, centre);
+          const out = (p: V3, n: [number, number], reach: number, y: number): V3 => [
+            p[0] + n[0] * reach * CM,
+            y,
+            p[2] + n[1] * reach * CM,
+          ];
+          walk.quad(
+            out(p0, n0, 0, WALK),
+            out(p0, n0, T.PAVEMENT_CM, WALK),
+            out(p1, n1, T.PAVEMENT_CM, WALK),
+            out(p1, n1, 0, WALK),
+          );
+          kerb.quad(
+            out(p0, n0, 0, 0),
+            out(p1, n1, 0, 0),
+            out(p1, n1, 0, WALK),
+            out(p0, n0, 0, WALK),
+            [n0[0], 0, n0[1]],
+          );
+        }
       }
-      if (radius === 0) continue;
-      const sides = 20;
-      for (let k = 0; k < sides; k += 1) {
-        const a = (k / sides) * Math.PI * 2;
-        const b = ((k + 1) / sides) * Math.PI * 2;
-        asphalt.quad(
-          [at.x * CM, ASPHALT, at.z * CM],
-          [(at.x + Math.cos(a) * radius) * CM, ASPHALT, (at.z + Math.sin(a) * radius) * CM],
-          [(at.x + Math.cos(b) * radius) * CM, ASPHALT, (at.z + Math.sin(b) * radius) * CM],
-          [(at.x + Math.cos(b) * radius) * CM, ASPHALT, (at.z + Math.sin(b) * radius) * CM],
-        );
+      for (let k = 0; k < hub.length; k += 1) {
+        const a = hub[k]!;
+        const b = hub[(k + 1) % hub.length]!;
+        asphalt.quad(centre, a, b, b);
       }
     }
   }
@@ -318,15 +423,18 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
   for (let i = 0; i < T.COLS; i += 1) {
     for (let j = 0; j < T.ROWS; j += 1) {
       if (T.control(i, j) !== "Signal") continue;
-      const at = T.site(i, j);
       for (const approach of T.approaches(i, j)) {
         if (!approach.present || !approach.head) continue;
+        // The head stands on the kerb at the stop line, where a driver waits.
+        const raw = T.samples(i, j, approach.d);
+        const stop = alongStreet(raw, approach.line);
+        const n = normalAt(stop);
+        const side = approach.d === "North" || approach.d === "East" ? -1 : 1;
+        const x = (stop.x + n[0] * (approach.half + 60) * side) * CM;
+        const z = (stop.z + n[1] * (approach.half + 60) * side) * CM;
         const angle = { North: -Math.PI / 2, South: Math.PI / 2, East: 0, West: Math.PI }[
           approach.d
         ];
-        const reach = (approach.half + 90) * CM;
-        const x = at.x * CM + Math.cos(angle) * reach;
-        const z = at.z * CM + Math.sin(angle) * reach;
         const pole = new THREE.Mesh(box(0.12, 5.4, 0.12), mats.metal);
         pole.position.set(x, WALK + 2.7, z);
         const head = new THREE.Mesh(box(0.34, 0.9, 0.3), mats.metal);

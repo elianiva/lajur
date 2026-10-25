@@ -144,6 +144,34 @@ export function lotsIn(i: number, j: number): number {
   return g.lots_in(i, j, SEED) as number;
 }
 
+/** How far from the node an approach's kerb stops, in centimetres. */
+export function mouthCm(i: number, j: number, d: DirName): number {
+  return g.mouth_cm(i, j, dir(d), SEED) as number;
+}
+
+/** One end of that mouth: `left` is the left of travel, as on the road. */
+export function mouthSide(i: number, j: number, d: DirName, left: boolean): Pt {
+  const p = g.mouth_side(i, j, dir(d), left, SEED) as Pt;
+  return { x: p.x, z: p.z };
+}
+
+/** The point between the two kerb ends of a mouth. */
+export function mouthMid(i: number, j: number, d: DirName): Pt {
+  const p = g.mouth_mid(i, j, dir(d), SEED) as Pt;
+  return { x: p.x, z: p.z };
+}
+
+/** Where the two kerbs of a corner would meet if the return were square. */
+export function cornerBetween(i: number, j: number, a: DirName, b: DirName): Pt {
+  const p = g.corner_between(i, j, dir(a), dir(b), SEED) as Pt;
+  return { x: p.x, z: p.z };
+}
+
+/** The kerb return of a junction, in centimetres. */
+export function junctionRadius(i: number, j: number): number {
+  return g.junction_radius_cm(i, j, SEED) as number;
+}
+
 export function lotAt(i: number, j: number, row: number, k: number): Lot {
   const l = g.lot_at(i, j, row, k, SEED) as Bend;
   return {

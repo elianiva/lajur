@@ -263,6 +263,17 @@ def left_of(d: Dir) -> Dir:
     case East{}:
       North{}
 
+def right_of(d: Dir) -> Dir:
+  match d:
+    case North{}:
+      East{}
+    case East{}:
+      South{}
+    case South{}:
+      West{}
+    case West{}:
+      North{}
+
 # A local street sometimes stops short, and the junction it would have made
 # becomes a T. The pattern is fixed rather than seeded: the skeleton of the
 # town is authored, and the seed moves it rather than rerouting it. Only east
@@ -748,6 +759,58 @@ def half_cm(s: Street) -> U32:
     case Local{}:
       300
 
+# ===========================================================================
+# The junction box
+#
+# A street stops short of the node it meets, and the ground between the stops
+# is the junction. How far a kerb stops is the kerb return of Bina Marga
+# 08/PBM/2024, Pedoman Perencanaan Teknis Geometrik Simpang: at least six
+# metres in an urban junction, 4.5 to 7.5 m for passenger cars, 7.5 to 9 m
+# where a collector crosses, 9 m or more on the ring, and one radius on all
+# four corners. The seed moves the radius inside that band and never outside
+# it, so a street that meets a wider one is always cut back past the wider
+# one's kerb. That single number is what makes the pavement continuous through
+# the corner, instead of a disc laid over it.
+# ===========================================================================
+
+def ring_here(+i: U32, +j: U32) -> Bool:
+  Bool.or(Bool.or(U32.is_eq(i, 0), U32.is_eq(i, U32.sub(cols(), 1))),
+          Bool.or(U32.is_eq(j, 0), U32.is_eq(j, U32.sub(rows(), 1))))
+
+# Two local streets, a collector, or the ring.
+def junction_rank(+i: U32, +j: U32) -> U32:
+  Bool.pick(U32, ring_here(i, j), 2,
+            Bool.pick(U32, Bool.or(major_col(i), major_row(j)), 1, 0))
+
+def junction_radius_cm(+i: U32, +j: U32, +seed: U32) -> U32:
+  +base = U32.add(600, U32.mul(150, junction_rank(i, j)))
+  +band = U32.add(150, U32.mul(75, junction_rank(i, j)))
+  U32.add(base, U32.mod(mix(U32.add(i, 31), U32.add(j, 977)), band))
+
+def widest(a: Bool, ah: U32, b: Bool, bh: U32) -> U32:
+  U32.max(Bool.pick(U32, a, ah, 0), Bool.pick(U32, b, bh, 0))
+
+# The widest street whose kerb cuts this approach: the one across the node.
+def cross_half(+i: U32, +j: U32, +d: Dir) -> U32:
+  match d:
+    case North{}:
+      widest(has(i, j, East{}), half_cm(street_of(i, j, East{})),
+             has(i, j, West{}), half_cm(street_of(i, j, West{})))
+    case South{}:
+      widest(has(i, j, East{}), half_cm(street_of(i, j, East{})),
+             has(i, j, West{}), half_cm(street_of(i, j, West{})))
+    case East{}:
+      widest(has(i, j, North{}), half_cm(street_of(i, j, North{})),
+             has(i, j, South{}), half_cm(street_of(i, j, South{})))
+    case West{}:
+      widest(has(i, j, North{}), half_cm(street_of(i, j, North{})),
+             has(i, j, South{}), half_cm(street_of(i, j, South{})))
+
+# How far from the node an approach's kerb stops.
+def mouth_cm(+i: U32, +j: U32, +d: Dir, +seed: U32) -> U32:
+  U32.add(cross_half(i, j, d), junction_radius_cm(i, j, seed))
+
+
 type Mark is Data:
   StopLine{}
   GiveWayLine{}
@@ -887,29 +950,32 @@ def signal_head(control: Control) -> Bool:
     case Uncontrolled{}:
       False{}
 
-# The line stands two metres off the carriageway it is crossing; the crossing
-# further back than the line. A local street with no line has no crossing.
-def line_cm(half: U32) -> U32:
-  U32.add(half, 200)
+# The line stands behind the junction box, not behind the approach's own
+# carriageway: a driver on a local street meeting the ring must stop before the
+# ring's near kerb, which is the widest street that reaches the node plus the
+# kerb return. The crossing stands further back still. A local street with no
+# line has no crossing.
+def line_cm(+behind: U32) -> U32:
+  U32.add(behind, 200)
 
-def crossing_cm(control: Control, street: Street, half: U32) -> U32:
+def crossing_cm(control: Control, street: Street, +behind: U32) -> U32:
   match control:
     case Signal{}:
-      U32.add(half, 900)
+      U32.add(behind, 900)
     case Roundabout{}:
       0
     case Uncontrolled{}:
       match street:
         case Ring{}:
-          U32.add(half, 900)
+          U32.add(behind, 900)
         case Collector{}:
-          U32.add(half, 900)
+          U32.add(behind, 900)
         case Local{}:
           0
 
-def approach_of(d: Dir, present: Bool, +half: U32, street: Street, +c: Control,
+def approach_of(d: Dir, present: Bool, +half: U32, +behind: U32, street: Street, +c: Control,
                 +gives: Bool, +given: Bool) -> Approach:
-  Approach{d, present, half, mark_of(c, gives), line_cm(half), crossing_cm(c, street, half),
+  Approach{d, present, half, mark_of(c, gives), line_cm(behind), crossing_cm(c, street, behind),
            signal_head(c), post_of(c, gives, given)}
 
 def approach_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Approach:
@@ -921,7 +987,7 @@ def approach_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Approach:
   +stem = is_eq_dir(d, opposite(gone))
   +gives = gives_way(s, minor_of(i, j, d), stem)
   +given = Bool.and(has_give_way(c, s), Bool.not(gives))
-  approach_of(d, has(i, j, d), half_cm(street), street, c, gives, given)
+  approach_of(d, has(i, j, d), half_cm(street), mouth_cm(i, j, d, seed), street, c, gives, given)
 
 # The four approaches of a junction. One that has no street is still answered,
 # so the list is the same shape everywhere and the renderer can walk it.
@@ -1014,20 +1080,31 @@ def every_head(xs: List<Approach>) -> Bool:
         case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
           Bool.and(Bool.or(Bool.not(present), head), every_head(t))
 
-def every_line_behind_the_kerb(xs: List<Approach>) -> Bool:
+# A line stands behind the box, which is the widest street across the approach
+# plus its kerb return: the approach's own width says nothing about how far a
+# driver on it has to go before the crossing carriageway begins.
+def every_line_behind_the_box(xs: List<Approach>, +i: U32, +j: U32) -> Bool:
   match xs:
     case Nil{}:
       True{}
     case +h <> t:
       match h:
         case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
-          +ok = Bool.or(Bool.not(present), U32.is_lt(half, line_cm))
-          Bool.and(ok, every_line_behind_the_kerb(t))
+          +ok = Bool.or(Bool.not(present), U32.is_lt(cross_half(i, j, d), line_cm))
+          Bool.and(ok, every_line_behind_the_box(t, i, j))
 
 def gives_of(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Bool:
   +gone = missing_of(has(i, j, North{}), has(i, j, East{}),
                      has(i, j, South{}), has(i, j, West{}))
   gives_way(shape(i, j, seed), minor_of(i, j, d), is_eq_dir(d, opposite(gone)))
+
+def line_in(a: Approach) -> U32:
+  match a:
+    case Approach{d, present, half, mark, line_cm, zebra_cm, head, post}:
+      line_cm
+
+def line_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> U32:
+  line_in(approach_at(i, j, d, seed))
 
 def mark_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Mark:
   mark_of(control(i, j), gives_of(i, j, d, seed))
@@ -1157,6 +1234,34 @@ def block_depth(+i: U32, +j: U32, +seed: U32) -> U32:
 def block_width(+i: U32, +j: U32, +seed: U32) -> U32:
   length(site(i, j, seed), site(U32.add(i, 1), j, seed))
 
+# ---------------------------------------------------------------------------
+# The frontage a block offers
+#
+# A block's west edge is column i's street and its east edge is column i + 1's,
+# so a corner lot would stand in the crossing carriageway unless the frontage
+# stops at the kerb of the street it crosses. The inset is that kerb: half a
+# carriageway, and the bite the junction's kerb return takes out of the corner
+# (see the junction box below). On the ring there is no crossing street, and
+# the inset is nothing.
+# ---------------------------------------------------------------------------
+
+def corner_cm(open: Bool, street: Street, +radius: U32) -> U32:
+  match open:
+    case True{}:
+      U32.add(half_cm(street), U32.max(pavement_cm(), U32.div(U32.add(U32.mul(3, radius), 9), 10)))
+    case False{}:
+      0
+
+def west_corner(+i: U32, +j: U32, +seed: U32) -> U32:
+  corner_cm(has(i, j, South{}), street_of(i, j, South{}), junction_radius_cm(i, j, seed))
+
+def east_corner(+i: U32, +j: U32, +seed: U32) -> U32:
+  corner_cm(has(U32.add(i, 1), j, South{}), street_of(U32.add(i, 1), j, South{}),
+            junction_radius_cm(U32.add(i, 1), j, seed))
+
+def frontage_cm(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.sub(U32.sub(block_width(i, j, seed), west_corner(i, j, seed)), east_corner(i, j, seed))
+
 # The block as a bilinear patch: a point is found by travelling `u` along the
 # south edge and `v` from there to the north edge. Nothing can leave the block,
 # because every u and v leaves a point inside the four corners.
@@ -1206,11 +1311,11 @@ def rows_in(+i: U32, +j: U32, +seed: U32) -> U32:
   rows_where(block_exists(i, j), i, j, seed)
 
 # A row's lots are seven hundred centimetres each, at least one and at most
-# twelve, and they share the width exactly.
+# twelve, and they share the frontage exactly.
 def lots_where(on: Bool, +i: U32, +j: U32, +seed: U32) -> U32:
   match on:
     case True{}:
-      U32.min(U32.max(U32.div(block_width(i, j, seed), 700), 1), 12)
+      U32.min(U32.max(U32.div(frontage_cm(i, j, seed), 700), 1), 12)
     case False{}:
       0
 
@@ -1218,7 +1323,7 @@ def lots_in(+i: U32, +j: U32, +seed: U32) -> U32:
   lots_where(block_exists(i, j), i, j, seed)
 
 def lot_width(+i: U32, +j: U32, +seed: U32) -> U32:
-  U32.div(block_width(i, j, seed), lots_in(i, j, seed))
+  U32.div(frontage_cm(i, j, seed), lots_in(i, j, seed))
 
 type LotKind is Data:
   Ruko{}
@@ -1283,8 +1388,9 @@ def lot_from(here: Pt, +f: Frame, +face: Bool, w: U32, depth: U32, kind: LotKind
 
 # One lot: its footprint centre, the way its front looks, its width and depth.
 def lot_at(+i: U32, +j: U32, +row: U32, +k: U32, +seed: U32) -> Lot:
-  +lots = lots_in(i, j, seed)
-  +u = U32.div(U32.mul(U32.add(U32.mul(k, 2), 1), 1024), U32.mul(lots, 2))
+  +w = lot_width(i, j, seed)
+  +along = U32.add(west_corner(i, j, seed), U32.add(U32.mul(k, w), U32.div(w, 2)))
+  +u = U32.div(U32.mul(along, 1024), U32.max(block_width(i, j, seed), 1))
   +start = U32.add(front_v(i, j, seed), U32.mul(row, U32.add(row_v(i, j, seed), gang_v(i, j, seed))))
   +v = U32.add(start, U32.div(row_v(i, j, seed), 2))
   +here = quad_point(site(i, j, seed), site(U32.add(i, 1), j, seed),
@@ -1311,3 +1417,48 @@ def rows_inside_block(fuel: Nat, +row: U32, +i: U32, +j: U32, +seed: U32) -> Boo
       +live = U32.is_lt(row, rows_in(i, j, seed))
       +ok = Bool.or(Bool.not(live), lot_inside(lot_at(i, j, row, 0, seed)))
       Bool.and(ok, rows_inside_block(p, U32.add(row, 1), i, j, seed))
+
+# The frame of an approach: its own street's chord from the node, and the
+# perpendicular to it, which is the left of travel. A mouth is square to the
+# street it belongs to, not to the block beside it, so each approach brings its
+# own frame.
+def approach_frame(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Frame:
+  frame_from(site(i, j, seed), end_of(i, j, d, seed))
+
+def mouth_at(f: Frame, +m: U32, +h: U32, +left: Bool) -> Pt:
+  match f:
+    case Frame{origin, +ux, +uz, +nx, +nz}:
+      match origin:
+        case Pt{ox, oz}:
+          +sx = Bool.pick(Signed, left, negate(nx), nx)
+          +sz = Bool.pick(Signed, left, negate(nz), nz)
+          Pt{push_along(push_along(ox, ux, m), sx, h), push_along(push_along(oz, uz, m), sz, h)}
+
+# One end of an approach's mouth: the point where its kerb stops.
+def mouth_side(+i: U32, +j: U32, +d: Dir, +left: Bool, +seed: U32) -> Pt:
+  mouth_at(approach_frame(i, j, d, seed), mouth_cm(i, j, d, seed),
+           half_cm(street_of(i, j, d)), left)
+
+def mouth_mid(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Pt:
+  mouth_at(approach_frame(i, j, d, seed), mouth_cm(i, j, d, seed), 0, True{})
+
+def corner_in(here: Pt, own: Frame, side: Frame, +h_side: U32, +h_own: U32) -> Pt:
+  match here:
+    case Pt{ox, oz}:
+      match own:
+        case Frame{origin, +ux, +uz, nx, nz}:
+          match side:
+            case Frame{origin2, +sx, +sz, nx2, nz2}:
+              Pt{push_along(push_along(ox, ux, h_side), sx, h_own),
+                 push_along(push_along(oz, uz, h_side), sz, h_own)}
+
+# Where the two kerbs of a corner would meet if the return were square: the
+# control point of the fillet that rounds it. It is reached by taking b's half
+# along a and a's half along b, so the corner is the same point from either
+# side of it.
+def corner_between(+i: U32, +j: U32, +a: Dir, +b: Dir, +seed: U32) -> Pt:
+  corner_in(site(i, j, seed), approach_frame(i, j, a, seed), approach_frame(i, j, b, seed),
+            half_cm(street_of(i, j, b)), half_cm(street_of(i, j, a)))
+
+def corner_pt(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Pt:
+  corner_between(i, j, d, left_of(d), seed)
