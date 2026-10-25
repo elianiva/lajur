@@ -735,6 +735,8 @@ def rule_name(id: U32) -> String:
       "Signal before a lane change"
     case 21:
       "Speed limit"
+    case 52:
+      "Right lane"
     case 59:
       "Negligent collision"
     case _:
