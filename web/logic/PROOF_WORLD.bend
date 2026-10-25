@@ -43,3 +43,20 @@ law a_lokal_street_is_thirty_and_a_main_road_fifty:
 
 def a_lokal_street_is_thirty_and_a_main_road_fifty():
   {==}
+
+# Streets across a ring lane, a comb's teeth or a grid's, stand far enough
+# apart for two rows of lots back to back, at every density the field can
+# take.
+law streets_across_a_lane_leave_two_rows_of_lots:
+  { W.every_cross_gap_holds_lots() == True{} : Bool }
+
+def streets_across_a_lane_leave_two_rows_of_lots():
+  {==}
+
+# Branches leave a street no nearer each other than the lokal floor, 20 m,
+# at every density.
+law branches_leave_a_street_at_least_twenty_metres_apart:
+  { W.every_branch_gap_keeps_floor() == True{} : Bool }
+
+def branches_leave_a_street_at_least_twenty_metres_apart():
+  {==}

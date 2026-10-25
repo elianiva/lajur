@@ -15,11 +15,15 @@
 #   - two collectors that meet a main road from either side either meet it at
 #     one crossing or stand at least a fifth of the road apart;
 #   - a lokal street is a residential road and a main road an urban one, with
-#     the limits PM 111/2015 Pasal 3 ayat (4) sets.
+#     the limits PM 111/2015 Pasal 3 ayat (4) sets;
+#   - streets across a lane leave two rows of lots between them, and branches
+#     leave a street at least the lokal floor apart, at every density.
 #
 # Every one of these turns on a decision that takes a handful of values (a
-# drop, a mouth position, a road class), so the laws walk every value the hash
-# can pick, and no seed can break them.
+# drop, a mouth position, a road class, a level of density), so the laws walk
+# every value the hash can pick, and no seed can break them. How a tree of
+# streets wanders is geometry and is not a law: the lab's plan check counts
+# its crossings instead.
 import Base
 import ../../bend/model.bend as M
 
@@ -1682,3 +1686,24 @@ def block_fill(+seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: 
   built_fill(Bool.and(Bool.and(Bool.not(U32.is_lt(l, 2)), roomy(bx, 7000)), Bool.not(List.is_empty(&2, Slot, cand))),
     l, seed, i, j, u0, v0, d, r, outer, bx, cand, es, en, ew, ee, mu, mv)
 
+# ---- For the laws: the spacing the density sets ---------------------------------
+
+# Whether ok holds at every level of density, 0 to 255. Spacing reads density
+# only through `level`, so this is every density.
+def levels_from(~ok: U32 -> Bool, fuel: Nat, +l: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(ok(l), levels_from(~ok, p, U32.add(l, 1)))
+
+# Streets across a lane stand at least `cross_gap` apart, since a lane of
+# length L holds floor(L / gap) of them; the grid's are wider still. That
+# leaves two rows of lots, back to back, between two streets.
+def every_cross_gap_holds_lots() -> Bool:
+  levels_from(~(l => U32.is_ge(level_gap(l), U32.mul(clear_cm(), 2))), 256n, 0)
+
+# Branch points along a street stand at least four fifths of `branch_every`
+# apart: never nearer than the lokal floor.
+def every_branch_gap_keeps_floor() -> Bool:
+  levels_from(~(l => U32.is_ge(U32.div(U32.mul(level_branch(l), 4), 5), lok_floor_cm())), 256n, 0)
