@@ -537,6 +537,7 @@ export function townView(options: { buildings?: boolean; splits?: boolean } = {}
         for (let ring = 0; ring < rings; ring += 1) {
           const lots = T.lotsOn(i, j, side, ring);
           for (let k = 0; k < lots; k += 1) {
+            if (!T.lotBuilt(i, j, side, ring, k)) continue;
             const lot = T.lotAt(i, j, side, ring, k);
             place(lot, hash(i * 31 + k, j * 17 + side * 7 + ring, lot.kind.length));
           }
@@ -546,7 +547,7 @@ export function townView(options: { buildings?: boolean; splits?: boolean } = {}
       for (let a = 0; a < across; a += 1) {
         for (let b = 0; b < deep; b += 1) {
           // A yard block's square stands open in the middle of its grid.
-          if (T.coreOpen(i, j, a, b)) continue;
+          if (T.coreOpen(i, j, a, b) || !T.coreLotBuilt(i, j, a, b)) continue;
           const lot = T.coreLotAt(i, j, a, b);
           place(lot, hash(i * 13 + a, j * 11 + b, lot.kind.length));
         }
@@ -567,6 +568,7 @@ export function townView(options: { buildings?: boolean; splits?: boolean } = {}
       for (let side = 0; side < 4; side += 1) {
         const lots = T.lotsOn(i, j, side, 0);
         for (let k = 0; k < lots; k += 1) {
+          if (!T.propBuilt(i, j, side, k)) continue;
           const prop = T.propAt(i, j, side, k);
           const seed = hash(i * 13 + k, j * 7 + side, prop.r);
           let mesh: THREE.Object3D;
@@ -593,7 +595,7 @@ export function townView(options: { buildings?: boolean; splits?: boolean } = {}
       const [across, deep] = T.coreLots(i, j);
       for (let a = 0; a < across; a += 1) {
         for (let b = 0; b < deep; b += 1) {
-          if (!T.coreOpen(i, j, a, b)) continue;
+          if (!T.coreOpen(i, j, a, b) || !T.coreTreeBuilt(i, j, a, b)) continue;
           const prop = T.coreTree(i, j, a, b);
           const seed = hash(i * 17 + a, j * 19 + b, prop.r);
           const tree = trees[prop.kind](seed);
@@ -681,6 +683,13 @@ export function townView(options: { buildings?: boolean; splits?: boolean } = {}
           const dx = cut.b.x - cut.a.x;
           const dz = cut.b.z - cut.a.z;
           const length = Math.hypot(dx, dz) || 1;
+          // The street it joins bows away from the chord the cut was measured
+          // to, so the cut runs on a few metres past its ends to meet the kerb.
+          const run = 400;
+          const ux = dx / length;
+          const uz = dz / length;
+          const from = { x: cut.a.x - ux * run, z: cut.a.z - uz * run };
+          const to = cut.kind === "Stub" ? cut.b : { x: cut.b.x + ux * run, z: cut.b.z + uz * run };
           const nx = (-dz / length) * cut.half;
           const nz = (dx / length) * cut.half;
           const at = (q: T.Pt, side: number): V3 => [
@@ -688,7 +697,7 @@ export function townView(options: { buildings?: boolean; splits?: boolean } = {}
             0.06,
             (q.z + nz * side) * CM,
           ];
-          asphalt.quad(at(cut.a, -1), at(cut.a, 1), at(cut.b, 1), at(cut.b, -1));
+          asphalt.quad(at(from, -1), at(from, 1), at(to, 1), at(to, -1));
         }
       }
     }

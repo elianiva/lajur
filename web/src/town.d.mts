@@ -87,6 +87,35 @@ declare const town: {
   core_open(i: number, j: number, a: number, b: number, seed: number): boolean;
   core_lot_at(i: number, j: number, a: number, b: number, seed: number): LotRecord;
   prop_at(i: number, j: number, side: number, k: number, seed: number): PropRecord;
+  lot_built(
+    i: number,
+    j: number,
+    side: number,
+    ring: number,
+    t: number,
+    seed: number,
+  ): Constructor<"True" | "False">;
+  prop_built(
+    i: number,
+    j: number,
+    side: number,
+    t: number,
+    seed: number,
+  ): Constructor<"True" | "False">;
+  core_lot_built(
+    i: number,
+    j: number,
+    a: number,
+    b: number,
+    seed: number,
+  ): Constructor<"True" | "False">;
+  core_tree_built(
+    i: number,
+    j: number,
+    a: number,
+    b: number,
+    seed: number,
+  ): Constructor<"True" | "False">;
   split_code(i: number, j: number, p: number, seed: number): number;
   split_start(i: number, j: number, p: number, seed: number): Point;
   split_end(i: number, j: number, p: number, seed: number): Point;

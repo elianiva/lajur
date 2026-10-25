@@ -19,3 +19,17 @@ law the_split_has_every_kind_of_cut_a_fair_share_of_dead_ends_and_no_sliver:
 
 def the_split_has_every_kind_of_cut_a_fair_share_of_dead_ends_and_no_sliver():
   {==}
+
+# A lot, a prop and a tree stand only where they clear every cut. The test is
+# the distance to the segment, and each end of the segment is measured from the
+# end: a point beside the cut, past its end, near its end and on a slant.
+law a_point_is_clear_of_a_cut_only_by_its_reach:
+  { Bool.and(Bool.not(T.seg_clear(100, 100, T.Pt{0, 0}, T.Pt{1000, 0}, 300)),
+    Bool.and(T.seg_clear(100, 500, T.Pt{0, 0}, T.Pt{1000, 0}, 300),
+    Bool.and(Bool.not(T.seg_clear(1200, 0, T.Pt{0, 0}, T.Pt{1000, 0}, 300)),
+    Bool.and(T.seg_clear(1400, 0, T.Pt{0, 0}, T.Pt{1000, 0}, 300),
+    Bool.and(T.seg_clear(1000, 0, T.Pt{0, 0}, T.Pt{1000, 1000}, 500),
+             Bool.not(T.seg_clear(600, 400, T.Pt{0, 0}, T.Pt{1000, 1000}, 300))))))) == True{} : Bool }
+
+def a_point_is_clear_of_a_cut_only_by_its_reach():
+  {==}

@@ -316,3 +316,21 @@ export function splitAt(i: number, j: number, p: number): Split | undefined {
   const b = g.split_end(i, j, p, SEED) as Pt;
   return { kind, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z }, half: SPLIT_HALF[code]! };
 }
+
+/** Whether a frontage lot is built, or left out because a cut runs through it. */
+export function lotBuilt(i: number, j: number, side: number, ring: number, k: number): boolean {
+  return bool(g.lot_built(i, j, side, ring, k, SEED));
+}
+
+/** Whether the prop in front of frontage lot `k` stands. */
+export function propBuilt(i: number, j: number, side: number, k: number): boolean {
+  return bool(g.prop_built(i, j, side, k, SEED));
+}
+
+export function coreLotBuilt(i: number, j: number, a: number, b: number): boolean {
+  return bool(g.core_lot_built(i, j, a, b, SEED));
+}
+
+export function coreTreeBuilt(i: number, j: number, a: number, b: number): boolean {
+  return bool(g.core_tree_built(i, j, a, b, SEED));
+}

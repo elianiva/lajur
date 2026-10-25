@@ -2680,3 +2680,97 @@ def dead_ends_in_range(+t: U32) -> Bool:
 
 def split_holds(+t: U32) -> Bool:
   Bool.and(every_kind_cut(t), Bool.and(dead_ends_in_range(t), U32.is_eq(cuts_slivers(t), 0)))
+
+# ===========================================================================
+# What the cuts leave standing
+#
+# A cut is a street, and a lot cannot stand on a street. A lot, a prop or a
+# tree is built only if it keeps clear of every cut in its block by the cut's
+# half carriageway and a pavement. The frontage rows still run along the
+# lattice streets and the core grid still fills the middle; where a cut
+# crosses either, the cells it touches are left out and the street is the gap.
+# ===========================================================================
+
+# Whether the point (px, pz) is at least `r` from the segment a to b. Wrapped
+# differences are two's complement, so a product of them is the signed product
+# and the sign is the top bit; every product stays under 2^31 at the size of a
+# block. A point past either end is measured from that end.
+def seg_clear(+px: U32, +pz: U32, +a: Pt, +b: Pt, +r: U32) -> Bool:
+  match a:
+    case Pt{+ax, +az}:
+      match b:
+        case Pt{+bx, +bz}:
+          +ex = U32.sub(bx, ax)
+          +ez = U32.sub(bz, az)
+          +dx = U32.sub(px, ax)
+          +dz = U32.sub(pz, az)
+          +fx = U32.sub(px, bx)
+          +fz = U32.sub(pz, bz)
+          +along = U32.add(U32.mul(dx, ex), U32.mul(dz, ez))
+          +wide = U32.add(U32.mul(ex, ex), U32.mul(ez, ez))
+          +cross = mag_of(U32.sub(U32.mul(dx, ez), U32.mul(dz, ex)))
+          +near_a = U32.add(U32.mul(dx, dx), U32.mul(dz, dz))
+          +near_b = U32.add(U32.mul(fx, fx), U32.mul(fz, fz))
+          +beside = U32.div(cross, U32.max(sqrt(wide), 1))
+          +r2 = U32.mul(r, r)
+          Bool.pick(Bool, U32.is_gt(along, 2147483647), U32.is_le(r2, near_a),
+          Bool.pick(Bool, U32.is_lt(wide, along), U32.is_le(r2, near_b),
+                    U32.is_le(r, beside)))
+
+# A lot is clear of a cut when its centre and its four corners are.
+def lot_off(l: Lot, +a: Pt, +b: Pt, +r: U32) -> Bool:
+  match l:
+    case Lot{x, z, fx, fz, w, d, kind, ax, az, bx, bz, cx, cz, dx, dz}:
+      Bool.and(seg_clear(x, z, a, b, r),
+      Bool.and(seg_clear(ax, az, a, b, r),
+      Bool.and(seg_clear(bx, bz, a, b, r),
+      Bool.and(seg_clear(cx, cz, a, b, r), seg_clear(dx, dz, a, b, r)))))
+
+def cut_reach_cm(+code: U32) -> U32:
+  U32.add(split_half_cm(cutkind_of(code)), pavement_cm())
+
+# Walks the block's seven cut slots, and answers for the lot against each cut
+# that exists.
+def lot_clear_from(fuel: Nat, +p: U32, +l: Lot, +i: U32, +j: U32, +seed: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+(+f):
+      +code = split_code(i, j, p, seed)
+      Bool.and(Bool.or(U32.is_eq(code, 0),
+                       lot_off(l, split_start(i, j, p, seed), split_end(i, j, p, seed),
+                               cut_reach_cm(code))),
+               lot_clear_from(f, U32.add(p, 1), l, i, j, seed))
+
+def lot_clear(+l: Lot, +i: U32, +j: U32, +seed: U32) -> Bool:
+  lot_clear_from(7n, 1, l, i, j, seed)
+
+def point_clear_from(fuel: Nat, +p: U32, +px: U32, +pz: U32, +i: U32, +j: U32, +seed: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+(+f):
+      +code = split_code(i, j, p, seed)
+      Bool.and(Bool.or(U32.is_eq(code, 0),
+                       seg_clear(px, pz, split_start(i, j, p, seed), split_end(i, j, p, seed),
+                                 cut_reach_cm(code))),
+               point_clear_from(f, U32.add(p, 1), px, pz, i, j, seed))
+
+def prop_clear(p: Prop, +i: U32, +j: U32, +seed: U32) -> Bool:
+  match p:
+    case Prop{x, z, r, kind}:
+      point_clear_from(7n, 1, x, z, i, j, seed)
+
+# What is built: a frontage lot, the prop in front of it, a core cell and the
+# tree in a kebun are each left out where a cut runs through them.
+def lot_built(+i: U32, +j: U32, +side: U32, +ring: U32, +t: U32, +seed: U32) -> Bool:
+  lot_clear(lot_at(i, j, side, ring, t, seed), i, j, seed)
+
+def prop_built(+i: U32, +j: U32, +side: U32, +t: U32, +seed: U32) -> Bool:
+  Bool.and(lot_built(i, j, side, 0, t, seed), prop_clear(prop_at(i, j, side, t, seed), i, j, seed))
+
+def core_lot_built(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> Bool:
+  lot_clear(core_lot_at(i, j, a, b, seed), i, j, seed)
+
+def core_tree_built(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> Bool:
+  prop_clear(core_tree(i, j, a, b, seed), i, j, seed)

@@ -41,7 +41,7 @@ const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 2000);
 
 const town = townView({
   buildings: new URLSearchParams(location.search).get("buildings") !== "0",
-  splits: new URLSearchParams(location.search).get("split") === "1",
+  splits: new URLSearchParams(location.search).get("split") !== "0",
 });
 scene.add(town.group);
 restyle(town.group, look);
