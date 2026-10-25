@@ -73,7 +73,7 @@ A scenario is six records and a sign act, so each constructor stays short enough
 | 13 | Passenger wears a helmet | Pasal 106 ayat (8) | 1 month, Rp250,000 (Pasal 291 ayat (2)) |
 | 14 | One passenger at most without a sidecar | Pasal 106 ayat (9) | 1 month, Rp250,000 (Pasal 292) |
 | 15 | Seatbelt in a cabin | Pasal 106 ayat (6) | 1 month, Rp250,000 (Pasal 289) |
-| 16 | Seatbelt in an open vehicle | Pasal 106 ayat (7) | 1 month, Rp250,000 (Pasal 290) |
+| 16 | Seatbelt and helmet in an open vehicle | Pasal 106 ayat (7) | 1 month, Rp250,000 (Pasal 290) |
 | 17 | No phone while driving | Pasal 106 ayat (1) | 3 months, Rp750,000 (Pasal 283) |
 | 18 | Give way to a pedestrian | Pasal 106 ayat (2) | 2 months, Rp500,000 (Pasal 284) |
 | 19 | Lights at night | Pasal 107 ayat (1) | 1 month, Rp250,000 (Pasal 293 ayat (1)) |

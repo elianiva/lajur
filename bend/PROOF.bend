@@ -144,6 +144,13 @@ def Laws.seatbelt_without_a_cabin(b):
     case False{}:
       {==}
 
+def Laws.an_open_four_wheeler_needs_a_helmet(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.no_phone_while_driving(b):
   match b:
     case True{}:

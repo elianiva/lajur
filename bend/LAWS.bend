@@ -96,6 +96,12 @@ law seatbelt_without_a_cabin:
   for b: Bool
   { R.contains(16, R.charges(R.with_gear(R.gear_seatbelt(b, False{})))) == Bool.not(b) : Bool }
 
+# Pasal 106 ayat (7): an open four-wheeler asks for a seatbelt and a helmet, so
+# a belted driver without one is still charged.
+law an_open_four_wheeler_needs_a_helmet:
+  for b: Bool
+  { R.contains(16, R.charges(R.with_gear(R.gear_open_helmet(b)))) == Bool.not(b) : Bool }
+
 law no_phone_while_driving:
   for b: Bool
   { R.contains(17, R.charges(R.with_gear(R.gear_phone(b)))) == b : Bool }

@@ -523,7 +523,7 @@ def charges_driver(s: Scenario) -> List<U32>:
         Bool.and(bike, Bool.and(more_than(passengers, 0), Bool.not(passenger_helmet))),
         Bool.and(bike, Bool.and(Bool.not(sidecar), more_than(passengers, 1))),
         Bool.and(car_like, Bool.and(cabin, Bool.not(seatbelt))),
-        Bool.and(car_like, Bool.and(Bool.not(cabin), Bool.not(seatbelt))),
+        Bool.and(car_like, Bool.and(Bool.not(cabin), Bool.or(Bool.not(seatbelt), Bool.not(rider_helmet)))),
         phone,
         Bool.and(pedestrian_waiting, Bool.not(yields_to_pedestrian)),
         Bool.and(night, Bool.not(lights_on)),
@@ -965,6 +965,10 @@ def gear_helmet(rider: Bool, pillion: Bool) -> Equipment:
 
 def gear_seatbelt(belted: Bool, cabin: Bool) -> Equipment:
   Equipment{True{}, True{}, belted, cabin, False{}, True{}, False{}, True{}, True{}, True{}, True{}, False{}, False{}}
+
+# Pasal 106 ayat (7): an open four-wheeler asks for a seatbelt and a helmet.
+def gear_open_helmet(helmet: Bool) -> Equipment:
+  Equipment{helmet, True{}, True{}, False{}, False{}, True{}, False{}, True{}, True{}, True{}, True{}, False{}, False{}}
 
 def gear_phone(on: Bool) -> Equipment:
   Equipment{True{}, True{}, True{}, True{}, False{}, True{}, on, True{}, True{}, True{}, True{}, False{}, False{}}
