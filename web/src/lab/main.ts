@@ -2,8 +2,10 @@ import * as THREE from "three";
 import { MapControls } from "three/addons/controls/MapControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import type { Shelf } from "../assets/kit.ts";
-import { Ink, light, lookByKey, looks, restyle } from "../render/look.ts";
+import { Ink, light, lookByKey, looks, restyle, type Look } from "../render/look.ts";
+import { initialState, nprState, query, share } from "./npr.ts";
 import { shelfView } from "./shelf.ts";
+import { studio } from "./studio.ts";
 import { townView } from "./town.ts";
 import type { View } from "./view.ts";
 import "./lab.css";
@@ -45,29 +47,67 @@ controls.maxZoom = 12;
 controls.maxPolarAngle = 1.2;
 
 let frame = 60;
+// Screen pixels the studio takes, so the city is framed in what is left.
+let inset = 0;
 function resize(): void {
-  const aspect = window.innerWidth / window.innerHeight;
-  camera.left = (-frame * aspect) / 2;
-  camera.right = (frame * aspect) / 2;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const half = (frame * (width / height)) / 2;
+  const shift = (inset / 2) * (frame / height);
+  camera.left = -half + shift;
+  camera.right = half + shift;
   camera.top = frame / 2;
   camera.bottom = -frame / 2;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  labels.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(width, height);
+  labels.setSize(width, height);
   ink.resize();
 }
 window.addEventListener("resize", resize);
 
+/** The stage's aspect, with the studio's width taken out of it. */
+function aspect(): number {
+  return (window.innerWidth - inset) / window.innerHeight;
+}
+
 type Mode = "shelf" | "town";
-let mode: Mode = location.hash === "#town" ? "town" : "shelf";
+let mode: Mode = location.hash === "#shelf" ? "shelf" : "town";
 let seed = 0.2024;
 let spinning = false;
 let view: View | null = null;
-// The look comes from ?look=, then the last one picked here; the game reads
-// the same key, so what you pick in the lab is what you drive.
-let look = lookByKey(
+// The city is drawn with the NPR shelf; the asset rows keep the game's looks.
+// Both remember their last pick, so what you settle on is what you come back to.
+let state = initialState(new URLSearchParams(location.search));
+let shelfLook = lookByKey(
   new URLSearchParams(location.search).get("look") ?? localStorage.getItem("lajur.look"),
 );
+
+const active = (): Look => (mode === "town" ? state.look : shelfLook);
+
+let saving = 0;
+function remember(): void {
+  // A drag fires per pixel; settle the address once it pauses.
+  clearTimeout(saving);
+  saving = window.setTimeout(() => {
+    localStorage.setItem("lajur.npr", query(state));
+    const at = new URLSearchParams(location.search).get("at");
+    history.replaceState(null, "", share(state, at));
+  }, 250);
+}
+
+const panel = studio({
+  state: () => state,
+  preset: (key) => {
+    state = nprState(key);
+    dress();
+    remember();
+  },
+  change: () => {
+    dress();
+    remember();
+  },
+});
+document.body.append(panel.element);
 
 function teardown(group: THREE.Object3D): void {
   group.traverse((node) => {
@@ -77,7 +117,7 @@ function teardown(group: THREE.Object3D): void {
 }
 
 /** Fit the sun's shadow to what is shown, from the look's direction. */
-function aim(bounds: THREE.Box3): void {
+function aim(bounds: THREE.Box3, look: Look): void {
   const centre = bounds.getCenter(new THREE.Vector3()).setY(0);
   const reach = bounds.getSize(new THREE.Vector3()).length() / 2;
   const shadow = sun.shadow.camera;
@@ -94,16 +134,33 @@ function aim(bounds: THREE.Box3): void {
     .add(new THREE.Vector3(...look.sunFrom).normalize().multiplyScalar(reach * 2));
 }
 
+/** Put a look on the scene: the light, the frame, and every material. */
+function dress(): void {
+  const look = active();
+  light(scene, hemi, sun, look);
+  ink.setLook(look);
+  if (view) {
+    restyle(view.group, look);
+    aim(view.bounds, look);
+  }
+  for (const button of picker.querySelectorAll<HTMLButtonElement>("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.look === shelfLook.key));
+  }
+  panel.sync();
+}
+
 function show(reframe: boolean): void {
   if (view) teardown(view.group);
+  picker.hidden = mode === "town";
+  panel.element.hidden = mode === "shelf";
+  inset = panel.element.hidden ? 0 : panel.element.offsetWidth + 16;
   view = mode === "shelf" ? shelfView(shelves, seed, () => spinning) : townView(seed);
   scene.add(view.group);
-  restyle(view.group, look);
+  dress();
 
   const bounds = view.bounds;
   const centre = bounds.getCenter(new THREE.Vector3()).setY(0);
   const reach = bounds.getSize(new THREE.Vector3()).length() / 2;
-  aim(bounds);
 
   if (reframe) {
     // Look from the south, a little to the east, and fit the content's
@@ -123,8 +180,7 @@ function show(reframe: boolean): void {
       seen.expandByPoint(point.applyMatrix4(camera.matrixWorldInverse));
     }
     const size = seen.getSize(new THREE.Vector3());
-    const aspect = window.innerWidth / window.innerHeight;
-    frame = Math.max(size.y, size.x / aspect) * 1.12;
+    frame = Math.max(size.y, size.x / aspect()) * 1.12;
     resize();
 
     // ?at=x,z,zoom frames one spot, so a view can be shared as a link.
@@ -150,30 +206,18 @@ for (const option of looks) {
   button.textContent = option.name;
   button.dataset.look = option.key;
   button.addEventListener("click", () => {
-    look = option;
-    localStorage.setItem("lajur.look", look.key);
-    applyLook();
-    if (view) {
-      restyle(view.group, look);
-      aim(view.bounds);
-    }
+    shelfLook = option;
+    localStorage.setItem("lajur.look", shelfLook.key);
+    dress();
   });
   picker.append(button);
 }
 
-function applyLook(): void {
-  light(scene, hemi, sun, look);
-  ink.setLook(look);
-  for (const button of picker.querySelectorAll<HTMLButtonElement>("button")) {
-    button.setAttribute("aria-pressed", String(button.dataset.look === look.key));
-  }
-}
-applyLook();
-
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-mode]")) {
   button.addEventListener("click", () => {
     mode = button.dataset.mode as Mode;
-    history.replaceState(null, "", mode === "town" ? "#town" : "#");
+    const hash = mode === "town" ? "#town" : "#shelf";
+    history.replaceState(null, "", `${location.pathname}${location.search}${hash}`);
     show(true);
   });
 }

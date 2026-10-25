@@ -26,3 +26,6 @@ dist-ssr
 # Generated from logic/game.bend and logic/town.bend by `vp run logic`
 src/game.mjs
 src/town.mjs
+
+# Orb state (portal manifests) written by `amp orb service`.
+.amp/

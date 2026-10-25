@@ -41,3 +41,12 @@ release. Add a tool name to select part of the graph. For example, run
   formatting, keyboard mapping. If a change would put a decision in `src/`, it
   belongs in `logic/game.bend` with a law next to it.
 - `vp check` must pass before a change counts; so must `vp run proof`.
+
+## The lab
+
+- `/lab.html` opens on the city (`Town`); `#shelf` shows every asset row.
+- The city is drawn by the NPR studio: five toon variations in `src/lab/npr.ts`,
+  sliders for their bands, shadow stain, rim, outline and grade, and the panel
+  that binds them in `src/lab/studio.ts`.
+- The shading itself is `src/render/look.ts` and is shared with the game. A new
+  knob belongs there so every look can use it; a preset belongs in `npr.ts`.

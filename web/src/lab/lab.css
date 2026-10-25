@@ -91,3 +91,168 @@ body {
 .far .tag {
   display: none;
 }
+
+#studio {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  bottom: 84px;
+  width: 268px;
+  display: flex;
+  flex-direction: column;
+  color: var(--paper);
+  background: rgba(27, 33, 48, 0.94);
+  border: 3px solid var(--paper);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+
+#studio[hidden],
+#looks[hidden] {
+  display: none;
+}
+
+/* The knobs run past the fold; fade the last row so the scroll reads. */
+#studio::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  left: 3px;
+  height: 26px;
+  background: linear-gradient(to top, rgba(27, 33, 48, 0.96), rgba(27, 33, 48, 0));
+  pointer-events: none;
+}
+
+#studio .presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 3px solid var(--paper);
+}
+
+#studio .presets button {
+  font: inherit;
+  color: var(--paper);
+  background: transparent;
+  border: 2px solid var(--paper);
+  padding: 5px 2px;
+  cursor: pointer;
+}
+
+#studio .presets button:hover {
+  background: #2a3348;
+}
+
+#studio .presets button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+#studio .sliders {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-bottom: 28px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(239, 230, 207, 0.4) transparent;
+}
+
+#studio .sliders::-webkit-scrollbar {
+  width: 6px;
+}
+
+#studio .sliders::-webkit-scrollbar-thumb {
+  background: rgba(239, 230, 207, 0.4);
+}
+
+#studio .sliders::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#studio h3 {
+  margin: 8px 10px 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgba(239, 230, 207, 0.55);
+}
+
+#studio .knob {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 6px;
+  align-items: center;
+  padding: 1px 10px 0;
+}
+
+#studio .swatch {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 4px 10px 0;
+}
+
+#studio .swatch + .knob {
+  padding-top: 5px;
+}
+
+#studio input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 12px;
+  margin: 1px 0 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+#studio input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgba(239, 230, 207, 0.3);
+}
+
+#studio input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  background: var(--paper);
+}
+
+#studio input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: rgba(239, 230, 207, 0.3);
+}
+
+#studio input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 14px;
+  border: 0;
+  border-radius: 0;
+  background: var(--paper);
+}
+
+#studio input[type="color"] {
+  width: 52px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid var(--paper);
+  background: transparent;
+  cursor: pointer;
+}
+
+#studio input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+#studio input[type="color"]::-webkit-color-swatch {
+  border: 0;
+}
