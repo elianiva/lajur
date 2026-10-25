@@ -61,7 +61,7 @@ else
   installed="$(bend version 2>/dev/null || true)"
   if [ "$installed" != "bend $bend_version" ]; then
     warn "install.sh gave '${installed:-no bend}', not bend $bend_version."
-    warn "Bump bend_version here and the version in README.md to match it."
+    warn "Bump bend_version here to match it."
   fi
 fi
 done_step
