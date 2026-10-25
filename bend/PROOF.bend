@@ -304,6 +304,33 @@ def Laws.a_dangerous_place_forbids_stopping(b):
     case False{}:
       {==}
 
+def Laws.slow_before_a_stated_hazard(h):
+  match h:
+    case R.NoHazard{}:
+      {==}
+    case R.PassingBus{}:
+      {==}
+    case R.AnimalDrawn{}:
+      {==}
+    case R.Rain{}:
+      {==}
+    case R.Community{}:
+      {==}
+    case R.JunctionAhead{}:
+      {==}
+    case R.PedestrianCrossing{}:
+      {==}
+
+def Laws.a_slowing_driver_answers_the_hazard():
+  {==}
+
+def Laws.a_stopped_bus_stops_the_traffic_behind(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.signal_before_slowing(b):
   match b:
     case True{}:

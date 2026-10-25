@@ -76,13 +76,24 @@ type Lane is Data:
   LaneLeft{}
   LaneRight{}
 
+# Pasal 116 ayat (2): the grounds that ask a driver to slow down.
+type Hazard is Data:
+  NoHazard{}
+  PassingBus{}
+  AnimalDrawn{}
+  Rain{}
+  Community{}
+  JunctionAhead{}
+  PedestrianCrossing{}
+
 # The act: the posted duty, the manoeuvre, and the facts a single rule reads
 # that the six records do not carry.
 type Act is Data:
   Act{sign: M.Duty, turn: Turn, parking: Bool, lane_ok: Bool, chains: Bool,
       following_m: U32, v_width: U32, v_length: U32, v_height: U32, v_axle: U32,
       lane: Lane, faster: Bool, sight_clear: Bool, room_ok: Bool,
-      train_coming: Bool, crossing_traffic: Bool, yields_to_crossing: Bool, left_turn_allowed: Bool}
+      train_coming: Bool, crossing_traffic: Bool, yields_to_crossing: Bool,
+      left_turn_allowed: Bool, hazard: Hazard, bus_stopping: Bool}
 
 type Scenario is Data:
   Scenario{road: Road, load: Payload, gear: Equipment, move: Motion, yield: Priority, docs: Papers, act: Act}
@@ -160,6 +171,9 @@ def catalogue() -> List<Rule>:
     # 53-54: a left turn at a signal, and a crossing already in use
   , Rule{53, Signal{}, 0, 0, 0, 112, 3, 0, 0}
   , Rule{54, Signal{}, 0, 0, 0, 114, 0, 0, 0}
+    # 55-56: the grounds to slow, and a bus taking passengers
+  , Rule{55, General{}, 0, 0, 0, 116, 2, 0, 0}
+  , Rule{56, General{}, 0, 0, 0, 119, 0, 0, 0}
   ]
 
 # ---------------------------------------------------------------------------
@@ -342,12 +356,20 @@ def keeps_left(v: Vehicle) -> Bool:
 def right_lane_ground(overtaking: Bool, +t: Turn) -> Bool:
   Bool.or(overtaking, Bool.or(turn_is_right(t), turn_is_back(t)))
 
+# Pasal 116 ayat (2) names the grounds; an empty road names none.
+def stated_hazard(h: Hazard) -> Bool:
+  match h:
+    case NoHazard{}:
+      False{}
+    case _:
+      True{}
+
 # Pasal 109 ayat (1): a pass needs a clear sight line and enough room.
 def pass_is_safe(act: Act) -> Bool:
   match act:
     case Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length,
              +v_height, +v_axle, +lane, +faster, +sight_clear, +room_ok, +train_coming, +crossing_traffic,
-             +yields_to_crossing, +left_turn_allowed}:
+             +yields_to_crossing, +left_turn_allowed, +hazard, +bus_stopping}:
       Bool.and(sight_clear, room_ok)
 
 def over_tonnes_if(zero: Bool, limit: U32, kg: U32) -> Bool:
@@ -463,7 +485,7 @@ def sign_violated(act: Act, side: Side, speed: U32, overtaking: Bool, stopping: 
                   emergency_stop: Bool, yields_right: Bool, vehicle: Vehicle, weight: U32) -> Bool:
   match act:
     case Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle, +lane, +faster, +sight_clear, +room_ok, +train_coming, +crossing_traffic,
-             +yields_to_crossing, +left_turn_allowed}:
+             +yields_to_crossing, +left_turn_allowed, +hazard, +bus_stopping}:
       match sign:
         case M.NoDuty{}:
           False{}
@@ -597,7 +619,7 @@ def charges_event(s: Scenario) -> List<U32>:
       Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
       Priority{+oncoming, +oncoming_room, +grade, +yields_to_uphill, +pedestrian_waiting, +yields_to_pedestrian, +yields_to_emergency, +at_junction, +yields_right} = yield
-      Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle, +lane, +faster, +sight_clear, +room_ok, +train_coming, +crossing_traffic, +yields_to_crossing, +left_turn_allowed} = act
+      Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle, +lane, +faster, +sight_clear, +room_ok, +train_coming, +crossing_traffic, +yields_to_crossing, +left_turn_allowed, +hazard, +bus_stopping} = act
       pick([
         Bool.and(railway_crossing, Bool.or(crossing_closed, train_coming)),
         racing,
@@ -664,7 +686,7 @@ def charges_position(s: Scenario) -> List<U32>:
       Road{+zone, +side, +police_directs, +obeys_officer, +signal_red, +sign_forbids, +marking_forbids, +railway_crossing, +crossing_closed, +roundabout, +emergency_vehicle, +goods_route_ok} = road
       Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
-      Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle, +lane, +faster, +sight_clear, +room_ok, +train_coming, +crossing_traffic, +yields_to_crossing, +left_turn_allowed} = act
+      Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle, +lane, +faster, +sight_clear, +room_ok, +train_coming, +crossing_traffic, +yields_to_crossing, +left_turn_allowed, +hazard, +bus_stopping} = act
       +right = lane_is_right(lane)
       +free = Bool.not(right_lane_ground(overtaking, turn))
       pick([
@@ -672,6 +694,8 @@ def charges_position(s: Scenario) -> List<U32>:
         Bool.and(right, Bool.and(Bool.not(faster), free)),
         Bool.and(signal_red, Bool.and(turn_is_left(turn), Bool.not(left_turn_allowed))),
         Bool.and(railway_crossing, Bool.and(crossing_traffic, Bool.not(yields_to_crossing))),
+        Bool.and(stated_hazard(hazard), Bool.not(slowing)),
+        Bool.and(bus_stopping, Bool.not(stopping)),
       ], 51)
 
 def charges(+s: Scenario) -> List<U32>:
@@ -792,7 +816,7 @@ def clean_docs() -> Papers:
 # No posted sign, no turn, a car-sized vehicle, and every lane and chain duty
 # satisfied. A sign scenario changes the one field its rule reads.
 def clean_act() -> Act:
-  Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 def clean_car() -> Scenario:
   Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
@@ -1206,48 +1230,66 @@ def with_bike_lights(on: Bool) -> Scenario:
 # Sign knobs. Each builder posts one duty and leaves every other action lawful,
 # so the verdict isolates the rule the sign states.
 def act_sign(d: M.Duty) -> Act:
-  Act{d, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{d, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 def act_parking(d: M.Duty, on: Bool) -> Act:
-  Act{d, NoTurn{}, on, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{d, NoTurn{}, on, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 def act_turn(d: M.Duty, t: Turn) -> Act:
-  Act{d, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{d, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 def act_chains(d: M.Duty, on: Bool) -> Act:
-  Act{d, NoTurn{}, False{}, True{}, on, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{d, NoTurn{}, False{}, True{}, on, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 def act_lane(d: M.Duty, ok: Bool) -> Act:
-  Act{d, NoTurn{}, False{}, ok, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{d, NoTurn{}, False{}, ok, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 def act_following(d: M.Duty, metres: U32) -> Act:
-  Act{d, NoTurn{}, False{}, True{}, True{}, metres, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{d, NoTurn{}, False{}, True{}, True{}, metres, 1800, 4500, 1500, 1500, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 def act_size(d: M.Duty, width: U32, length: U32, height: U32, axle: U32) -> Act:
-  Act{d, NoTurn{}, False{}, True{}, True{}, 100, width, length, height, axle, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{d, NoTurn{}, False{}, True{}, True{}, 100, width, length, height, axle, LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 # Where the vehicle sits in its direction of travel, why, and what it is about
 # to do. Pasal 108 ayat (3) and (4) read the three together.
 def act_pass(sight: Bool, room: Bool) -> Act:
   Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500,
-      LaneLeft{}, False{}, sight, room, False{}, False{}, False{}, True{}}
+      LaneLeft{}, False{}, sight, room, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
+
+def act_hazard(h: Hazard) -> Act:
+  Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500,
+      LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, h, False{}}
+
+def act_bus(bus: Bool) -> Act:
+  Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500,
+      LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, bus}
 
 def act_left_turn(allowed: Bool) -> Act:
   Act{M.NoDuty{}, TurnLeft{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500,
-      LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, allowed}
+      LaneLeft{}, False{}, True{}, True{}, False{}, False{}, False{}, allowed, NoHazard{}, False{}}
 
 def act_crossing(train: Bool, traffic: Bool, yields: Bool) -> Act:
   Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500,
-      LaneLeft{}, False{}, True{}, True{}, train, traffic, yields, True{}}
+      LaneLeft{}, False{}, True{}, True{}, train, traffic, yields, True{}, NoHazard{}, False{}}
 
 def act_position(lane: Lane, faster: Bool, t: Turn) -> Act:
-  Act{M.NoDuty{}, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, lane, faster, True{}, True{}, False{}, False{}, False{}, True{}}
+  Act{M.NoDuty{}, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, lane, faster, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}}
 
 # A pass on the right, with or without a clear sight line and with or without
 # room, so each half of Pasal 109 ayat (1) can be charged on its own.
 def overtake_with(sight: Bool, room: Bool) -> Scenario:
   Scenario{clean_road(), clean_load(), clean_gear(), move_overtake(True{}, Right{}, False{}),
            clean_yield(), clean_docs(), act_pass(sight, room)}
+
+# One hazard from Pasal 116 ayat (2), and whether the driver is slowing for it.
+def hazard_ahead(h: Hazard, slowing: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), move_slowing(slowing, True{}),
+           clean_yield(), clean_docs(), act_hazard(h)}
+
+# A public vehicle stopped to take passengers, and the driver behind it.
+def bus_stopped(bus: Bool, stopping: Bool) -> Scenario:
+  Scenario{clean_road(), clean_load(), clean_gear(), move_stopping(stopping, True{}),
+           clean_yield(), clean_docs(), act_bus(bus)}
 
 # A left turn at a red signal, with or without a sign or an arrow that allows it.
 # The signal itself is charged as rule 7; Pasal 112 ayat (3) charges the turn.

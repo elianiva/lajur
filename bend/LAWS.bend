@@ -201,6 +201,21 @@ law a_dangerous_place_forbids_stopping:
   for b: Bool
   { R.contains(29, R.charges(R.car_stopping(False{}, False{}, b))) == b : Bool }
 
+# Pasal 116 ayat (2): each stated ground asks for the brake, and slowing answers
+# it. Ayat (1), slowing where a warning sign stands, needs the warning's duty,
+# which this slice does not carry.
+law slow_before_a_stated_hazard:
+  for h: R.Hazard
+  { R.contains(55, R.charges(R.hazard_ahead(h, False{}))) == R.stated_hazard(h) : Bool }
+
+law a_slowing_driver_answers_the_hazard:
+  { R.contains(55, R.charges(R.hazard_ahead(R.Rain{}, True{}))) == False{} : Bool }
+
+# Pasal 119 ayat (2): a bus stopped to take passengers stops the traffic behind.
+law a_stopped_bus_stops_the_traffic_behind:
+  for b: Bool
+  { R.contains(56, R.charges(R.bus_stopped(b, False{}))) == b : Bool }
+
 law signal_before_slowing:
   for b: Bool
   { R.contains(30, R.charges(R.with_move(R.move_slowing(True{}, b)))) == Bool.not(b) : Bool }
