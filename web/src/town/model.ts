@@ -60,7 +60,16 @@ export type Mark = "StopLine" | "GiveWayLine" | "NoLine";
 export type Post = "PriorityWarning" | "GiveWaySign" | "StopSign" | "NoSign";
 export type Control = "Signal" | "Roundabout" | "Uncontrolled";
 export type Shape = "FourEqual" | "FourMajor" | "StraightT" | "SkewT" | "Bend";
-export type LotKind = "Ruko" | "Warung" | "House" | "Kos" | "Petak" | "Filler";
+export type LotKind =
+  | "Ruko"
+  | "Warung"
+  | "House"
+  | "Kos"
+  | "Petak"
+  | "Filler"
+  | "Minimarket"
+  | "Bengkel"
+  | "Gudang";
 export type PropKind = "Mangga" | "Palm" | "Kamboja" | "Semak" | "Pole" | "Pot";
 
 export interface Approach {
@@ -88,6 +97,19 @@ export interface Lot extends Pt {
   w: number;
   d: number;
   kind: LotKind;
+  /**
+   * The footprint, in centimetres, clockwise from the street side: `a` and `b`
+   * are the two front corners on the frontage line, `c` and `d` the two back
+   * corners. A cell of a band, so the back edge may be shorter than the front.
+   */
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  cx: number;
+  cz: number;
+  dx: number;
+  dz: number;
 }
 
 /** The river runs between this column and the next; only the bridges cross. */
@@ -191,6 +213,14 @@ export function lotAt(i: number, j: number, side: number, ring: number, k: numbe
     w: l.w as number,
     d: l.d as number,
     kind: (l.kind as Bend).$ as LotKind,
+    ax: l.ax as number,
+    az: l.az as number,
+    bx: l.bx as number,
+    bz: l.bz as number,
+    cx: l.cx as number,
+    cz: l.cz as number,
+    dx: l.dx as number,
+    dz: l.dz as number,
   };
 }
 
@@ -210,6 +240,37 @@ export function coreLots(i: number, j: number): [number, number] {
   return [g.core_lots_w(i, j, SEED) as number, g.core_lots_d(i, j, SEED) as number];
 }
 
+/**
+ * A point of a block's core, in thousand-and-twenty-fourths of the core
+ * itself. The four corners of the block's ground are (0,0) to (1024,1024).
+ */
+export function coreAt(i: number, j: number, u: number, v: number): Pt {
+  const p = g.core_at(i, j, u, v, SEED) as Pt;
+  return { x: p.x, z: p.z };
+}
+
+/** Whether a core cell stands open: a kebun with a tree, or a yard block's square. */
+export function coreOpen(i: number, j: number, a: number, b: number): boolean {
+  return bool(g.core_open(i, j, a, b, SEED));
+}
+
+/** The tree of an open core cell. A kebun holds a tree, never furniture. */
+export interface CoreTree extends Pt {
+  /** Half the crown, in centimetres. */
+  r: number;
+  kind: "Mangga" | "Palm" | "Kamboja";
+}
+
+export function coreTree(i: number, j: number, a: number, b: number): CoreTree {
+  const p = g.core_tree(i, j, a, b, SEED) as Bend;
+  return {
+    x: p.x as number,
+    z: p.z as number,
+    r: p.r as number,
+    kind: (p.kind as Bend).$ as CoreTree["kind"],
+  };
+}
+
 export function coreLotAt(i: number, j: number, a: number, b: number): Lot {
   const l = g.core_lot_at(i, j, a, b, SEED) as Bend;
   return {
@@ -220,5 +281,13 @@ export function coreLotAt(i: number, j: number, a: number, b: number): Lot {
     w: l.w as number,
     d: l.d as number,
     kind: (l.kind as Bend).$ as LotKind,
+    ax: l.ax as number,
+    az: l.az as number,
+    bx: l.bx as number,
+    bz: l.bz as number,
+    cx: l.cx as number,
+    cz: l.cz as number,
+    dx: l.dx as number,
+    dz: l.dz as number,
   };
 }

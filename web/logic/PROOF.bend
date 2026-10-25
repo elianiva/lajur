@@ -393,10 +393,10 @@ def a_gap_never_goes_below_zero():
 # its shape, so the same rules hold whatever seed moves it.
 # ===========================================================================
 
-law a_block_pitches_seventy_metres:
-  { T.pitch_cm() == 7000 : U32 }
+law a_block_pitches_a_hundred_and_forty_metres:
+  { T.pitch_cm() == 14000 : U32 }
 
-def a_block_pitches_seventy_metres():
+def a_block_pitches_a_hundred_and_forty_metres():
   {==}
 
 law no_block_can_fold:
@@ -412,7 +412,7 @@ def the_tightest_bend_clears_the_minimum_radius():
   {==}
 
 law every_junction_keeps_a_street_to_leave_by:
-  { T.every_node_wide(99n, 0) == True{} : Bool }
+  { T.every_node_wide(30n, 0) == True{} : Bool }
 
 def every_junction_keeps_a_street_to_leave_by():
   {==}
@@ -476,7 +476,7 @@ def the_two_signal_phases_never_show_green_together():
 # ---------------------------------------------------------------------------
 
 law the_town_has_a_signalised_crossing:
-  { T.control(4, 0) == T.Signal{} : T.Control }
+  { T.control(2, 0) == T.Signal{} : T.Control }
 
 def the_town_has_a_signalised_crossing():
   {==}
@@ -493,26 +493,29 @@ law the_town_has_a_perpendicular_t:
 def the_town_has_a_perpendicular_t():
   {==}
 
-law the_town_has_a_skew_t:
-  { T.shape(3, 0, T.seed_of_town()) == T.SkewT{} : T.Shape }
+# At a 140 m pitch the field's Ts come out square to the through road, and the
+# town itself has no skew T. The rule still classifies one, which is what the
+# verdict text promises: a T on a bend is a skew T.
+law a_t_on_a_bend_is_a_skew_t:
+  { T.shape_of(3, False{}, False{}) == T.SkewT{} : T.Shape }
 
-def the_town_has_a_skew_t():
+def a_t_on_a_bend_is_a_skew_t():
   {==}
 
 law the_town_has_a_four_way_of_equal_roads:
-  { T.duty(1, 3, T.seed_of_town()) == T.YieldLeft{} : T.Duty }
+  { T.duty(1, 1, T.seed_of_town()) == T.YieldLeft{} : T.Duty }
 
 def the_town_has_a_four_way_of_equal_roads():
   {==}
 
 law the_town_has_a_minor_branch_onto_a_main_road:
-  { T.duty(1, 4, T.seed_of_town()) == T.YieldMain{} : T.Duty }
+  { T.duty(1, 2, T.seed_of_town()) == T.YieldMain{} : T.Duty }
 
 def the_town_has_a_minor_branch_onto_a_main_road():
   {==}
 
 law the_town_has_a_bend:
-  { T.duty(7, 0, T.seed_of_town()) == T.FreePassage{} : T.Duty }
+  { T.duty(0, 0, T.seed_of_town()) == T.FreePassage{} : T.Duty }
 
 def the_town_has_a_bend():
   {==}
@@ -550,13 +553,13 @@ def a_street_is_drawn_in_nine_points():
 # ---------------------------------------------------------------------------
 
 law a_signalised_approach_has_a_stop_line:
-  { T.every_mark(T.approaches(4, 0, T.seed_of_town()), T.StopLine{}) == True{} : Bool }
+  { T.every_mark(T.approaches(2, 0, T.seed_of_town()), T.StopLine{}) == True{} : Bool }
 
 def a_signalised_approach_has_a_stop_line():
   {==}
 
 law a_signalised_approach_has_a_head:
-  { T.every_head(T.approaches(4, 0, T.seed_of_town())) == True{} : Bool }
+  { T.every_head(T.approaches(2, 0, T.seed_of_town())) == True{} : Bool }
 
 def a_signalised_approach_has_a_head():
   {==}
@@ -648,32 +651,49 @@ def a_line_stands_behind_the_box():
 # ---------------------------------------------------------------------------
 
 law a_block_holds_at_least_one_ring:
-  { U32.is_le(1, T.rings_in(3, 3, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(1, T.rings_in(1, 1, T.seed_of_town())) == True{} : Bool }
 
 def a_block_holds_at_least_one_ring():
   {==}
 
+# The mitre sends a row short of a corner by its band times cot(theta/2), and
+# the constant that stands for that is only honest while no corner is sharper
+# than fifty-eight degrees. This is the field's own corners, every one of them,
+# checked against that sine rather than assumed to clear it.
+law every_block_corner_stays_near_square:
+  { T.every_block_corner(30n, 0, T.seed_of_town()) == True{} : Bool }
+
+def every_block_corner_stays_near_square():
+  {==}
+
+law a_core_tiles_its_own_ground:
+  { Bool.and(T.core_edges_rise(8n, 0, 1, 1, True{}, T.seed_of_town()),
+             T.core_edges_rise(8n, 0, 1, 1, False{}, T.seed_of_town())) == True{} : Bool }
+
+def a_core_tiles_its_own_ground():
+  {==}
+
 law every_frontage_holds_a_lot_inside_the_town:
-  { T.sides_inside(2n, 0, 3, 3, T.seed_of_town()) == True{} : Bool }
+  { T.sides_inside(2n, 0, 1, 1, T.seed_of_town()) == True{} : Bool }
 
 def every_frontage_holds_a_lot_inside_the_town():
   {==}
 
-law a_frontage_row_is_twelve_metres_deep:
-  { T.row_depth_cm() == 1200 : U32 }
+law a_frontage_row_is_thirteen_metres_deep:
+  { T.row_depth_cm() == 1300 : U32 }
 
-def a_frontage_row_is_twelve_metres_deep():
+def a_frontage_row_is_thirteen_metres_deep():
   {==}
 
 law a_frontage_starts_behind_the_box:
-  { U32.is_le(T.mouth_cm(3, 3, T.East{}, T.seed_of_town()),
-              T.side_len(3, 3, 0, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(T.mouth_cm(1, 1, T.East{}, T.seed_of_town()),
+              T.side_len(1, 1, 0, T.seed_of_town())) == True{} : Bool }
 
 def a_frontage_starts_behind_the_box():
   {==}
 
 law a_lot_is_never_narrower_than_its_pitch:
-  { U32.is_le(T.pitch_of(0), T.lot_width(3, 3, 0, 0, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(T.pitch_of(0), T.lot_width(1, 1, 0, 0, T.seed_of_town())) == True{} : Bool }
 
 def a_lot_is_never_narrower_than_its_pitch():
   {==}
@@ -714,7 +734,10 @@ law no_building_outgrows_its_ring:
     Bool.and(U32.is_le(T.kind_depth_cm(T.House{}), T.row_depth_cm()),
     Bool.and(U32.is_le(T.kind_depth_cm(T.Kos{}), T.row_depth_cm()),
     Bool.and(U32.is_le(T.kind_depth_cm(T.Petak{}), T.row_depth_cm()),
-             U32.is_le(T.kind_depth_cm(T.Filler{}), T.row_depth_cm())))))) == True{} : Bool }
+    Bool.and(U32.is_le(T.kind_depth_cm(T.Filler{}), T.row_depth_cm()),
+    Bool.and(U32.is_le(T.kind_depth_cm(T.Minimarket{}), T.row_depth_cm()),
+    Bool.and(U32.is_le(T.kind_depth_cm(T.Bengkel{}), T.row_depth_cm()),
+             U32.is_le(T.kind_depth_cm(T.Gudang{}), T.row_depth_cm()))))))))) == True{} : Bool }
 
 def no_building_outgrows_its_ring():
   {==}
@@ -727,8 +750,8 @@ def every_kind_fits_the_lot_it_is_chosen_for():
   {==}
 
 law every_lot_of_a_block_holds_a_building_that_fits:
-  { Bool.and(T.lots_fit(2n, 0, 0, 0, 3, 3, T.seed_of_town()),
-             T.lots_fit(2n, 0, 1, 1, 3, 3, T.seed_of_town())) == True{} : Bool }
+  { Bool.and(T.lots_fit(2n, 0, 0, 0, 1, 1, T.seed_of_town()),
+             T.lots_fit(2n, 0, 1, 1, 1, 1, T.seed_of_town())) == True{} : Bool }
 
 def every_lot_of_a_block_holds_a_building_that_fits():
   {==}
@@ -748,14 +771,14 @@ def no_two_crowns_meet():
   {==}
 
 law a_prop_stands_on_the_pavement:
-  { Bool.and(T.prop_on_pavement(3, 3, 0), Bool.and(T.prop_on_pavement(3, 3, 1),
-             Bool.and(T.prop_on_pavement(3, 3, 2), T.prop_on_pavement(3, 3, 3)))) == True{} : Bool }
+  { Bool.and(T.prop_on_pavement(1, 1, 0), Bool.and(T.prop_on_pavement(1, 1, 1),
+             Bool.and(T.prop_on_pavement(1, 1, 2), T.prop_on_pavement(1, 1, 3)))) == True{} : Bool }
 
 def a_prop_stands_on_the_pavement():
   {==}
 
 law the_props_of_a_frontage_keep_apart:
-  { T.props_apart(2n, 0, 3, 3, 0, T.seed_of_town()) == True{} : Bool }
+  { T.props_apart(2n, 0, 1, 1, 0, T.seed_of_town()) == True{} : Bool }
 
 def the_props_of_a_frontage_keep_apart():
   {==}

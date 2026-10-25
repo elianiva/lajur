@@ -26,6 +26,14 @@ export type ApproachRecord = {
   head: Constructor<"True" | "False">;
   post: Constructor<"PriorityWarning" | "GiveWaySign" | "StopSign" | "NoSign">;
 };
+export type PropRecord = {
+  $: "Prop";
+  x: number;
+  z: number;
+  r: number;
+  kind: Constructor<"Mangga" | "Palm" | "Kamboja" | "Semak" | "Pole" | "Pot">;
+};
+
 export type LotRecord = {
   $: "Lot";
   x: number;
@@ -34,7 +42,17 @@ export type LotRecord = {
   fz: Signed;
   w: number;
   d: number;
-  kind: Constructor<"Ruko" | "Warung" | "House" | "Kos" | "Petak">;
+  kind: Constructor<
+    "Ruko" | "Warung" | "House" | "Kos" | "Petak" | "Filler" | "Minimarket" | "Bengkel" | "Gudang"
+  >;
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  cx: number;
+  cz: number;
+  dx: number;
+  dz: number;
 };
 
 export type Control = Constructor<"Signal" | "Roundabout" | "Uncontrolled">;
@@ -61,9 +79,14 @@ declare const town: {
   shape(i: number, j: number, seed: number): Shape;
   approaches(i: number, j: number, seed: number): BendList<ApproachRecord>;
   block_exists(i: number, j: number): Constructor<"True" | "False">;
-  rows_in(i: number, j: number, seed: number): number;
-  lots_in(i: number, j: number, seed: number): number;
-  lot_at(i: number, j: number, row: number, k: number, seed: number): LotRecord;
+  rings_in(i: number, j: number, seed: number): number;
+  lots_on(i: number, j: number, side: number, ring: number, seed: number): number;
+  lot_at(i: number, j: number, side: number, ring: number, k: number, seed: number): LotRecord;
+  core_lots_w(i: number, j: number, seed: number): number;
+  core_lots_d(i: number, j: number, seed: number): number;
+  core_open(i: number, j: number, a: number, b: number, seed: number): boolean;
+  core_lot_at(i: number, j: number, a: number, b: number, seed: number): LotRecord;
+  prop_at(i: number, j: number, side: number, k: number, seed: number): PropRecord;
 };
 
 export default town;

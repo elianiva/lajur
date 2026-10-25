@@ -1,6 +1,16 @@
 import * as THREE from "three";
-import { bake, box, mats } from "../assets/kit.ts";
-import { filler, house, kos, petak, ruko, warung } from "../assets/buildings.ts";
+import { bake, box, mats, roofs, walls } from "../assets/kit.ts";
+import {
+  bengkel,
+  filler,
+  gudang,
+  house,
+  kos,
+  minimarket,
+  petak,
+  ruko,
+  warung,
+} from "../assets/buildings.ts";
 import { powerPole, pot } from "../assets/street.ts";
 import { kamboja, mangga, palm, semak } from "../assets/trees.ts";
 import * as T from "./model.ts";
@@ -190,6 +200,7 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
   const paint = new Batch();
   const walk = new Batch();
   const kerb = new Batch();
+  const yard = new Batch();
   const buildings = new THREE.Group();
 
   const halves = new Map<string, number>();
@@ -396,6 +407,21 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
   // --- buildings ------------------------------------------------------------
 
   const AIR = 0.16;
+  // The catalogue builds some of its assets to a footprint and some to their
+  // own size. A kind with a size of its own is fitted to the lot it stands in,
+  // uniformly, so the workshop under a cell is the workshop the catalogue draws
+  // and never a stretched one.
+  const fitted =
+    (build: (seed: number) => THREE.Group) =>
+    (seed: number, width: number, depth: number): THREE.Group => {
+      const group = build(seed);
+      const box = new THREE.Box3().setFromObject(group);
+      const size = box.getSize(new THREE.Vector3());
+      const scale = Math.min(width / Math.max(size.x, 0.1), depth / Math.max(size.z, 0.1));
+      if (Number.isFinite(scale) && scale > 0) group.scale.setScalar(scale);
+      return group;
+    };
+
   const kinds = {
     Ruko: ruko,
     Warung: warung,
@@ -403,9 +429,87 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
     Kos: kos,
     Petak: petak,
     Filler: filler,
+    Minimarket: fitted(minimarket),
+    Bengkel: fitted(bengkel),
+    Gudang: fitted(gudang),
+  };
+  // A lot is a cell of its band, so its back edge can be shorter than its
+  // front. When it is square enough the detailed asset stands in it; when the
+  // band bends the footprint into a trapezoid, the footprint itself is
+  // extruded, walls and a flat roof, so the wedge is built instead of left
+  // empty. That is the shape an offset subdivision gives and a box cannot.
+  const heights: Record<T.LotKind, number> = {
+    Ruko: 7.2,
+    Warung: 3.1,
+    House: 4.6,
+    Kos: 8.2,
+    Petak: 4.2,
+    Filler: 5.2,
+    Minimarket: 5.4,
+    Bengkel: 4.8,
+    Gudang: 6.4,
+  };
+  const footprint = (lot: T.Lot): [number, number][] => [
+    [lot.ax * CM, lot.az * CM],
+    [lot.bx * CM, lot.bz * CM],
+    [lot.cx * CM, lot.cz * CM],
+    [lot.dx * CM, lot.dz * CM],
+  ];
+  const prism = (lot: T.Lot, seed: number): THREE.Group => {
+    const quad = footprint(lot);
+    const height = heights[lot.kind] * (0.82 + 0.42 * seed);
+    const wall = walls[Math.floor(seed * walls.length) % walls.length]!;
+    const roof = roofs[Math.floor(seed * 7.3) % roofs.length]!;
+    const sides: number[] = [];
+    for (let k = 0; k < 4; k += 1) {
+      const p = quad[k]!;
+      const q = quad[(k + 1) % 4]!;
+      sides.push(p[0], 0, p[1], q[0], 0, q[1], q[0], height, q[1]);
+      sides.push(p[0], 0, p[1], q[0], height, q[1], p[0], height, p[1]);
+    }
+    const body = new THREE.BufferGeometry();
+    body.setAttribute("position", new THREE.Float32BufferAttribute(sides, 3));
+    body.computeVertexNormals();
+    const cap = new THREE.BufferGeometry();
+    cap.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(
+        [
+          quad[0]![0],
+          height,
+          quad[0]![1],
+          quad[1]![0],
+          height,
+          quad[1]![1],
+          quad[2]![0],
+          height,
+          quad[2]![1],
+          quad[0]![0],
+          height,
+          quad[0]![1],
+          quad[2]![0],
+          height,
+          quad[2]![1],
+          quad[3]![0],
+          height,
+          quad[3]![1],
+        ],
+        3,
+      ),
+    );
+    cap.computeVertexNormals();
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(body, wall));
+    group.add(new THREE.Mesh(cap, roof));
+    return group;
   };
   const place = (lot: T.Lot, seed: number): void => {
-    const mesh = kinds[lot.kind](seed, lot.w * CM - AIR, lot.d * CM - AIR);
+    const front = Math.hypot(lot.bx - lot.ax, lot.bz - lot.az);
+    const back = Math.hypot(lot.cx - lot.dx, lot.cz - lot.dz);
+    const square = front <= 0 || back / front > 0.92;
+    const mesh = square
+      ? kinds[lot.kind](seed, lot.w * CM - AIR, lot.d * CM - AIR)
+      : prism(lot, seed);
     mesh.position.set(lot.x * CM, 0, lot.z * CM);
     mesh.rotation.y = Math.atan2(-lot.fz, lot.fx);
     buildings.add(mesh);
@@ -413,6 +517,21 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
   for (let i = 0; i + 1 < T.COLS; i += 1) {
     for (let j = 0; j + 1 < T.ROWS; j += 1) {
       if (!T.blockExists(i, j)) continue;
+      // The ground the block's own lots stand on: the core and the lanes
+      // between them. Without it the gaps read as lawn instead of yard.
+      const [nw, nd] = T.coreLots(i, j);
+      if (nw > 0 && nd > 0) {
+        const c0 = T.coreAt(i, j, 0, 0);
+        const c1 = T.coreAt(i, j, 1024, 0);
+        const c2 = T.coreAt(i, j, 1024, 1024);
+        const c3 = T.coreAt(i, j, 0, 1024);
+        yard.quad(
+          [c0.x * CM, 0.02, c0.z * CM],
+          [c1.x * CM, 0.02, c1.z * CM],
+          [c2.x * CM, 0.02, c2.z * CM],
+          [c3.x * CM, 0.02, c3.z * CM],
+        );
+      }
       const rings = T.ringsIn(i, j);
       for (let side = 0; side < 4; side += 1) {
         for (let ring = 0; ring < rings; ring += 1) {
@@ -426,6 +545,8 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
       const [across, deep] = T.coreLots(i, j);
       for (let a = 0; a < across; a += 1) {
         for (let b = 0; b < deep; b += 1) {
+          // A yard block's square stands open in the middle of its grid.
+          if (T.coreOpen(i, j, a, b)) continue;
           const lot = T.coreLotAt(i, j, a, b);
           place(lot, hash(i * 13 + a, j * 11 + b, lot.kind.length));
         }
@@ -465,6 +586,23 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
           mesh.position.set(prop.x * CM, WALK, prop.z * CM);
           mesh.rotation.y = (seed - 0.5) * 0.6;
           buildings.add(mesh);
+        }
+      }
+      // An open core cell is a kebun: the tree it holds stands in the middle
+      // of it, and the same crown the model declares is what is drawn.
+      const [across, deep] = T.coreLots(i, j);
+      for (let a = 0; a < across; a += 1) {
+        for (let b = 0; b < deep; b += 1) {
+          if (!T.coreOpen(i, j, a, b)) continue;
+          const prop = T.coreTree(i, j, a, b);
+          const seed = hash(i * 17 + a, j * 19 + b, prop.r);
+          const tree = trees[prop.kind](seed);
+          const box = new THREE.Box3().setFromObject(tree);
+          const reach = Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z);
+          if (reach > 0) tree.scale.setScalar((prop.r * CM) / reach);
+          tree.position.set(prop.x * CM, WALK, prop.z * CM);
+          tree.rotation.y = (seed - 0.5) * 6.3;
+          buildings.add(tree);
         }
       }
     }
@@ -543,6 +681,7 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
     [paint, mats.paint],
     [walk, mats.walk],
     [kerb, mats.kerb],
+    [yard, mats.dirt],
     [river, mats.water],
   ] as const) {
     if (!batch.empty) group.add(batch.mesh(material));
