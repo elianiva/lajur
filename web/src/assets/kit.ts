@@ -39,7 +39,7 @@ export const mats = {
   paving: mat("walk", 0xd9b48c, { roughness: 0.95 }),
   ground: mat("ground", 0x9fcf6a, { roughness: 1 }),
   dirt: mat("ground", 0xd8b27a, { roughness: 1 }),
-  earth: mat("ground", 0x9a6a45, { roughness: 1 }),
+  plinth: mat("plinth", 0xdec6a2, { roughness: 1 }),
   grass: mat("grass", 0x7cc957, { roughness: 1 }),
   field: mat("grass", 0x5fbf4f, { roughness: 1 }),
   water: mat("water", 0x48c6e8, { roughness: 0.3, metalness: 0.05 }),

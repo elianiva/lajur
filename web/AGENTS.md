@@ -45,8 +45,9 @@ release. Add a tool name to select part of the graph. For example, run
 ## The lab
 
 - `/lab.html` opens on the city (`Town`); `#shelf` shows every asset row.
-- The city is drawn by the NPR studio: five toon variations in `src/lab/npr.ts`,
-  sliders for their bands, shadow stain, rim, outline and grade, and the panel
-  that binds them in `src/lab/studio.ts`.
+- The city is drawn by the NPR studio: the look the game drives, plus five
+  more in `src/lab/npr.ts`, sliders for their bands, shadow stain, rim,
+  outline and grade, and the panel that binds them in `src/lab/studio.ts`.
 - The shading itself is `src/render/look.ts` and is shared with the game. A new
-  knob belongs there so every look can use it; a preset belongs in `npr.ts`.
+  knob belongs there so every look can use it; a preset belongs in `npr.ts`,
+  unless the game drives with it, and then it is the first entry of `looks`.

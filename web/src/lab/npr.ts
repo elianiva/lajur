@@ -1,11 +1,10 @@
-import type { Look, Shade, InkStyle } from "../render/look.ts";
+import { looks, type Look, type Shade, type InkStyle } from "../render/look.ts";
 
 /**
- * The lab's NPR shelf: five toon variations, and the knobs that bend them.
+ * The lab's NPR shelf: the look the game drives, then five to take apart.
  *
- * The game's looks stay where they are; these are the ones built to be taken
- * apart on the city. A preset is a whole `Look`; the knobs write into it, and
- * `look.ts` puts the result on screen without rebuilding a single material.
+ * A preset is a whole `Look`; the knobs write into it, and `look.ts` puts the
+ * result on screen without rebuilding a single material.
  */
 
 export interface NprState {
@@ -55,7 +54,11 @@ const DEFAULT_INK: InkStyle = {
 const shade = (state: NprState): Shade => (state.look.shade ??= { ...DEFAULT_SHADE });
 const ink = (state: NprState): InkStyle => (state.look.ink ??= { ...DEFAULT_INK });
 
+/** The look the game drives with; the city is built around it, so it opens here. */
+const maket = looks.find((look) => look.key === "maket") ?? looks[0]!;
+
 export const nprLooks: Look[] = [
+  maket,
   {
     key: "sel",
     name: "Sel",
@@ -244,6 +247,16 @@ export const knobs: Knob[] = [
     set: (state, value) => (shade(state).rimPower = value),
   },
   {
+    key: "wrap",
+    label: "Wrap",
+    min: 0,
+    max: 1,
+    step: 0.01,
+    digits: 2,
+    get: (state) => shade(state).wrap ?? 0,
+    set: (state, value) => (shade(state).wrap = value),
+  },
+  {
     key: "width",
     label: "Ink width",
     min: 0.5,
@@ -427,7 +440,7 @@ export const swatches: Swatch[] = [
 /** Groups of knobs, in the order the panel shows them. */
 export const sections: { title: string; keys: string[] }[] = [
   { title: "Toon", keys: ["bands", "soft"] },
-  { title: "Shade", keys: ["stain", "shadow", "rim", "rimColour", "rimPower"] },
+  { title: "Shade", keys: ["wrap", "stain", "shadow", "rim", "rimColour", "rimPower"] },
   {
     title: "Outline",
     keys: ["width", "strength", "silhouette", "crease", "inkColour"],

@@ -16,7 +16,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #c8d7d3;
+  background: #f4ecdd;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -41,8 +41,9 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  color: #fff;
-  text-shadow: 0 2px 6px rgba(10, 20, 24, 0.45);
+  color: var(--ink);
+  /* Read against the paper sky and against the grass alike. */
+  text-shadow: 0 1px 0 rgba(246, 241, 228, 0.8);
 }
 
 .speed b {
@@ -53,7 +54,7 @@ body {
 }
 
 .speed.over b {
-  color: #ff8a73;
+  color: var(--warn);
 }
 
 .speed span {
@@ -87,8 +88,8 @@ body {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  color: #fff;
-  text-shadow: 0 2px 6px rgba(10, 20, 24, 0.45);
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(246, 241, 228, 0.8);
 }
 
 .metres b {
@@ -117,8 +118,8 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  background: rgba(16, 22, 26, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(16, 22, 26, 0.3);
 }
 
 .lamps[data-signal="ToLeft"] i:first-child,

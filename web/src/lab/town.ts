@@ -154,7 +154,56 @@ function onBridge(z: number): boolean {
 
 const bankWall = mats.concrete.clone();
 bankWall.side = THREE.DoubleSide;
-const skirt = mats.earth;
+
+// --- the plinth -------------------------------------------------------------------
+
+/** How far the base reaches past the city, and how deep it stands. */
+const APRON = 4.5;
+const DEEP = 14;
+
+/**
+ * The base: a rounded, bevelled rim the city stands on. Hollow, so the river
+ * runs on under it and out of the frame, the way a cut-away model does.
+ */
+function plinth(): THREE.ExtrudeGeometry {
+  const hx = HX + APRON;
+  const hz = HZ + APRON;
+  const corner = 9;
+  const shape = new THREE.Shape();
+  shape.moveTo(-hx + corner, -hz);
+  // Round the corners, and let the river run on under the rim.
+  shape.lineTo(hx - corner, -hz);
+  shape.quadraticCurveTo(hx, -hz, hx, -hz + corner);
+  shape.lineTo(hx, hz - corner);
+  shape.quadraticCurveTo(hx, hz, hx - corner, hz);
+  shape.lineTo(-hx + corner, hz);
+  shape.quadraticCurveTo(-hx, hz, -hx, hz - corner);
+  shape.lineTo(-hx, -hz + corner);
+  shape.quadraticCurveTo(-hx, -hz, -hx + corner, -hz);
+
+  const hollow = new THREE.Path();
+  hollow.moveTo(-HX + 0.5, -HZ + 0.5);
+  hollow.lineTo(HX - 0.5, -HZ + 0.5);
+  hollow.lineTo(HX - 0.5, HZ - 0.5);
+  hollow.lineTo(-HX + 0.5, HZ - 0.5);
+  shape.holes.push(hollow);
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: DEEP,
+    bevelEnabled: true,
+    bevelThickness: 2.2,
+    bevelSize: 1.4,
+    bevelSegments: 3,
+    curveSegments: 6,
+  });
+  // Stand it up: the shape's plane becomes the ground, its extrusion the drop.
+  // The top sits a hair under the road so the two never fight for a pixel.
+  geometry.rotateX(Math.PI / 2);
+  geometry.computeBoundingBox();
+  geometry.translate(0, -0.06 - geometry.boundingBox!.max.y, 0);
+  geometry.computeBoundingBox();
+  return geometry;
+}
 
 // --- placement ------------------------------------------------------------------
 
@@ -421,16 +470,10 @@ export function townView(seed: number): View {
     }
   }
 
-  // The base: a slab of earth under everything, cut where the river runs out.
-  for (const z of [-HZ, HZ]) {
-    const river = riverX(z);
-    const out = z > 0 ? 0.6 : -0.6;
-    piece(still, [river - WALL + HX, 8, 1.2], skirt, [(-HX + river - WALL) / 2, -4, z + out]);
-    piece(still, [HX - river - WALL, 8, 1.2], skirt, [(HX + river + WALL) / 2, -4, z + out]);
-    piece(still, [WALL * 2, 6.6, 1.2], skirt, [river, -4.7, z + out]);
-  }
-  for (const x of [-HX, HX])
-    piece(still, [1.2, 8, 2 * HZ + 2.4], skirt, [x + (x > 0 ? 0.6 : -0.6), -4, 0]);
+  // The base: a chunky, bevelled plinth the city sits on, hollow so the river
+  // still runs out of it and rounded so the whole thing reads as a model.
+  const base = plinth();
+  still.add(new THREE.Mesh(base, mats.plinth));
 
   // --- roads ---------------------------------------------------------------------
 
@@ -1137,7 +1180,10 @@ export function townView(seed: number): View {
 
   return {
     group,
-    bounds: new THREE.Box3(new THREE.Vector3(-HX, -8, -HZ), new THREE.Vector3(HX, 30, HZ)),
+    bounds: new THREE.Box3(
+      new THREE.Vector3(-HX - APRON, base.boundingBox!.min.y, -HZ - APRON),
+      new THREE.Vector3(HX + APRON, 30, HZ + APRON),
+    ),
     update(dt) {
       time += dt;
       for (const lane of lanes) {
@@ -1162,8 +1208,10 @@ export function townView(seed: number): View {
           mover.v += (want - mover.v) * Math.min(1, dt * (want < mover.v ? 6 : 1.5));
         }
         for (const mover of list) {
-          mover.s += mover.v * dt;
-          if (mover.s > length) mover.s -= length;
+          // A mover is always somewhere on its lane: the modulo takes a
+          // backwards step (a negative frame, a resumed tab) as well as an
+          // overshoot past the end.
+          mover.s = (((mover.s + mover.v * dt) % length) + length) % length;
           place(mover, time);
         }
       }

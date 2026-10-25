@@ -21,6 +21,8 @@ export interface Shade {
   rim: number;
   rimColour: number;
   rimPower: number;
+  /** How far the light wraps into the shade: 0 cuts at the terminator. */
+  wrap?: number;
 }
 
 export interface InkStyle {
@@ -35,6 +37,22 @@ export interface InkStyle {
   crease: number;
 }
 
+/**
+ * A paintbox: every material colour is pulled toward its nearest anchor hue
+ * and squeezed into one band of saturation and value, so twelve asset
+ * palettes read as one hand-mixed set of paints.
+ */
+export interface Palette {
+  /** Hue anchors, in turns. */
+  hues: number[];
+  /** How far a colour moves toward its nearest anchor, 0..1. */
+  pull: number;
+  /** The band saturation is squeezed into. */
+  saturation: [number, number];
+  /** The band lightness is squeezed into. */
+  lightness: [number, number];
+}
+
 export interface Look {
   key: string;
   name: string;
@@ -47,6 +65,10 @@ export interface Look {
   bands: number;
   /** Palette shift applied to every material colour, in HSL. */
   tint: { saturation: number; lightness: number; hue: number; pastel: number };
+  /** A colour for a material role, painted under the tint: a pale road, say. */
+  roles?: Record<string, number>;
+  /** The paintbox every material colour is mixed from, before the tint. */
+  palette?: Palette;
   /** Band edges, shadow stain and rim. Absent means plain bands. */
   shade?: Shade;
   ink: InkStyle | null;
@@ -63,6 +85,44 @@ export interface Look {
 }
 
 export const looks: Look[] = [
+  {
+    // What ships: a model on a table. Warm paper behind it, pale stone
+    // underfoot, one smooth ramp wrapped round every form, no ink. The palette
+    // is mixed from a few anchors so twelve asset palettes read as one set.
+    key: "maket",
+    name: "Maket",
+    sky: 0xf4ecdd,
+    hemi: [0xfff6e6, 0x9a9288, 0.65],
+    sun: [0xffe6bd, 3.6],
+    sunFrom: [-0.56, 0.74, 0.37],
+    bands: 8,
+    tint: { saturation: 0.98, lightness: 0, hue: 0.004, pastel: 0.06 },
+    palette: {
+      hues: [0.02, 0.1, 0.3, 0.55],
+      pull: 0.5,
+      saturation: [0.2, 0.55],
+      lightness: [0.34, 0.86],
+    },
+    roles: {
+      asphalt: 0x8f8578,
+      concrete: 0xdcd2be,
+      plinth: 0xd9bd93,
+      water: 0x4fb4d4,
+    },
+    shade: {
+      softness: 1,
+      shadow: 0x7c7186,
+      stain: 0.45,
+      rim: 0,
+      rimColour: 0xfff4e0,
+      rimPower: 2.4,
+      wrap: 0.15,
+    },
+    ink: { colour: null, width: 1.2, strength: 0, silhouette: 1, crease: 0.5 },
+    pixel: 1,
+    grade: { saturation: 1.12, contrast: 1.18, warmth: 0.1, posterize: 0, vignette: 0.04 },
+    night: false,
+  },
   {
     key: "komik",
     name: "Komik",
@@ -180,6 +240,7 @@ const toon = {
   stain: { value: 0 },
   rim: { value: new THREE.Color() },
   rimPower: { value: 3 },
+  wrap: { value: 0 },
 };
 
 const PLAIN: Shade = {
@@ -199,6 +260,7 @@ function applyShade(look: Look): void {
   toon.stain.value = shade.shadow === null ? 0 : shade.stain;
   (toon.rim.value as THREE.Color).set(shade.rimColour).multiplyScalar(shade.rim);
   toon.rimPower.value = Math.max(0.5, shade.rimPower);
+  toon.wrap.value = shade.wrap ?? 0;
 }
 
 const TOON_PARS = /* glsl */ `
@@ -207,10 +269,13 @@ const TOON_PARS = /* glsl */ `
   uniform float stain;
   uniform vec3 rim;
   uniform float rimPower;
+  uniform float wrap;
 
   vec3 getGradientIrradiance( vec3 normal, vec3 lightDirection ) {
     float dotNL = dot( normal, lightDirection );
-    float band = texture2D( gradientMap, vec2( dotNL * 0.5 + 0.5, 0.0 ) ).r;
+    // Clay wraps the light round the terminator; a band look cuts it there.
+    float lit = wrap > 0.0 ? clamp( ( dotNL + wrap ) / ( 1.0 + wrap ), 0.0, 1.0 ) : dotNL * 0.5 + 0.5;
+    float band = texture2D( gradientMap, vec2( lit, 0.0 ) ).r;
     return mix( vec3( band ), shadowInk * band, stain * ( 1.0 - band ) );
   }
 `;
@@ -244,8 +309,33 @@ const hsl = { h: 0, s: 0, l: 0 };
 const WHITE = new THREE.Color(0xffffff);
 const WINDOW_LIGHT = new THREE.Color(0xffc45e);
 
+/** The signed way round the wheel from one hue to another, in [-0.5, 0.5). */
+function turn(from: number, to: number): number {
+  return ((to - from + 1.5) % 1) - 0.5;
+}
+
+/** Mix a colour out of the paintbox: nearest anchor, then one band. */
+function painted(colour: THREE.Color, palette: Palette): void {
+  colour.getHSL(hsl);
+  let nearest = palette.hues[0] ?? hsl.h;
+  let shortest = 1;
+  for (const hue of palette.hues) {
+    const gap = Math.abs(turn(hsl.h, hue));
+    if (gap < shortest) {
+      shortest = gap;
+      nearest = hue;
+    }
+  }
+  colour.setHSL(
+    (hsl.h + turn(hsl.h, nearest) * palette.pull + 1) % 1,
+    Math.min(palette.saturation[1], Math.max(palette.saturation[0], hsl.s)),
+    Math.min(palette.lightness[1], Math.max(palette.lightness[0], hsl.l)),
+  );
+}
+
 function convert(base: THREE.MeshStandardMaterial, look: Look): THREE.Material {
-  const colour = base.color.clone();
+  const colour = new THREE.Color(look.roles?.[base.name] ?? base.color);
+  if (look.palette) painted(colour, look.palette);
   colour.getHSL(hsl);
   colour.setHSL(
     (hsl.h + look.tint.hue + 1) % 1,

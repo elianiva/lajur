@@ -33,7 +33,7 @@ const hemi = new THREE.HemisphereLight();
 scene.add(hemi);
 const sun = new THREE.DirectionalLight();
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
@@ -163,10 +163,10 @@ function show(reframe: boolean): void {
   const reach = bounds.getSize(new THREE.Vector3()).length() / 2;
 
   if (reframe) {
-    // Look from the south, a little to the east, and fit the content's
-    // corners as the camera sees them.
+    // Look from the south, a little to the east, low enough that the sides of
+    // the base show: the model-on-a-table angle.
     controls.target.copy(centre);
-    camera.position.copy(centre).add(new THREE.Vector3(0.35, 1.25, 1).multiplyScalar(reach * 2));
+    camera.position.copy(centre).add(new THREE.Vector3(0.55, 0.9, 1).multiplyScalar(reach * 2));
     camera.zoom = 1;
     camera.lookAt(centre);
     camera.updateMatrixWorld();
@@ -235,7 +235,8 @@ show(true);
 
 let previous = performance.now();
 renderer.setAnimationLoop((now) => {
-  const dt = Math.min(now - previous, 100) / 1000;
+  // A resumed tab or a slow first frame must not step the traffic backwards.
+  const dt = Math.max(0, Math.min(now - previous, 100)) / 1000;
   previous = now;
   view?.update(dt);
   controls.update();
