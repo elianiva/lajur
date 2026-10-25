@@ -846,8 +846,13 @@ def all_catalogued(ids: List<U32>) -> Bool:
 # Scenarios
 # ---------------------------------------------------------------------------
 
+# The clean road, in the zone the vehicle is in. The zone is the only thing that
+# sets the ceiling, so the verdict reads the number the road reads.
+def road_in(zone: M.Zone) -> Road:
+  Road{zone, Left{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, NoPriority{}, True{}}
+
 def clean_road() -> Road:
-  Road{M.Urban{}, Left{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, NoPriority{}, True{}}
+  road_in(M.Urban{})
 
 def clean_load() -> Payload:
   Payload{Car{}, 1500, 0, 0, False{}, False{}, False{}, False{}, True{}}
@@ -1332,6 +1337,11 @@ def act_left_turn(allowed: Bool) -> Act:
 def act_crossing(train: Bool, traffic: Bool, yields: Bool) -> Act:
   Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500,
       LaneLeft{}, False{}, True{}, True{}, train, traffic, yields, True{}, NoHazard{}, False{}, False{}, True{}, True{}}
+
+# A clean act in a named lane, which is all the drive needs to state.
+def act_in_lane(lane: Lane, faster: Bool) -> Act:
+  Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, lane, faster,
+      True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}, False{}, True{}, True{}}
 
 def act_position(lane: Lane, faster: Bool, t: Turn) -> Act:
   Act{M.NoDuty{}, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, lane, faster, True{}, True{}, False{}, False{}, False{}, True{}, NoHazard{}, False{}, False{}, True{}, True{}}

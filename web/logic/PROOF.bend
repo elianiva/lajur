@@ -72,7 +72,7 @@ def a_bend_is_either_left_or_right_at_every_sample():
   {==}
 
 law a_tick_cannot_cross_two_chunks:
-  { U32.is_lt(G.roll(3333), G.chunk_cm()) == True{} : Bool }
+  { U32.is_lt(G.roll(G.fastest()), G.chunk_cm()) == True{} : Bool }
 
 def a_tick_cannot_cross_two_chunks():
   {==}
@@ -212,10 +212,16 @@ law the_motorway_ceiling_is_one_hundred_kmh:
 def the_motorway_ceiling_is_one_hundred_kmh():
   {==}
 
-law the_throttle_stops_at_one_hundred_and_twenty:
-  { G.speed_next(3333, True{}, False{}) == 3333 : U32 }
+law the_throttle_stops_at_the_fastest_legal_speed:
+  { G.speed_next(G.fastest(), True{}, False{}) == G.fastest() : U32 }
 
-def the_throttle_stops_at_one_hundred_and_twenty():
+def the_throttle_stops_at_the_fastest_legal_speed():
+  {==}
+
+law the_fastest_legal_speed_is_one_hundred:
+  { G.kmh(G.fastest()) == 100 : U32 }
+
+def the_fastest_legal_speed_is_one_hundred():
   {==}
 
 law the_brake_stops_at_zero:
@@ -273,22 +279,54 @@ def the_start_is_legal():
 # Pasal 108 ayat (4): the start sits in the right lane because it is moving
 # faster than the car beside it, and the same player outrun by that car is
 # charged. The kerb lane asks nothing of the article.
+# The zone the road is in sets both the ceiling the screen shows and the one the
+# verdict applies, because both read the statute's table.
+law the_verdict_reads_the_zone_the_road_is_in:
+  for z: M.Zone
+  { R.contains(21, R.charges(G.scenario_in(G.cruising(U32.add(G.limit_of(z), 100)), z))) == True{} : Bool }
+
+def the_verdict_reads_the_zone_the_road_is_in(z):
+  match z:
+    case M.Residential{}:
+      {==}
+    case M.Urban{}:
+      {==}
+    case M.Intercity{}:
+      {==}
+    case M.Motorway{}:
+      {==}
+
+law the_ceiling_is_lawful_in_every_zone:
+  for z: M.Zone
+  { R.contains(21, R.charges(G.scenario_in(G.cruising(G.limit_of(z)), z))) == False{} : Bool }
+
+def the_ceiling_is_lawful_in_every_zone(z):
+  match z:
+    case M.Residential{}:
+      {==}
+    case M.Urban{}:
+      {==}
+    case M.Intercity{}:
+      {==}
+    case M.Motorway{}:
+      {==}
+
 law the_start_holds_the_right_lane_lawfully:
-  { R.contains(52, R.charges(G.scenario_among(G.player_of(G.start()), G.traffic_of(G.start())))) == False{} : Bool }
+  { R.contains(52, R.charges(G.scenario_among(G.player_of(G.start()), G.traffic_of(G.start()), G.zone_of(G.start())))) == False{} : Bool }
 
 def the_start_holds_the_right_lane_lawfully():
   {==}
 
 law a_slow_player_in_the_right_lane_is_charged:
   { R.contains(52, R.charges(G.scenario_among(G.cruising(1000),
-      [ G.Car{1, G.Outer{}, 3000, 1400, G.Sedan{}, 0} ]))) == True{} : Bool }
+      [ G.Car{1, G.Outer{}, 3000, 1400, G.Sedan{}, 0} ], M.Urban{}))) == True{} : Bool }
 
 def a_slow_player_in_the_right_lane_is_charged():
   {==}
 
 law the_kerb_lane_asks_nothing_of_pasal_108:
   { G.spread(R.charges(G.scenario_among(G.Player{G.Outer{}, 1000, G.Off{}, 0, 0, G.Outer{}},
-      [ G.Car{1, G.Inner{}, 3000, 1400, G.Sedan{}, 0} ]))) == Nil{} : List<&2, U32> }
+      [ G.Car{1, G.Inner{}, 3000, 1400, G.Sedan{}, 0} ], M.Urban{}))) == Nil{} : List<&2, U32> }
 
 def the_kerb_lane_asks_nothing_of_pasal_108():
   {==}

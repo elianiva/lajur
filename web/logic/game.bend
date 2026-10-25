@@ -147,6 +147,10 @@ def same_lane(a: Lane, b: Lane) -> Bool:
 def limit_of(z: M.Zone) -> U32:
   U32.div(U32.mul(M.speed_limit(z), 100000), 3600)
 
+# The fastest speed any Indonesian road allows, from the statute's own table.
+def fastest() -> U32:
+  limit_of(M.Motorway{})
+
 def kmh(speed: U32) -> U32:
   U32.div(U32.add(U32.mul(speed, 3600), 50000), 100000)
 
@@ -160,7 +164,7 @@ def speed_next(speed: U32, up: Bool, down: Bool) -> U32:
   # Throttle and ceiling first, brake last. The floor is a choice, not a
   # subtraction: U32 wraps, so `sub` before `max` answers 120 km/h for a
   # stopped car.
-  +capped = U32.min(U32.add(speed, gain), 3333)
+  +capped = U32.min(U32.add(speed, gain), fastest())
   Bool.pick(U32, U32.is_lt(capped, loss), 0, U32.sub(capped, loss))
 
 # ===========================================================================
@@ -493,21 +497,24 @@ def outruns_all(+at: Lane, +speed: U32, cars: List<&2, Car>) -> Bool:
 
 # Pasal 108 ayat (4): the right lane is for a vehicle moving faster than the
 # traffic beside it. With nothing beside it, nothing is slower.
-def scenario_among(p: Player, +cars: List<&2, Car>) -> R.Scenario:
+def scenario_among(p: Player, +cars: List<&2, Car>, zone: M.Zone) -> R.Scenario:
   match p:
     case Player{+lane, +speed, signal, lamp, moving, target}:
       +changing = Bool.or(signalling(signal), Bool.not(U32.is_eq(moving, 0)))
       # A scenario carries the signs in force at the moment; the game posts no
       # sign duty, so it names the clean act apart from the lane facts.
-      R.Scenario{R.clean_road(), R.clean_load(), R.clean_gear(),
+      R.Scenario{R.road_in(zone), R.clean_load(), R.clean_gear(),
                  motion_for(kmh(speed), changing, changing),
                  R.clean_yield(), R.clean_docs(),
-                 R.Act{M.NoDuty{}, R.NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500,
-                       1500, 1500, lane_use(lane), outruns_all(lane, speed, cars)}}
+                 R.act_in_lane(lane_use(lane), outruns_all(lane, speed, cars))}
 
 # A moment with no traffic beside the player, for the proofs that judge one car.
 def scenario_for(p: Player) -> R.Scenario:
-  scenario_among(p, Nil{})
+  scenario_among(p, Nil{}, M.Urban{})
+
+# The same moment in a named zone, for the laws about the ceiling.
+def scenario_in(p: Player, zone: M.Zone) -> R.Scenario:
+  scenario_among(p, Nil{}, zone)
 
 def status_after(hit: Bool) -> Status:
   match hit:
@@ -522,7 +529,7 @@ def status_after(hit: Bool) -> Status:
 
 type World is Data:
   World{tick: U32, player: Player, traffic: List<&2, Car>, oncoming: List<&2, Car>,
-        distance: U32, limit: U32, charges: List<&2, U32>, status: Status,
+        distance: U32, zone: M.Zone, charges: List<&2, U32>, status: Status,
         held: Controls, residual: U32, index: U32, along: U32, seed: U32}
 
 def is_crashed(s: Status) -> Bool:
@@ -534,7 +541,7 @@ def is_crashed(s: Status) -> Bool:
 
 def player_of(w: World) -> Player:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       player
 
@@ -551,7 +558,7 @@ def start() -> World:
         , Car{12, Outer{}, 8000, 1200, Sedan{}, 4}
         , Car{13, Inner{}, 13000, 1000, Truck{}, 2}
         ],
-        0, limit_of(M.Urban{}), Nil{}, Driving{},
+        0, M.Urban{}, Nil{}, Driving{},
         Controls{False{}, False{}, False{}, False{}}, 0, 24, 0, 20261024}
 
 # The player advances along the road; `walked` rolls over chunk boundaries and
@@ -560,21 +567,21 @@ def moved(index: U32, along: U32, +dist: U32) -> U32 & U32:
   walked(index, U32.add(along, dist))
 
 def assemble(pos: U32 & U32, tick: U32, player: Player, traffic: List<&2, Car>,
-             oncoming: List<&2, Car>, distance: U32, limit: U32,
+             oncoming: List<&2, Car>, distance: U32, +zone: M.Zone,
              charges: List<&2, U32>, status: Status, held: Controls,
              residual: U32, seed: U32) -> World:
   match pos:
     case (index, along):
-      World{tick, player, traffic, oncoming, distance, limit, charges, status,
+      World{tick, player, traffic, oncoming, distance, zone, charges, status,
             held, residual, index, along, seed}
 
 def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
-         oncoming: List<&2, Car>, distance: U32, limit: U32,
+         oncoming: List<&2, Car>, distance: U32, +zone: M.Zone,
          charges: List<&2, U32>, held: Controls, residual: U32,
          index: U32, along: U32, +seed: U32, +input: Controls) -> World:
   match frozen:
     case True{}:
-      World{tick, player, traffic, oncoming, distance, limit, charges, Crashed{},
+      World{tick, player, traffic, oncoming, distance, zone, charges, Crashed{},
             held, residual, index, along, seed}
     case False{}:
       +player2 = player_next(player, held, input)
@@ -583,15 +590,15 @@ def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
       +oncoming2 = drift_oncoming(oncoming, dist, U32.add(tick, 1))
       +hit = blocked(traffic2, lane_of(player2))
       assemble(moved(index, along, dist), U32.add(tick, 1), player2, traffic2,
-               oncoming2, U32.add(distance, dist), limit,
-               spread(R.charges(scenario_among(player2, traffic2))), status_after(hit),
+               oncoming2, U32.add(distance, dist), zone,
+               spread(R.charges(scenario_among(player2, traffic2, zone))), status_after(hit),
                input, residual, seed)
 
 def tick(w: World, input: Controls) -> World:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
-      step(is_crashed(status), tick, player, traffic, oncoming, distance, limit,
+      step(is_crashed(status), tick, player, traffic, oncoming, distance, zone,
            charges, held, residual, index, along, seed, input)
 
 # A Nat fuel counts the ticks down; the shrinking argument comes first.
@@ -606,13 +613,13 @@ def run(fuel: Nat, w: World, +input: Controls) -> World:
 # world, so a 144 Hz monitor and a 60 Hz one cover the same ground.
 def advance(w: World, ms: U32, input: Controls) -> World:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       +total = U32.add(residual, U32.min(ms, 250))
       +count = U32.min(U32.div(U32.mul(total, 60), 1000), 5)
       +left = U32.sub(total, U32.div(U32.mul(count, 1000), 60))
       +spent = run(U32.to_nat(count), World{tick, player, traffic, oncoming, distance,
-                                        limit, charges, status, held, left, index,
+                                        zone, charges, status, held, left, index,
                                         along, seed}, input)
       spent
 
@@ -626,21 +633,27 @@ def restart(w: World) -> World:
 def speed_kmh(w: World) -> U32:
   kmh(speed_of(player_of(w)))
 
+def zone_of(w: World) -> M.Zone:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, index, along, seed}:
+      zone
+
 def limit_kmh(w: World) -> U32:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
-      kmh(limit)
+      kmh(limit_of(zone))
 
 def metres(w: World) -> U32:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       U32.div(distance, 100)
 
 def crashed(w: World) -> Bool:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       is_crashed(status)
 
@@ -658,25 +671,25 @@ def lane_centre(w: World) -> U32:
 
 def traffic_of(w: World) -> List<&2, Car>:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       traffic
 
 def index_of(w: World) -> U32:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       index
 
 def along_of(w: World) -> U32:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       along
 
 def seed_of(w: World) -> U32:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       seed
 
@@ -698,7 +711,7 @@ def curve_left(+cm: U32, +seed: U32) -> Bool:
 
 def curve_of(w: World) -> Curve:
   match w:
-    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, index, along, seed}:
       curve_at(U32.add(U32.mul(index, chunk_cm()), along), seed)
 
