@@ -55,6 +55,20 @@ law obey_a_road_marking:
   for b: Bool
   { R.contains(9, R.charges(R.with_road(R.road_marking(b)))) == b : Bool }
 
+# Pasal 103 and 104 ayat (3): what an officer directs replaces the signal, the
+# sign and the marking, but only for a driver who obeys it.
+law an_obeyed_officer_outranks_a_red_light:
+  for b: Bool
+  { R.contains(7, R.charges(R.with_road(R.road_officer_signal(b, True{})))) == Bool.not(b) : Bool }
+
+law an_obeyed_officer_outranks_a_sign:
+  for b: Bool
+  { R.contains(8, R.charges(R.with_road(R.road_officer_sign(b, True{})))) == Bool.not(b) : Bool }
+
+law an_obeyed_officer_outranks_a_marking:
+  for b: Bool
+  { R.contains(9, R.charges(R.with_road(R.road_officer_marking(b, True{})))) == Bool.not(b) : Bool }
+
 law signal_before_turning:
   for b: Bool
   { R.contains(10, R.charges(R.with_move(R.move_turn(True{}, b)))) == Bool.not(b) : Bool }

@@ -78,6 +78,27 @@ def Laws.obey_a_road_marking(b):
     case False{}:
       {==}
 
+def Laws.an_obeyed_officer_outranks_a_red_light(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.an_obeyed_officer_outranks_a_sign(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.an_obeyed_officer_outranks_a_marking(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.signal_before_turning(b):
   match b:
     case True{}:

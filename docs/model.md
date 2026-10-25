@@ -28,8 +28,11 @@ about. That is why the fifty behaviour laws each vary a single flag.
 3. **No invented sanctions.** Where the statute assigns no fine or imprisonment
    to a private driver, the catalogue records zero.
 4. **Precedence is explicit.** An officer's direction outranks a signal, a
-   signal a sign, a sign a marking, and a marking the general rule.
-   `tiers_follow_precedence` checks the catalogue entries that carry those tiers.
+   signal a sign, a sign a marking, and a marking the general rule. An obeyed
+   direction settles the charges below it, and disobeying it adds rule 6 to
+   them: `an_obeyed_officer_outranks_a_red_light`, `..._a_sign` and
+   `..._a_marking` prove that, and `tiers_follow_precedence` checks that the
+   catalogue entries carry the tiers the order names.
 5. **A scenario is one moment.** No history, no general following distance, no
    closing speed. Those need time. A posted following-distance sign reads the
    gap the sign act records, not a trace.

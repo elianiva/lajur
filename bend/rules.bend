@@ -218,6 +218,12 @@ def is_car_like(v: Vehicle) -> Bool:
     case Bicycle{}:
       False{}
 
+# Pasal 103 and 104 ayat (3): an officer's direction outranks a signal, a sign
+# and a marking. It settles them only when the driver obeys it; a driver who
+# disobeys is charged with rule 6 and with what the officer overrode.
+def officer_wins(directs: Bool, obeys: Bool) -> Bool:
+  Bool.and(directs, obeys)
+
 def side_is_left(s: Side) -> Bool:
   match s:
     case Left{}:
@@ -481,16 +487,17 @@ def charges_road(s: Scenario) -> List<U32>:
       Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
       Priority{+oncoming, +oncoming_room, +grade, +yields_to_uphill, +pedestrian_waiting, +yields_to_pedestrian, +yields_to_emergency, +at_junction, +yields_right} = yield
+      +settled = officer_wins(police_directs, obeys_officer)
       pick([
-        Bool.and(side_is_right(side), Bool.and(Bool.not(overtaking), Bool.not(police_directs))),
+        Bool.and(side_is_right(side), Bool.and(Bool.not(overtaking), Bool.not(settled))),
         Bool.and(overtaking, side_is_left(overtake_side)),
         Bool.and(overtaking, front_signals_right),
         Bool.and(oncoming, Bool.not(oncoming_room)),
         Bool.and(grade_is_downhill(grade), Bool.not(yields_to_uphill)),
         Bool.and(police_directs, Bool.not(obeys_officer)),
-        signal_red,
-        Bool.or(sign_forbids, sign_violated(act, side, speed, overtaking, stopping, emergency_stop, yields_right, vehicle, weight)),
-        marking_forbids,
+        Bool.and(signal_red, Bool.not(settled)),
+        Bool.and(Bool.or(sign_forbids, sign_violated(act, side, speed, overtaking, stopping, emergency_stop, yields_right, vehicle, weight)), Bool.not(settled)),
+        Bool.and(marking_forbids, Bool.not(settled)),
       ], 1)
 
 def charges_driver(s: Scenario) -> List<U32>:
@@ -924,6 +931,16 @@ def road_marking(blocks: Bool) -> Road:
 
 def road_railway(closed: Bool) -> Road:
   Road{M.Urban{}, Left{}, False{}, True{}, False{}, False{}, False{}, True{}, closed, False{}, False{}, True{}}
+
+# An officer directing traffic, and the one instruction the direction replaces.
+def road_officer_signal(obeys: Bool, red: Bool) -> Road:
+  Road{M.Urban{}, Left{}, True{}, obeys, red, False{}, False{}, False{}, False{}, False{}, False{}, True{}}
+
+def road_officer_sign(obeys: Bool, blocks: Bool) -> Road:
+  Road{M.Urban{}, Left{}, True{}, obeys, False{}, blocks, False{}, False{}, False{}, False{}, False{}, True{}}
+
+def road_officer_marking(obeys: Bool, blocks: Bool) -> Road:
+  Road{M.Urban{}, Left{}, True{}, obeys, False{}, False{}, blocks, False{}, False{}, False{}, False{}, True{}}
 def load_vehicle(v: Vehicle) -> Payload:
   Payload{v, 1500, 0, 0, False{}, False{}, False{}, False{}, True{}}
 
