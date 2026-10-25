@@ -40,3 +40,32 @@ jobs:
       - name: Re-check the proofs with the Lean kernel
         working-directory: bend
         run: bend PROOF.bend --verdict
+
+  # The driving game's model, the town and the world. Its own job, so it runs
+  # beside the catalogue's proofs rather than after them.
+  game:
+    runs-on: ubuntu-latest
+    env:
+      BEND_NO_TELEMETRY: 1
+    defaults:
+      run:
+        working-directory: web/logic
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Bend
+        run: |
+          curl -fsSL https://bend-lang.com/install.sh | sh
+          echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
+      - name: Install Lean
+        run: |
+          curl -fsSL https://elan.lean-lang.org/elan-init.sh |
+            sh -s -- -y --default-toolchain "$(cat ../../lean-toolchain)"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Prove the world's laws
+        run: bend PROOF_WORLD.bend
+      - name: Re-check the world's laws with the Lean kernel
+        run: bend PROOF_WORLD.bend --verdict
+      # The kernel runs out of fuel on some of the town's laws, so these go
+      # through Bend's checker only.
+      - name: Prove the game's and the town's laws
+        run: bend PROOF.bend

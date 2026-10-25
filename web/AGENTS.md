@@ -48,7 +48,7 @@ release. Add a tool name to select part of the graph. For example, run
 - `#world` is the generated world, made cell by cell, each cell a function of
   (seed, i, j), so cells tile in any order. `logic/world.bend` is the lattice,
   the roads, each cell's frame, its collectors, the entrance slots and what
-  each block becomes; its laws are in `logic/PROOF.bend`. `src/world/cells.ts`
+  each block becomes; its laws are in `logic/PROOF_WORLD.bend`. `src/world/cells.ts`
   reads it and still grows the streets inside a block, `parcels.ts` places the
   lots, courts and trees, and `plan.ts` draws it as a flat SVG for a minimap or
   preview. The game does not read it yet. `vp run plan` checks it.
