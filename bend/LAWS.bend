@@ -142,6 +142,12 @@ law mark_a_breakdown:
   for b: Bool
   { R.contains(27, R.charges(R.with_move(R.move_stop_emergency(True{}, b)))) == Bool.not(b) : Bool }
 
+# Pasal 121 ayat (2): the duty to set out a warning does not reach a motorcycle
+# without a sidecar, and does reach one with a sidecar.
+law a_bike_needs_no_triangle:
+  for s: Bool
+  { R.contains(27, R.charges(R.bike_stop_emergency(s, False{}))) == s : Bool }
+
 law stay_after_a_crash:
   for b: Bool
   { R.contains(28, R.charges(R.with_move(R.move_accident(b)))) == b : Bool }

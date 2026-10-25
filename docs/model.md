@@ -84,7 +84,7 @@ A scenario is six records and a sign act, so each constructor stays short enough
 | 24 | Carry a test certificate | Pasal 106 ayat (5) huruf c | 2 months, Rp500,000 (Pasal 288 ayat (3)) |
 | 25 | Stop at a closed crossing | Pasal 114 | 3 months, Rp750,000 (Pasal 296) |
 | 26 | No racing | Pasal 115 huruf b | 1 year, Rp3,000,000 (Pasal 297) |
-| 27 | Mark a breakdown | Pasal 121 ayat (1) | 2 months, Rp500,000 (Pasal 298) |
+| 27 | Mark a breakdown (a motorcycle without a sidecar is exempt, Pasal 121 ayat (2)) | Pasal 121 ayat (1) | 2 months, Rp500,000 (Pasal 298) |
 | 28 | Stay after a crash | Pasal 231 ayat (1) | 3 years, Rp75,000,000 (Pasal 312) |
 | 29 | Park where it is allowed | Pasal 120 | 1 month, Rp250,000 (Pasal 287 ayat (3)) |
 | 30 | Signal before slowing | Pasal 117 | none stated |

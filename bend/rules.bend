@@ -253,6 +253,11 @@ def exceeded(limit: U32, actual: U32) -> Bool:
 def more_than(count: U32, threshold: U32) -> Bool:
   U32.is_lt(threshold, count)
 
+# Pasal 121 ayat (2): a motorcycle without a sidecar is not required to set out
+# a triangle or a hazard lamp, so rule 27 does not reach it.
+def no_triangle_needed(v: Vehicle, sidecar: Bool) -> Bool:
+  Bool.and(is_motorcycle(v), Bool.not(sidecar))
+
 # ---------------------------------------------------------------------------
 # What a posted sign requires
 #
@@ -533,12 +538,13 @@ def charges_event(s: Scenario) -> List<U32>:
   match s:
     case Scenario{road, load, gear, move, yield, docs, act}:
       Road{+zone, +side, +police_directs, +obeys_officer, +signal_red, +sign_forbids, +marking_forbids, +railway_crossing, +crossing_closed, +roundabout, +emergency_vehicle, +goods_route_ok} = road
+      Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
       Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
       Priority{+oncoming, +oncoming_room, +grade, +yields_to_uphill, +pedestrian_waiting, +yields_to_pedestrian, +yields_to_emergency, +at_junction, +yields_right} = yield
       pick([
         Bool.and(railway_crossing, crossing_closed),
         racing,
-        Bool.and(emergency_stop, Bool.not(emergency_sign)),
+        Bool.and(emergency_stop, Bool.and(Bool.not(emergency_sign), Bool.not(no_triangle_needed(vehicle, sidecar)))),
         leaves_accident,
         Bool.and(stopping, Bool.not(parked_ok)),
         Bool.and(slowing, Bool.not(indicates_slow)),
@@ -946,6 +952,7 @@ def load_vehicle(v: Vehicle) -> Payload:
 
 def load_motorcycle(passengers: U32) -> Payload:
   Payload{Motorcycle{}, 200, 150, passengers, False{}, False{}, False{}, False{}, True{}}
+
 def load_truck(overloaded: Bool, people: Bool, manifest: Bool) -> Payload:
   Payload{Truck{}, 8000, 0, 0, False{}, overloaded, people, False{}, True{}}
 
@@ -1002,6 +1009,13 @@ def move_stopping(on: Bool, ok: Bool) -> Motion:
 
 def move_stop_emergency(on: Bool, sign: Bool) -> Motion:
   Motion{40, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, False{}, True{}, on, sign, False{}, False{}}
+
+# A motorcycle broken down, with or without a sidecar, and with or without the
+# hazard sign Pasal 121 ayat (1) asks for.
+def bike_stop_emergency(sidecar: Bool, sign: Bool) -> Scenario:
+  Scenario{clean_road(),
+           Payload{Motorcycle{}, 200, 150, 0, sidecar, False{}, False{}, False{}, True{}},
+           clean_gear(), move_stop_emergency(True{}, sign), clean_yield(), clean_docs(), clean_act()}
 
 def move_stopping_emergency(on: Bool, emergency: Bool) -> Motion:
   Motion{40, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, on, True{}, emergency, True{}, False{}, False{}}

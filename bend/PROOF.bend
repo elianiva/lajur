@@ -220,6 +220,13 @@ def Laws.mark_a_breakdown(b):
     case False{}:
       {==}
 
+def Laws.a_bike_needs_no_triangle(s):
+  match s:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.stay_after_a_crash(b):
   match b:
     case True{}:
