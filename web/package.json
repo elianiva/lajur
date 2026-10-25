@@ -8,7 +8,8 @@
     "build": "tsc && vp build",
     "preview": "vp preview",
     "logic": "vpx scripts/bend.ts logic/game.bend -o src/game.mjs",
-    "proof": "vpx scripts/bend.ts proof"
+    "proof": "vpx scripts/bend.ts proof",
+    "layers": "vpx scripts/layers.ts"
   },
   "dependencies": {
     "three": "^0.186.1"
