@@ -664,3 +664,1021 @@ def stagger_walk(fuel: Nat, +k: U32, +least: U32) -> U32:
 
 def narrowest_stagger() -> U32:
   stagger_walk(U32.to_nat(mouths()), 0, 1024)
+
+# ===========================================================================
+# Layer 3: the streets inside a block
+#
+# Everything here works in the block's own metric frame: x = u * mu and
+# z = v * mv, in centimetres from the frame's first corner. The lab maps a
+# point back with the frame, so a street straight here bends with the frame.
+# Headings are in 65536ths of a turn; sines and cosines in 16384ths.
+# ===========================================================================
+
+# Signed comparisons and bounds, on U32 read as two's complement.
+def slt(+a: U32, +b: U32) -> Bool:
+  U32.is_lt(U32.xor(a, half_turn()), U32.xor(b, half_turn()))
+
+def smin(+a: U32, +b: U32) -> U32:
+  Bool.pick(U32, slt(a, b), a, b)
+
+def smax(+a: U32, +b: U32) -> U32:
+  Bool.pick(U32, slt(a, b), b, a)
+
+def clamp(+x: U32, +lo: U32, +hi: U32) -> U32:
+  smin(smax(x, lo), hi)
+
+# Bhaskara's sine, good to a fifth of a degree.
+def sin14(+a: U32) -> U32:
+  +h = U32.and(a, 65535)
+  +x = U32.shrn(U32.and(h, 32767), 4n)
+  +p = U32.mul(x, U32.sub(2048, x))
+  signed(U32.is_ge(h, 32768), U32.div(U32.mul(p, 256), U32.shrn(U32.sub(20971520, U32.mul(p, 4)), 10n)))
+
+def cos14(+a: U32) -> U32:
+  sin14(U32.add(a, 16384))
+
+# The heading from the origin to (dx, dz), to a quarter of a degree.
+def atan2(+dz: U32, +dx: U32) -> U32:
+  +ax = sabs(dx)
+  +az = sabs(dz)
+  +mx = U32.max(U32.max(ax, az), 1)
+  +t = U32.mul(U32.div(U32.mul(U32.min(ax, az), 4096), mx), 16)
+  +r0 = U32.add(U32.shrn(t, 3n), mul16(2847, mul16(t, U32.sub(65536, t))))
+  +r1 = Bool.pick(U32, U32.is_gt(az, ax), U32.sub(16384, r0), r0)
+  +r2 = Bool.pick(U32, is_neg(dx), U32.sub(32768, r1), r1)
+  U32.and(Bool.pick(U32, is_neg(dz), U32.sub(65536, r2), r2), 65535)
+
+# How far heading a turns past heading b, signed, within half a turn.
+def turn_from(+a: U32, +b: U32) -> U32:
+  U32.sub(U32.and(U32.add(U32.sub(a, b), 32768), 65535), 32768)
+
+# A roll in 65536ths: the n-th of a stream the key picks.
+def draw(+key: U32, +n: U32) -> U32:
+  U32.shrn(mix(key, n), 16n)
+
+# lo + (hi - lo) * r for a roll r in 65536ths.
+def between(+lo: U32, +hi: U32, +r: U32) -> U32:
+  U32.add(lo, mul16(U32.sub(hi, lo), r))
+
+def hash6(+s: U32, +a: U32, +b: U32, +c: U32, +d: U32, +e: U32, +f: U32) -> U32:
+  mix(hash5(s, a, b, c, d, e), f)
+
+def pt_x(p: Pt) -> U32:
+  match p:
+    case Pt{x, z}:
+      x
+
+def pt_z(p: Pt) -> U32:
+  match p:
+    case Pt{x, z}:
+      z
+
+# Whether two points stand closer than r, for r below 2^15.
+def within(p: Pt, q: Pt, +r: U32) -> Bool:
+  match p:
+    case Pt{px, pz}:
+      match q:
+        case Pt{qx, qz}:
+          +dx = sabs(U32.sub(qx, px))
+          +dz = sabs(U32.sub(qz, pz))
+          Bool.and(Bool.and(U32.is_lt(dx, r), U32.is_lt(dz, r)),
+            U32.is_lt(U32.add(U32.mul(U32.min(dx, r), U32.min(dx, r)), U32.mul(U32.min(dz, r), U32.min(dz, r))), U32.mul(r, r)))
+
+# ---- What a block holds and hands back ------------------------------------
+
+# A road along one side of a block: its key, its length, the junctions
+# already on it, and the stretch of it the block owns, in 65536ths.
+type Edge is Data:
+  Edge{road: Bool, k0: U32, k1: U32, k2: U32, len: U32, a0: U32, a1: U32, t0: U32, t1: U32}
+
+# A rectangle of the block's metric frame, centimetres.
+type Box is Data:
+  Box{x0: U32, x1: U32, z0: U32, z1: U32}
+
+# An entrance: the side it is on (0 S, 1 N, 2 W, 3 E), where along the road
+# (65536ths) and along the frame (cm), and the rolls that rank it.
+type Slot is Data:
+  Slot{side: U32, t: U32, at: U32, use: U32, shared: U32, own: U32}
+
+type Mouth is Data:
+  Mouth{side: U32, t: U32}
+
+# A street: 0 a tree street, 1 a ring lane, 2 a mouth, 3 a cross street.
+type Street is Data:
+  Street{tag: U32, bulb: Bool, pts: List<&2, Pt>}
+
+type Placed is Data:
+  Placed{p: Pt, id: U32}
+
+def box_x0(+b: Box) -> U32:
+  match b:
+    case Box{x0, x1, z0, z1}:
+      x0
+
+def box_x1(+b: Box) -> U32:
+  match b:
+    case Box{x0, x1, z0, z1}:
+      x1
+
+def box_z0(+b: Box) -> U32:
+  match b:
+    case Box{x0, x1, z0, z1}:
+      z0
+
+def box_z1(+b: Box) -> U32:
+  match b:
+    case Box{x0, x1, z0, z1}:
+      z1
+
+def box_w(+b: Box) -> U32:
+  U32.sub(box_x1(b), box_x0(b))
+
+def box_h(+b: Box) -> U32:
+  U32.sub(box_z1(b), box_z0(b))
+
+# Whether a box is at least `least` across both ways.
+def roomy(+b: Box, +least: U32) -> Bool:
+  Bool.and(Bool.not(slt(box_w(b), least)), Bool.not(slt(box_h(b), least)))
+
+def inside(+b: Box, +x: U32, +z: U32) -> Bool:
+  Bool.and(Bool.and(slt(box_x0(b), x), slt(x, box_x1(b))), Bool.and(slt(box_z0(b), z), slt(z, box_z1(b))))
+
+def slot_side(+s: Slot) -> U32:
+  match s:
+    case Slot{side, t, at, use, shared, own}:
+      side
+
+def slot_t(+s: Slot) -> U32:
+  match s:
+    case Slot{side, t, at, use, shared, own}:
+      t
+
+def slot_at(+s: Slot) -> U32:
+  match s:
+    case Slot{side, t, at, use, shared, own}:
+      at
+
+def slot_use(+s: Slot) -> U32:
+  match s:
+    case Slot{side, t, at, use, shared, own}:
+      use
+
+def slot_le(+a: Slot, +b: Slot) -> Bool:
+  U32.is_le(slot_use(a), slot_use(b))
+
+# S and N run along u, W and E along v.
+def along_u(+side: U32) -> Bool:
+  U32.is_lt(side, 2)
+
+# ---- Entrances --------------------------------------------------------------
+
+# Whether a box reaches the side of the block's inner rectangle.
+def touches(+side: U32, +bx: Box, +inner: Box) -> Bool:
+  Bool.pick(Bool, U32.is_eq(side, 0), U32.is_eq(box_z0(bx), box_z0(inner)),
+  Bool.pick(Bool, U32.is_eq(side, 1), U32.is_eq(box_z1(bx), box_z1(inner)),
+  Bool.pick(Bool, U32.is_eq(side, 2), U32.is_eq(box_x0(bx), box_x0(inner)),
+    U32.is_eq(box_x1(bx), box_x1(inner)))))
+
+# The lokal floor: no entrance nearer than 20 m to a corner of the box.
+def lok_floor_cm() -> U32:
+  2000
+
+def keep_slots(ts: List<&2, U32>, +seed: U32, +side: U32, +k0: U32, +k1: U32, +k2: U32, +t0: U32, +t1: U32, +m: U32, +lo: U32, +hi: U32) -> List<&2, Slot>:
+  match ts:
+    case Nil{}:
+      Nil{}
+    case Con{+t, r}:
+      +rest = keep_slots(r, seed, side, k0, k1, k2, t0, t1, m, lo, hi)
+      +at = mul16(m, t)
+      +ok = Bool.and(Bool.and(U32.is_ge(t, t0), U32.is_le(t, t1)),
+            Bool.and(Bool.not(slt(at, U32.add(lo, lok_floor_cm()))), Bool.not(slt(U32.sub(hi, lok_floor_cm()), at))))
+      +shared = U32.shrn(hash5(seed, 13, k0, k1, k2, t), 16n)
+      +own = U32.shrn(hash6(seed, 12, k0, k1, k2, t, Bool.pick(U32, U32.is_even(side), 1, 0)), 16n)
+      Bool.pick(List<&2, Slot>, ok, Slot{side, t, at, U32.min(shared, own), shared, own} <> rest, rest)
+
+def side_slots_go(go: Bool, +seed: U32, +side: U32, +e: Edge, +bx: Box, +mu: U32, +mv: U32) -> List<&2, Slot>:
+  match go:
+    case False{}:
+      Nil{}
+    case True{}:
+      match e:
+        case Edge{road, k0, k1, k2, len, a0, a1, t0, t1}:
+          +u = along_u(side)
+          keep_slots(slots(seed, k0, k1, k2, len, a0, a1), seed, side, k0, k1, k2, t0, t1,
+            Bool.pick(U32, u, mu, mv), Bool.pick(U32, u, box_x0(bx), box_z0(bx)), Bool.pick(U32, u, box_x1(bx), box_z1(bx)))
+
+def edge_road(+e: Edge) -> Bool:
+  match e:
+    case Edge{road, k0, k1, k2, len, a0, a1, t0, t1}:
+      road
+
+def side_slots(+seed: U32, +side: U32, +e: Edge, +bx: Box, +inner: Box, +mu: U32, +mv: U32) -> List<&2, Slot>:
+  side_slots_go(Bool.and(edge_road(e), touches(side, bx, inner)), seed, side, e, bx, mu, mv)
+
+def sort_slots(xs: List<&2, Slot>) -> List<&2, Slot>:
+  List.sort(~Slot, ~(a => b => slot_le(a, b)), xs)
+
+# The entrances into a box of the block: slots on each road side it reaches,
+# most wanted first.
+def entrances(+seed: U32, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge, +bx: Box, +inner: Box, +mu: U32, +mv: U32) -> List<&2, Slot>:
+  sort_slots(List.append(&2, Slot, List.append(&2, Slot, side_slots(seed, 0, es, bx, inner, mu, mv), side_slots(seed, 1, en, bx, inner, mu, mv)),
+    List.append(&2, Slot, side_slots(seed, 2, ew, bx, inner, mu, mv), side_slots(seed, 3, ee, bx, inner, mu, mv))))
+
+# A slot both sides of the road like becomes a crossing of it: the most wanted
+# entrance, and every other one with a low shared or own roll.
+def liked(+s: Slot) -> Bool:
+  match s:
+    case Slot{side, t, at, use, shared, own}:
+      Bool.or(U32.is_lt(shared, 19661), U32.is_lt(own, 14418))
+
+def wanted(xs: List<&2, Slot>) -> List<&2, Slot>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{+s, r}:
+      +rest = wanted(r)
+      Bool.pick(List<&2, Slot>, liked(s), s <> rest, rest)
+
+def pick_used(xs: List<&2, Slot>) -> List<&2, Slot>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{s, r}:
+      s <> wanted(r)
+
+# ---- A tree of streets ----------------------------------------------------
+#
+# A trunk from each entrance, and branches that leave it at an angle, wander,
+# and branch again. Growth stops where a street would come within two lot
+# depths (26 m) of another, or leave the box. A tip that stops near another
+# street links to it, a T, when the link is short and clear; otherwise it
+# ends in a turning circle. The first trunk runs through to an entrance on
+# another road when it can, so the tree is also a way through the block.
+#
+# Bend has no mutual recursion, so the growth is one loop over a stack of
+# tasks: grow a street, then each of its branch points in turn, each branch
+# grown in full before the next point, as a recursive grower would.
+
+def clear_cm() -> U32:
+  2600
+
+def step_cm() -> U32:
+  600
+
+def none_id() -> U32:
+  4294967295
+
+type Entry is Data:
+  Entry{start: Pt, end: Pt, h: U32}
+
+# Where an entrance's street leaves the block's edge, where it reaches the
+# box, and which way it faces inward.
+def entry(+outer: Box, +bx: Box, +s: Slot) -> Entry:
+  +side = slot_side(s)
+  +at = slot_at(s)
+  Bool.pick(Entry, U32.is_eq(side, 0), Entry{Pt{at, box_z0(outer)}, Pt{at, box_z0(bx)}, 16384},
+  Bool.pick(Entry, U32.is_eq(side, 1), Entry{Pt{at, box_z1(outer)}, Pt{at, box_z1(bx)}, 49152},
+  Bool.pick(Entry, U32.is_eq(side, 2), Entry{Pt{box_x0(outer), at}, Pt{box_x0(bx), at}, 0},
+    Entry{Pt{box_x1(outer), at}, Pt{box_x1(bx), at}, 32768})))
+
+def entry_start(+e: Entry) -> Pt:
+  match e:
+    case Entry{start, end, h}:
+      start
+
+def entry_end(+e: Entry) -> Pt:
+  match e:
+    case Entry{start, end, h}:
+      end
+
+def entry_h(+e: Entry) -> U32:
+  match e:
+    case Entry{start, end, h}:
+      h
+
+def has_mouth(ms: List<&2, Mouth>, +side: U32, +t: U32) -> Bool:
+  match ms:
+    case Nil{}:
+      False{}
+    case Con{+m, r}:
+      match m:
+        case Mouth{ms_side, ms_t}:
+          Bool.or(Bool.and(U32.is_eq(ms_side, side), U32.is_eq(ms_t, t)), has_mouth(r, side, t))
+
+# A junction keeps 24 m from every other one.
+def room_at(js: List<&2, Pt>, +p: Pt) -> Bool:
+  match js:
+    case Nil{}:
+      True{}
+    case Con{+q, r}:
+      Bool.and(Bool.not(within(p, q, 2400)), room_at(r, p))
+
+def placed_id(+q: Placed) -> U32:
+  match q:
+    case Placed{p, id}:
+      id
+
+def placed_p(+q: Placed) -> Pt:
+  match q:
+    case Placed{p, id}:
+      p
+
+# Whether a street point would come within 26 m of a street already placed,
+# leaving out the stretch of the parent it grew from.
+def hit(qs: List<&2, Placed>, +p: Pt, +parent: U32, +from: Pt) -> Bool:
+  match qs:
+    case Nil{}:
+      False{}
+    case Con{+q, r}:
+      +own = Bool.and(U32.is_eq(placed_id(q), parent), within(placed_p(q), from, 3900))
+      Bool.or(Bool.and(Bool.not(own), within(p, placed_p(q), clear_cm())), hit(r, p, parent, from))
+
+type Near is Data:
+  Near{found: Bool, p: Pt, id: U32, d: U32}
+
+# The nearest placed point within 80 m, not on the parent.
+def nearest(qs: List<&2, Placed>, +tip: Pt, +parent: U32, +best: Near) -> Near:
+  match qs:
+    case Nil{}:
+      best
+    case Con{+q, r}:
+      match best:
+        case Near{found, bp, bid, bd}:
+          +dd = dist(tip, placed_p(q))
+          +ok = Bool.and(Bool.and(U32.is_ne(placed_id(q), parent), within(tip, placed_p(q), 8000)),
+                Bool.or(Bool.not(found), U32.is_lt(dd, bd)))
+          nearest(r, tip, parent, Bool.pick(Near, ok, Near{True{}, placed_p(q), placed_id(q), dd}, Near{found, bp, bid, bd}))
+
+# Whether a link from the tip to the midpoint would pass near another street.
+def crossing(qs: List<&2, Placed>, +mid: Pt, +r: U32, +skip: U32) -> Bool:
+  match qs:
+    case Nil{}:
+      False{}
+    case Con{+q, rest}:
+      Bool.or(Bool.and(U32.is_ne(placed_id(q), skip), within(placed_p(q), mid, r)), crossing(rest, mid, r, skip))
+
+def place_all(ps: List<&2, Pt>, +id: U32, acc: List<&2, Placed>) -> List<&2, Placed>:
+  match ps:
+    case Nil{}:
+      acc
+    case Con{p, r}:
+      place_all(r, id, Placed{p, id} <> acc)
+
+def nth(ps: List<&2, Pt>, +k: U32, +dflt: Pt) -> Pt:
+  Maybe.default(&2, Pt, List.get(&2, Pt, ps, U32.to_nat(k)), dflt)
+
+def pt_head(ps: List<&2, Pt>, +dflt: Pt) -> Pt:
+  Maybe.default(&2, Pt, List.head(&2, Pt, ps), dflt)
+
+# ---- One street -------------------------------------------------------------
+
+type Step is Data:
+  Go{x: U32, z: U32, h: U32, turn: U32}
+  Stop{through: Bool, edge: Bool}
+
+# The next step of a street at (x, z) heading h, having run s. It wanders a
+# few degrees a step; with a target it steers for it, harder as it nears.
+def step_of(+bx: Box, +placed: List<&2, Placed>, +parent: U32, +from: Pt, +aim: Bool, +tg: Pt, +x: U32, +z: U32, +h: U32, +turn: U32, +s: U32, +r: U32) -> Step:
+  +turn1 = U32.add(sdiv(U32.mul(turn, 4), 5), sdiv(U32.mul(U32.sub(r, 32768), 730), 65536))
+  +h1 = U32.add(h, turn1)
+  +here = {Pt{x, z} : Pt}
+  +arrived = Bool.and(aim, within(here, tg, 900))
+  +want = turn_from(atan2(U32.sub(pt_z(tg), z), U32.sub(pt_x(tg), x)), h1)
+  +gain = Bool.pick(U32, U32.is_gt(s, 4000), 35, 10)
+  +h2 = Bool.pick(U32, aim, U32.add(h1, clamp(sdiv(U32.mul(want, gain), 100), U32.sub(0, 1252), 1252)), h1)
+  +nx = U32.add(x, sdiv(U32.mul(cos14(h2), step_cm()), 16384))
+  +nz = U32.add(z, sdiv(U32.mul(sin14(h2), step_cm()), 16384))
+  +out = Bool.and(Bool.not(inside(bx, nx, nz)), U32.is_gt(s, clear_cm()))
+  Bool.pick(Step, arrived, Stop{True{}, False{}},
+  Bool.pick(Step, out, Stop{False{}, True{}},
+  Bool.pick(Step, hit(placed, Pt{nx, nz}, parent, from), Stop{False{}, False{}}, Go{nx, nz, h2, turn1})))
+
+type Walked is Data:
+  Walked{path: List<&2, Pt>, count: U32, n: U32, through: Bool, edge: Bool}
+
+# A street's points, newest first.
+def walk(fuel: Nat, step: Step, +bx: Box, +placed: List<&2, Placed>, +parent: U32, +from: Pt, +aim: Bool, +tg: Pt, +key: U32, +n: U32, +s: U32, +count: U32, +path: List<&2, Pt>) -> Walked:
+  match fuel step:
+    case 0n _:
+      Walked{path, count, n, False{}, False{}}
+    case 1n+p Stop{+through, edge}:
+      Walked{Bool.pick(List<&2, Pt>, through, tg <> path, path), Bool.pick(U32, through, U32.add(count, 1), count), n, through, edge}
+    case 1n+p Go{+x, +z, +h, +turn}:
+      walk(p, step_of(bx, placed, parent, from, aim, tg, x, z, h, turn, U32.add(s, step_cm()), draw(key, n)),
+        bx, placed, parent, from, aim, tg, key, U32.add(n, 1), U32.add(s, step_cm()), U32.add(count, 1), Pt{x, z} <> path)
+
+# What the loop needs of the block, and what it builds.
+type Ctx is Data:
+  Ctx{seed: U32, d: U32, outer: Box, box: Box, cand: List<&2, Slot>, first: Slot, key: U32}
+
+type St is Data:
+  St{n: U32, next: U32, placed: List<&2, Placed>, joints: List<&2, Pt>, mouths: List<&2, Mouth>, streets: List<&2, Street>, linked: U32, bulb: U32, thru: U32}
+
+type Task is Data:
+  TThrough{xs: List<&2, Slot>}
+  TTrunks{xs: List<&2, Slot>}
+  TBranch{id: U32, path: List<&2, Pt>, len: U32, at: U32, side: Bool, depth: U32}
+  TGrow{x: U32, z: U32, h: U32, depth: U32, parent: U32, from: Pt, tried: Bool}
+
+type Grown is Data:
+  Grown{st: St, stack: List<&2, Task>, ok: Bool}
+
+type Run is Data:
+  Run{st: St, stack: List<&2, Task>}
+
+def ctx_outer(+c: Ctx) -> Box:
+  match c:
+    case Ctx{seed, d, outer, box, cand, first, key}:
+      outer
+
+def ctx_box(+c: Ctx) -> Box:
+  match c:
+    case Ctx{seed, d, outer, box, cand, first, key}:
+      box
+
+def ctx_key(+c: Ctx) -> U32:
+  match c:
+    case Ctx{seed, d, outer, box, cand, first, key}:
+      key
+
+def ctx_d(+c: Ctx) -> U32:
+  match c:
+    case Ctx{seed, d, outer, box, cand, first, key}:
+      d
+
+def ctx_cand(+c: Ctx) -> List<&2, Slot>:
+  match c:
+    case Ctx{seed, d, outer, box, cand, first, key}:
+      cand
+
+def ctx_first(+c: Ctx) -> Slot:
+  match c:
+    case Ctx{seed, d, outer, box, cand, first, key}:
+      first
+
+def st_n(+s: St) -> U32:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      n
+
+def st_joints(+s: St) -> List<&2, Pt>:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      joints
+
+def st_mouths(+s: St) -> List<&2, Mouth>:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      mouths
+
+# Spend k rolls.
+def st_bump(+s: St, +k: U32) -> St:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      St{U32.add(n, k), next, placed, joints, mouths, streets, linked, bulb, thru}
+
+def st_joint(+s: St, +p: Pt) -> St:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      St{n, next, placed, p <> joints, mouths, streets, linked, bulb, thru}
+
+def st_street(+s: St, +k: Street) -> St:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      St{n, next, placed, joints, mouths, k <> streets, linked, bulb, thru}
+
+# An entrance opens: a straight street through the frontage, from the road to
+# the box, and a junction where it reaches the box.
+def open_into(+outer: Box, +bx: Box, +s: St, +m: Slot) -> St:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      +e = entry(outer, bx, m)
+      St{n, next, placed, entry_end(e) <> joints, Mouth{slot_side(m), slot_t(m)} <> mouths,
+        Street{2, False{}, [entry_start(e), entry_end(e)]} <> streets, linked, bulb, thru}
+
+def open_slot(+c: Ctx, +s: St, +m: Slot) -> St:
+  open_into(ctx_outer(c), ctx_box(c), s, m)
+
+# How often a tip links on: a trunk nearly always, a branch more often than
+# not, a twig half the time.
+def link_odds(+depth: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(depth, 1), 62259, Bool.pick(U32, U32.is_eq(depth, 2), 45875, 32768))
+
+# Street spacing reads the density at 256 levels.
+def level(+d: U32) -> U32:
+  U32.shrn(U32.min(d, 1023), 2n)
+
+# Branches leave every 80 m in the fields to every 45 m in town.
+def level_branch(+l: U32) -> U32:
+  U32.sub(8000, U32.div(U32.mul(3500, l), 256))
+
+def branch_every(+d: U32) -> U32:
+  level_branch(level(d))
+
+# Whether q lies ahead of the tip, coming from back: within 60 degrees, or
+# anywhere ahead at the back of the shops.
+def ahead(+back: Pt, +tip: Pt, +q: Pt, +edge: Bool) -> Bool:
+  +ax = U32.sub(pt_x(tip), pt_x(back))
+  +az = U32.sub(pt_z(tip), pt_z(back))
+  +bx = U32.sub(pt_x(q), pt_x(tip))
+  +bz = U32.sub(pt_z(q), pt_z(tip))
+  +dot = U32.add(U32.mul(ax, bx), U32.mul(az, bz))
+  Bool.pick(Bool, edge, slt(0, dot), slt(U32.mul(dist(tip, back), dist(tip, q)), U32.mul(dot, 2)))
+
+def link_of(+near: Near, +back: Pt, +tip: Pt, +edge: Bool, +through: Bool, +joints: List<&2, Pt>, +placed: List<&2, Placed>, +r: U32, +depth: U32) -> Bool:
+  match near:
+    case Near{found, q, qid, d}:
+      +mid = {Pt{U32.shrn(U32.add(pt_x(tip), pt_x(q)), 1n), U32.shrn(U32.add(pt_z(tip), pt_z(q)), 1n)} : Pt}
+      Bool.and(Bool.and(Bool.and(Bool.not(through), found), Bool.and(U32.is_lt(d, Bool.pick(U32, edge, 8000, 6000)), ahead(back, tip, q, edge))),
+        Bool.and(Bool.and(room_at(joints, q), U32.is_lt(r, link_odds(depth))),
+          Bool.not(crossing(placed, mid, U32.sub(U32.max(U32.shrn(d, 1n), 200), 200), qid))))
+
+def near_p(+near: Near) -> Pt:
+  match near:
+    case Near{found, q, qid, d}:
+      q
+
+# A street that ran far enough is kept: its tip links or ends in a turning
+# circle, its points are placed, and its first branch point is queued.
+def keep_street(ok: Bool, +c: Ctx, +s: St, +stack: List<&2, Task>, +w: Walked, +depth: U32, +parent: U32) -> Grown:
+  match ok:
+    case False{}:
+      match s:
+        case St{n0, next, placed, joints, mouths, streets, linked, bulb, thru}:
+          match w:
+            case Walked{path, count, n, through, edge}:
+              Grown{St{n, next, placed, joints, mouths, streets, linked, bulb, thru}, stack, False{}}
+    case True{}:
+      match s:
+        case St{n0, +id, +placed, +joints, mouths, streets, linked, bulb, thru}:
+          match w:
+            case Walked{+path, +cnt, +n, +through, +edge}:
+              +tip = pt_head(path, Pt{0, 0})
+              +back = nth(path, U32.min(3, U32.sub(cnt, 1)), tip)
+              +near = nearest(placed, tip, parent, Near{False{}, tip, 0, 0})
+              +link = link_of(near, back, tip, edge, through, joints, placed, draw(ctx_key(c), n), depth)
+              +fwd = List.reverse(&2, Pt, path)
+              +pts = Bool.pick(List<&2, Pt>, link, List.append(&2, Pt, fwd, [near_p(near)]), fwd)
+              +len = U32.mul(U32.sub(cnt, 1), step_cm())
+              +every = branch_every(ctx_d(c))
+              +at = between(U32.div(U32.mul(every, 3), 5), every, draw(ctx_key(c), U32.add(n, 2)))
+              +side = U32.is_lt(draw(ctx_key(c), U32.add(n, 1)), 32768)
+              +bulb_end = Bool.and(Bool.not(through), Bool.not(link))
+              Grown{St{U32.add(n, 3), U32.add(id, 1), place_all(path, id, placed),
+                  Bool.pick(List<&2, Pt>, link, near_p(near) <> joints, joints), mouths,
+                  Street{0, bulb_end, pts} <> streets,
+                  U32.add(linked, count(link)), U32.add(bulb, count(bulb_end)), U32.add(thru, count(through))},
+                Bool.pick(List<&2, Task>, U32.is_lt(depth, 3), TBranch{id, fwd, len, at, side, depth} <> stack, stack),
+                True{}}
+
+def walked_ok(+w: Walked, +aim: Bool) -> Bool:
+  match w:
+    case Walked{path, count, n, through, edge}:
+      Bool.and(U32.is_ge(U32.mul(U32.sub(count, 1), step_cm()), 3000), Bool.or(Bool.not(aim), through))
+
+def grow_walked(+c: Ctx, +s: St, +stack: List<&2, Task>, +w: Walked, +aim: Bool, +depth: U32, +parent: U32) -> Grown:
+  keep_street(walked_ok(w, aim), c, s, stack, w, depth, parent)
+
+# Grow one street from (x, z) heading h, at most `most` long. With `aim`, it
+# steers for tg and is kept only if it gets there.
+def grow_street(+c: Ctx, +s: St, +stack: List<&2, Task>, +x: U32, +z: U32, +h: U32, +most: U32, +depth: U32, +parent: U32, +from: Pt, +aim: Bool, +tg: Pt) -> Grown:
+  match s:
+    case St{+n, next, +placed, joints, mouths, streets, linked, bulb, thru}:
+      +fuel = U32.to_nat(U32.add(U32.div(U32.add(most, 599), step_cm()), 1))
+      +first = step_of(ctx_box(c), placed, parent, from, aim, tg, x, z, h, 0, 0, draw(ctx_key(c), n))
+      grow_walked(c, s, stack, walk(fuel, first, ctx_box(c), placed, parent, from, aim, tg, ctx_key(c), U32.add(n, 1), 0, 1, [Pt{x, z}]), aim, depth, parent)
+
+# ---- The loop -----------------------------------------------------------------
+
+def empty_st() -> St:
+  St{0, 0, [], [], [], [], 0, 0, 0}
+
+def slot_head(xs: List<&2, Slot>) -> Slot:
+  Maybe.default(&2, Slot, List.head(&2, Slot, xs), Slot{0, 0, 0, 0, 0, 0})
+
+def on_side(xs: List<&2, Slot>, +side: U32) -> List<&2, Slot>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{+s, r}:
+      +rest = on_side(r, side)
+      Bool.pick(List<&2, Slot>, U32.is_eq(slot_side(s), side), s <> rest, rest)
+
+def off_sides(xs: List<&2, Slot>, +a: U32, +b: U32) -> List<&2, Slot>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{+s, r}:
+      +rest = off_sides(r, a, b)
+      Bool.pick(List<&2, Slot>, Bool.or(U32.is_eq(slot_side(s), a), U32.is_eq(slot_side(s), b)), rest, s <> rest)
+
+# Where the first trunk may run through to: an entrance on the opposite road
+# first, then the others, most wanted first; three tries.
+def exits_of(+cand: List<&2, Slot>, +first: Slot) -> List<&2, Slot>:
+  +f = slot_side(first)
+  +o = U32.xor(f, 1)
+  List.take(&2, Slot, List.append(&2, Slot, on_side(cand, o), off_sides(cand, f, o)), 3n)
+
+# An entrance no street uses yet, within 260 m and 50 degrees of a heading,
+# with room for a junction where it meets the box; the nearest.
+def free_ahead(xs: List<&2, Slot>, +c: Ctx, +ms: List<&2, Mouth>, +js: List<&2, Pt>, +q: Pt, +h: U32, +best: Maybe<&2, Slot>, +bd: U32) -> Maybe<&2, Slot>:
+  match xs:
+    case Nil{}:
+      best
+    case Con{+s, r}:
+      +e = entry_end(entry(ctx_outer(c), ctx_box(c), s))
+      +dd = dist(q, e)
+      +off = sabs(turn_from(atan2(U32.sub(pt_z(e), pt_z(q)), U32.sub(pt_x(e), pt_x(q))), h))
+      +ok = Bool.and(Bool.and(Bool.not(has_mouth(ms, slot_side(s), slot_t(s))), U32.is_lt(dd, bd)),
+            Bool.and(U32.is_lt(off, 9074), room_at(js, e)))
+      free_ahead(r, c, ms, js, q, h, Bool.pick(Maybe<&2, Slot>, ok, Some{s}, best), Bool.pick(U32, ok, dd, bd))
+
+def grown_run(g: Grown) -> Run:
+  match g:
+    case Grown{st, stack, ok}:
+      Run{st, stack}
+
+# A street that reached its target opens the entrances at both its ends;
+# one that did not leaves the next try on the stack.
+def through_done(g: Grown, +c: Ctx, +x: Slot, +retry: Task) -> Run:
+  match g:
+    case Grown{st, stack, ok}:
+      match ok:
+        case True{}:
+          Run{open_slot(c, open_slot(c, st, ctx_first(c)), x), stack}
+        case False{}:
+          Run{st, retry <> stack}
+
+def through_task(xs: List<&2, Slot>, +c: Ctx, +st: St, +rest: List<&2, Task>) -> Run:
+  match xs:
+    case Nil{}:
+      Run{st, rest}
+    case Con{+x, more}:
+      +a = entry(ctx_outer(c), ctx_box(c), ctx_first(c))
+      +b = entry(ctx_outer(c), ctx_box(c), x)
+      +sp = entry_end(a)
+      through_done(grow_street(c, st, rest, pt_x(sp), pt_z(sp), entry_h(a), 120000, 1, none_id(), sp, True{}, entry_end(b)), c, x, TThrough{more})
+
+def opened(g: Grown, +c: Ctx, +m: Slot) -> Run:
+  match g:
+    case Grown{+st, stack, +ok}:
+      Run{Bool.pick(St, ok, open_slot(c, st, m), st), stack}
+
+# Every other entrance grows a trunk 260 to 480 m long, within 17 degrees of
+# straight in.
+def trunk_go(done: Bool, +c: Ctx, +st: St, +m: Slot, +next: List<&2, Task>) -> Run:
+  match done:
+    case True{}:
+      Run{st, next}
+    case False{}:
+      +e = entry(ctx_outer(c), ctx_box(c), m)
+      +sp = entry_end(e)
+      +n = st_n(st)
+      +h = U32.add(entry_h(e), U32.sub(between(0, 6258, draw(ctx_key(c), n)), 3129))
+      +most = between(26000, 48000, draw(ctx_key(c), U32.add(n, 1)))
+      opened(grow_street(c, st_bump(st, 2), next, pt_x(sp), pt_z(sp), h, most, 1, none_id(), sp, False{}, sp), c, m)
+
+def trunks_task(xs: List<&2, Slot>, +c: Ctx, +st: St, +rest: List<&2, Task>) -> Run:
+  match xs:
+    case Nil{}:
+      Run{st, rest}
+    case Con{+m, more}:
+      +next = {TTrunks{more} <> rest : List<&2, Task>}
+      trunk_go(has_mouth(st_mouths(st), slot_side(m), slot_t(m)), c, st, m, next)
+
+# The next branch point along a street. Branches leave at 60 to 100 degrees,
+# on alternating sides, now and then both sides at once: a crossing. Twigs
+# are fewer than branches.
+def branch_go(go: Bool, +c: Ctx, +st: St, +id: U32, +path: List<&2, Pt>, +len: U32, +at: U32, +side: Bool, +depth: U32, +rest: List<&2, Task>) -> Run:
+  match go:
+    case False{}:
+      Run{st, rest}
+    case True{}:
+      +key = ctx_key(c)
+      +k = U32.div(U32.add(at, 300), step_cm())
+      +q = nth(path, k, Pt{0, 0})
+      +q1 = nth(path, U32.add(k, 1), q)
+      +hh = atan2(U32.sub(pt_z(q1), pt_z(q)), U32.sub(pt_x(q1), pt_x(q)))
+      +n = st_n(st)
+      +every = branch_every(ctx_d(c))
+      +at2 = U32.add(at, between(U32.div(U32.mul(every, 4), 5), U32.div(U32.mul(every, 6), 5), draw(key, n)))
+      +same = {TBranch{id, path, len, at2, side, depth} <> rest : List<&2, Task>}
+      +flip = {TBranch{id, path, len, at2, Bool.not(side), depth} <> rest : List<&2, Task>}
+      +skip = Bool.and(U32.is_eq(depth, 2), U32.is_lt(draw(key, U32.add(n, 1)), 39322))
+      +both = U32.is_lt(draw(key, U32.add(n, 2)), 9830)
+      +w1 = between(10948, 18254, draw(key, U32.add(n, 3)))
+      +w2 = between(10948, 18254, draw(key, U32.add(n, 4)))
+      +g1 = {TGrow{pt_x(q), pt_z(q), Bool.pick(U32, side, U32.add(hh, w1), U32.sub(hh, w1)), U32.add(depth, 1), id, q, False{}} : Task}
+      +g2 = {TGrow{pt_x(q), pt_z(q), Bool.pick(U32, side, U32.sub(hh, w2), U32.add(hh, w2)), U32.add(depth, 1), id, q, False{}} : Task}
+      +grow = Bool.pick(List<&2, Task>, both, g1 <> g2 <> flip, g1 <> flip)
+      Bool.pick(Run, Bool.not(room_at(st_joints(st), q)), Run{st_bump(st, 1), same},
+        Bool.pick(Run, skip, Run{st_bump(st_joint(st, q), 2), flip}, Run{st_bump(st_joint(st, q), 5), grow}))
+
+def branch_task(+c: Ctx, +st: St, +id: U32, +path: List<&2, Pt>, +len: U32, +at: U32, +side: Bool, +depth: U32, +rest: List<&2, Task>) -> Run:
+  branch_go(U32.is_lt(U32.add(at, lok_floor_cm()), len), c, st, id, path, len, at, side, depth, rest)
+
+# A branch or twig, 150 to 320 m over the square root of its depth.
+def plain_grow(+c: Ctx, +st: St, +x: U32, +z: U32, +h: U32, +depth: U32, +parent: U32, +from: Pt, +rest: List<&2, Task>) -> Run:
+  +most = U32.div(U32.mul(between(15000, 32000, draw(ctx_key(c), st_n(st))), 1000), Bool.pick(U32, U32.is_eq(depth, 2), 1414, 1732))
+  grown_run(grow_street(c, st_bump(st, 1), rest, x, z, h, most, depth, parent, from, False{}, from))
+
+def aimed(g: Grown, +c: Ctx, +s: Slot, +retry: Task) -> Run:
+  match g:
+    case Grown{st, stack, ok}:
+      match ok:
+        case True{}:
+          Run{open_slot(c, st, s), stack}
+        case False{}:
+          Run{st, retry <> stack}
+
+# A branch that points at a free entrance on a big road steers for it, and
+# becomes another way out of the block.
+def aim_with(m: Maybe<&2, Slot>, +c: Ctx, +st: St, +x: U32, +z: U32, +h: U32, +depth: U32, +parent: U32, +from: Pt, +rest: List<&2, Task>) -> Run:
+  match m:
+    case None{}:
+      plain_grow(c, st, x, z, h, depth, parent, from, rest)
+    case Some{+s}:
+      +b = entry_end(entry(ctx_outer(c), ctx_box(c), s))
+      aimed(grow_street(c, st, rest, x, z, h, 60000, depth, parent, from, True{}, b), c, s, TGrow{x, z, h, depth, parent, from, True{}})
+
+def aim_go(go: Bool, +c: Ctx, +st: St, +x: U32, +z: U32, +h: U32, +depth: U32, +parent: U32, +from: Pt, +rest: List<&2, Task>) -> Run:
+  match go:
+    case True{}:
+      aim_with(free_ahead(ctx_cand(c), c, st_mouths(st), st_joints(st), Pt{x, z}, h, None{}, 26000), c, st, x, z, h, depth, parent, from, rest)
+    case False{}:
+      plain_grow(c, st, x, z, h, depth, parent, from, rest)
+
+def do_task(t: Task, +c: Ctx, +st: St, +rest: List<&2, Task>) -> Run:
+  match t:
+    case TThrough{xs}:
+      through_task(xs, c, st, rest)
+    case TTrunks{xs}:
+      trunks_task(xs, c, st, rest)
+    case TBranch{id, path, len, at, side, depth}:
+      branch_task(c, st, id, path, len, at, side, depth, rest)
+    case TGrow{x, z, h, +depth, parent, from, tried}:
+      aim_go(Bool.and(U32.is_eq(depth, 2), Bool.not(tried)), c, st, x, z, h, depth, parent, from, rest)
+
+def run_st(r: Run) -> St:
+  match r:
+    case Run{st, stack}:
+      st
+
+def run(fuel: Nat, +c: Ctx, r: Run) -> St:
+  match fuel:
+    case 0n:
+      run_st(r)
+    case 1n+p:
+      match r:
+        case Run{st, stack}:
+          match stack:
+            case Nil{}:
+              st
+            case Con{t, rest}:
+              run(p, c, do_task(t, c, st, rest))
+
+# The first entrance's trunk tries to run through; then every entrance not
+# yet open grows its own trunk.
+def grow_tree(+c: Ctx, +st: St, +used: List<&2, Slot>) -> St:
+  run(4000n, c, Run{st, [TThrough{exits_of(ctx_cand(c), ctx_first(c))}, TTrunks{used}]})
+
+# ---- Lanes, combs and grids ---------------------------------------------------
+
+def st_streets(+s: St, +xs: List<&2, Street>) -> St:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      St{n, next, placed, joints, mouths, List.append(&2, Street, xs, streets), linked, bulb, thru}
+
+def lane_street(+b: Box) -> Street:
+  match b:
+    case Box{+x0, +x1, +z0, +z1}:
+      Street{1, False{}, [Pt{x0, z0}, Pt{x1, z0}, Pt{x1, z1}, Pt{x0, z1}, Pt{x0, z0}]}
+
+def open_all(xs: List<&2, Slot>, +outer: Box, +bx: Box, +st: St) -> St:
+  match xs:
+    case Nil{}:
+      st
+    case Con{+m, r}:
+      open_all(r, outer, bx, open_into(outer, bx, st, m))
+
+# A lane round a box, and a mouth from each entrance to it.
+def lane(+outer: Box, +bx: Box, +entries: List<&2, Slot>, +st: St) -> St:
+  open_all(entries, outer, bx, st_street(st, lane_street(bx)))
+
+def bool_eq(+a: Bool, +b: Bool) -> Bool:
+  Bool.not(Bool.xor(a, b))
+
+# Whether a cross street at a..b would meet the lane within 30 m of a mouth.
+def near_mouth(xs: List<&2, Slot>, +u: Bool, +a: U32, +b: U32) -> Bool:
+  match xs:
+    case Nil{}:
+      False{}
+    case Con{+s, r}:
+      +at = slot_at(s)
+      Bool.or(Bool.and(bool_eq(along_u(slot_side(s)), u), U32.is_lt(U32.min(sabs(U32.sub(at, a)), sabs(U32.sub(at, b))), 3000)),
+        near_mouth(r, u, a, b))
+
+# Streets across a lane, one every `gap` or so: across u (at a fixed x), or
+# across v. A street leans by `lean`, its far end that much further on; it
+# keeps the lokal floor from the lane's corners and 30 m from every mouth.
+def across_go(fuel: Nat, +k: U32, +n: U32, +u: Bool, +lo: U32, +hi: U32, +o0: U32, +o1: U32, +lean: U32, +ms: List<&2, Slot>, +acc: List<&2, Street>) -> List<&2, Street>:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      +t = U32.add(lo, U32.div(U32.mul(U32.sub(hi, lo), k), n))
+      +a = U32.sub(t, sdiv(lean, 2))
+      +b = U32.add(t, sdiv(lean, 2))
+      +ok = Bool.and(Bool.and(U32.is_lt(k, n), Bool.not(slt(smin(a, b), U32.add(lo, lok_floor_cm())))),
+            Bool.and(Bool.not(slt(U32.sub(hi, lok_floor_cm()), smax(a, b))), Bool.not(near_mouth(ms, u, a, b))))
+      +pts = Bool.pick(List<&2, Pt>, u, [Pt{a, o0}, Pt{b, o1}], [Pt{o0, a}, Pt{o1, b}])
+      across_go(p, U32.add(k, 1), n, u, lo, hi, o0, o1, lean, ms, Bool.pick(List<&2, Street>, ok, Street{3, False{}, pts} <> acc, acc))
+
+def across(+u: Bool, +lo: U32, +hi: U32, +o0: U32, +o1: U32, +gap: U32, +lean: U32, +ms: List<&2, Slot>) -> List<&2, Street>:
+  +n = U32.max(U32.div(U32.sub(hi, lo), gap), 1)
+  across_go(U32.to_nat(n), 1, n, u, lo, hi, o0, o1, lean, ms, Nil{})
+
+# Between streets 85 m in the fields, 55 m in town.
+def level_gap(+l: U32) -> U32:
+  U32.sub(8500, U32.div(U32.mul(3000, l), 256))
+
+def cross_gap(+d: U32) -> U32:
+  level_gap(level(d))
+
+# A comb's teeth lean up to 25 degrees, so the estate is not square to its
+# frame.
+def comb(+bx: Box, +d: U32, +r: U32, +ms: List<&2, Slot>) -> List<&2, Street>:
+  +long_u = Bool.not(slt(box_w(bx), box_h(bx)))
+  +span = Bool.pick(U32, long_u, box_h(bx), box_w(bx))
+  +a = sdiv(U32.mul(U32.sub(U32.mul(r, 2), 1024), 4589), 1024)
+  +s = sin14(a)
+  +lean = signed(is_neg(s), U32.div(U32.mul(sabs(s), span), cos14(a)))
+  Bool.pick(List<&2, Street>, long_u,
+    across(True{}, box_x0(bx), box_x1(bx), box_z0(bx), box_z1(bx), cross_gap(d), lean, ms),
+    across(False{}, box_z0(bx), box_z1(bx), box_x0(bx), box_x1(bx), cross_gap(d), lean, ms))
+
+def grid(+bx: Box, +d: U32, +ms: List<&2, Slot>) -> List<&2, Street>:
+  +g = cross_gap(d)
+  List.append(&2, Street,
+    across(True{}, box_x0(bx), box_x1(bx), box_z0(bx), box_z1(bx), U32.div(U32.mul(g, 6), 5), 0, ms),
+    across(False{}, box_z0(bx), box_z1(bx), box_x0(bx), box_x1(bx), U32.div(U32.mul(g, 7), 5), 0, ms))
+
+# ---- Rings ----------------------------------------------------------------------
+
+# A ring is as big as its court and a row of houses round it: alun-alun,
+# pasar, sekolah, gudang; the long side, else the short one.
+def ring_size(+court: U32, +long: Bool) -> U32:
+  Bool.pick(U32, U32.is_eq(court, 0), Bool.pick(U32, long, 15000, 12500),
+  Bool.pick(U32, U32.is_eq(court, 1), Bool.pick(U32, long, 11000, 9000),
+  Bool.pick(U32, U32.is_eq(court, 2), Bool.pick(U32, long, 12000, 9000), Bool.pick(U32, long, 12000, 9500))))
+
+# What is left beside a ring must be this wide to grow streets of its own.
+def ring_rest_cm() -> U32:
+  10000
+
+# The ring facing an entrance: centred on it along the road, the long side
+# along the road; where what is left is too thin for streets, the ring takes
+# it too.
+def ring_box(+m: Slot, +inner: Box, +court: U32) -> Box:
+  match inner:
+    case Box{+x0, +x1, +z0, +z1}:
+      +side = slot_side(m)
+      +at = slot_at(m)
+      +across = along_u(side)
+      +au = ring_size(court, across)
+      +av = ring_size(court, Bool.not(across))
+      +cu = Bool.pick(U32, across, clamp(U32.sub(at, U32.shrn(au, 1n)), x0, U32.sub(x1, au)),
+              Bool.pick(U32, U32.is_eq(side, 2), x0, U32.sub(x1, au)))
+      +cv = Bool.pick(U32, across, Bool.pick(U32, U32.is_eq(side, 0), z0, U32.sub(z1, av)),
+              clamp(U32.sub(at, U32.shrn(av, 1n)), z0, U32.sub(z1, av)))
+      +a0 = smax(x0, cu)
+      +a1 = smin(x1, U32.add(cu, au))
+      +b0 = smax(z0, cv)
+      +b1 = smin(z1, U32.add(cv, av))
+      +rest = ring_rest_cm()
+      Box{Bool.pick(U32, slt(U32.sub(a0, x0), rest), x0, a0), Bool.pick(U32, slt(U32.sub(x1, a1), rest), x1, a1),
+          Bool.pick(U32, slt(U32.sub(b0, z0), rest), z0, b0), Bool.pick(U32, slt(U32.sub(z1, b1), rest), z1, b1)}
+
+type Placing is Data:
+  Placing{found: Bool, ring: Box, entries: List<&2, Slot>}
+
+def placing_found(+p: Placing) -> Bool:
+  match p:
+    case Placing{found, ring, entries}:
+      found
+
+# The ring at the first entrance, most wanted first, that leaves it an
+# entrance of its own.
+def place_ring(xs: List<&2, Slot>, +seed: U32, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge, +inner: Box, +court: U32, +mu: U32, +mv: U32, +best: Placing) -> Placing:
+  match xs:
+    case Nil{}:
+      best
+    case Con{+m, r}:
+      +bx = ring_box(m, inner, court)
+      +e = entrances(seed, es, en, ew, ee, bx, inner, mu, mv)
+      +take = Bool.and(Bool.not(placing_found(best)), Bool.not(List.is_empty(&2, Slot, e)))
+      place_ring(r, seed, es, en, ew, ee, inner, court, mu, mv, Bool.pick(Placing, take, Placing{True{}, bx, pick_used(e)}, best))
+
+# Between a ring's lane and the streets beside it: two rows of lots.
+def ring_gap_cm() -> U32:
+  2600
+
+# What is left beside a ring: a strip along its open sides in u, then along
+# its open sides in v, between them.
+def rests_of(+ring: Box, +inner: Box) -> List<&2, Box>:
+  match ring:
+    case Box{+a0, +a1, +b0, +b1}:
+      match inner:
+        case Box{+x0, +x1, +z0, +z1}:
+          +g = ring_gap_cm()
+          +s = Bool.pick(List<&2, Box>, slt(z0, b0), [Box{a0, a1, z0, U32.sub(b0, g)}], [])
+          +n = Bool.pick(List<&2, Box>, slt(b1, z1), Box{a0, a1, U32.add(b1, g), z1} <> s, s)
+          +w = Bool.pick(List<&2, Box>, slt(x0, a0), Box{x0, U32.sub(a0, g), z0, z1} <> n, n)
+          Bool.pick(List<&2, Box>, slt(a1, x1), Box{U32.add(a1, g), x1, z0, z1} <> w, w)
+
+def rest_go(go: Bool, +c: Ctx, +used: List<&2, Slot>, +st: St) -> St:
+  match go:
+    case True{}:
+      grow_tree(c, st, used)
+    case False{}:
+      st
+
+# Each strip wide enough, with an entrance, grows its own tree.
+def grow_rests(rs: List<&2, Box>, +k: U32, +seed: U32, +i: U32, +j: U32, +u0: U32, +v0: U32, +d: U32, +outer: Box, +inner: Box, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge, +mu: U32, +mv: U32, +st: St) -> St:
+  match rs:
+    case Nil{}:
+      st
+    case Con{+rb, r}:
+      +e = entrances(seed, es, en, ew, ee, rb, inner, mu, mv)
+      +used = pick_used(e)
+      +c = {Ctx{seed, d, outer, rb, e, slot_head(used), hash6(seed, 20, i, j, u0, v0, U32.add(k, 1))} : Ctx}
+      grow_rests(r, U32.add(k, 1), seed, i, j, u0, v0, d, outer, inner, es, en, ew, ee, mu, mv,
+        rest_go(Bool.and(roomy(rb, 7000), Bool.not(List.is_empty(&2, Slot, e))), c, used, st))
+
+# ---- A block --------------------------------------------------------------------
+
+# What a block became (0 sawah, 1 kebun, 2 tree, 3 comb, 4 grid, 5 ring,
+# 6 shops), its court (4 for none) and ring lane, its streets and the
+# entrances they use, and how its tree streets end.
+type Fill is Data:
+  Fill{land: U32, court: U32, ring: Box, streets: List<&2, Street>, mouths: List<&2, Mouth>, linked: U32, bulb: U32, thru: U32}
+
+def fill_of(+land: U32, +court: U32, +ring: Box, +s: St) -> Fill:
+  match s:
+    case St{n, next, placed, joints, mouths, streets, linked, bulb, thru}:
+      Fill{land, court, ring, streets, mouths, linked, bulb, thru}
+
+def zero_box() -> Box:
+  Box{0, 0, 0, 0}
+
+def placing_fill(p: Placing, +court: U32, +seed: U32, +i: U32, +j: U32, +u0: U32, +v0: U32, +d: U32, +outer: Box, +inner: Box, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge, +mu: U32, +mv: U32) -> Fill:
+  match p:
+    case Placing{found, +ring, +entries}:
+      fill_of(5, court, ring, grow_rests(rests_of(ring, inner), 0, seed, i, j, u0, v0, d, outer, inner, es, en, ew, ee, mu, mv,
+        lane(outer, ring, entries, empty_st())))
+
+def land_fill(l: Land, +c: Ctx, +seed: U32, +i: U32, +j: U32, +u0: U32, +v0: U32, +d: U32, +r: U32, +outer: Box, +bx: Box, +cand: List<&2, Slot>, +used: List<&2, Slot>, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge, +mu: U32, +mv: U32) -> Fill:
+  match l:
+    case Tree{}:
+      fill_of(2, 4, zero_box(), grow_tree(c, empty_st(), used))
+    case Comb{}:
+      fill_of(3, 4, zero_box(), st_streets(lane(outer, bx, used, empty_st()), comb(bx, d, r, used)))
+    case Grid{}:
+      fill_of(4, 4, zero_box(), st_streets(lane(outer, bx, used, empty_st()), grid(bx, d, used)))
+    case Ring{}:
+      +court = court(d, roll(hash5(seed, 14, i, j, u0, v0)))
+      placing_fill(place_ring(cand, seed, es, en, ew, ee, bx, court, mu, mv, Placing{False{}, bx, used}),
+        court, seed, i, j, u0, v0, d, outer, bx, es, en, ew, ee, mu, mv)
+    case _:
+      fill_of(6, 4, zero_box(), empty_st())
+
+def built_fill(go: Bool, +l: U32, +seed: U32, +i: U32, +j: U32, +u0: U32, +v0: U32, +d: U32, +r: U32, +outer: Box, +bx: Box, +cand: List<&2, Slot>, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge, +mu: U32, +mv: U32) -> Fill:
+  match go:
+    case False{}:
+      fill_of(Bool.pick(U32, U32.is_lt(l, 2), l, 6), 4, zero_box(), empty_st())
+    case True{}:
+      +used = pick_used(cand)
+      +c = {Ctx{seed, d, outer, bx, cand, slot_head(used), hash6(seed, 20, i, j, u0, v0, 0)} : Ctx}
+      land_fill(land_of(d, r), c, seed, i, j, u0, v0, d, r, outer, bx, cand, used, es, en, ew, ee, mu, mv)
+
+# The frontage row on a main road is 35 m deep; a side with no road keeps 12 m.
+def inset(+e: Edge) -> U32:
+  Bool.pick(U32, edge_road(e), 3500, 1200)
+
+# Fill the block (u0..u1, v0..v1 in 65536ths) of cell (i, j), with the road,
+# or none, on each side of it. Sawah and kebun stay open; a block too small
+# for streets, or with no entrance, is shops along its roads.
+def block_fill(+seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge) -> Fill:
+  +f = frame_of(seed, i, j)
+  +mu = frame_mu(f)
+  +mv = frame_mv(f)
+  +outer = {Box{mul16(mu, u0), mul16(mu, u1), mul16(mv, v0), mul16(mv, v1)} : Box}
+  +mid = frame_at(f, U32.shrn(U32.add(u0, u1), 1n), U32.shrn(U32.add(v0, v1), 1n))
+  +d = density(seed, pt_x(mid), pt_z(mid))
+  +r = roll(hash5(seed, 11, i, j, u0, v0))
+  +l = land(d, r)
+  +bx = {Box{U32.add(box_x0(outer), inset(ew)), U32.sub(box_x1(outer), inset(ee)), U32.add(box_z0(outer), inset(es)), U32.sub(box_z1(outer), inset(en))} : Box}
+  +cand = entrances(seed, es, en, ew, ee, bx, bx, mu, mv)
+  built_fill(Bool.and(Bool.and(Bool.not(U32.is_lt(l, 2)), roomy(bx, 7000)), Bool.not(List.is_empty(&2, Slot, cand))),
+    l, seed, i, j, u0, v0, d, r, outer, bx, cand, es, en, ew, ee, mu, mv)
+

@@ -15,11 +15,10 @@
  *            round a civic court. Lokal streets reach a main road only at
  *            entrance slots both sides of it share.
  *
- * Layers 1 and 2, and the choice of what each block becomes, are
- * `logic/world.bend`, with their laws in `logic/PROOF_WORLD.bend`. The streets inside
- * a block are still TypeScript, until they are ported too.
+ * All three layers are `logic/world.bend`, with their laws in
+ * `logic/PROOF_WORLD.bend`. This file reads the model in metres and frames.
  */
-import W from "../world.mjs";
+import W, { type Edge as BendEdge, type List } from "../world.mjs";
 
 export interface Pt {
   x: number;
@@ -31,8 +30,6 @@ export type Dir = "E" | "S";
 /** A side of a cell or block, in the frame: v = 0 is south, u = 0 is west. */
 export type Side = "S" | "N" | "W" | "E";
 
-const SHOPS = 35; // depth of the frontage row on a main road
-const LOK_FLOOR = 20; // nearest two junctions on a lokal street
 export const RIVER_HALF = 14;
 
 /** Road classes. A line of kind 0 is a river. */
@@ -52,7 +49,7 @@ export interface Line {
   ring?: boolean;
   mouth?: boolean;
   cut?: "u" | "v";
-  cross?: "u" | "v";
+  cross?: boolean;
 }
 
 export interface Frame {
@@ -110,9 +107,9 @@ export interface Cell {
 }
 
 // ---- The model --------------------------------------------------------------
-// Layers 1 and 2 are logic/world.bend: the lattice, the roads, the frames, the
-// collectors, the entrance slots and what each block becomes. This file reads
-// them in metres and fractions. The model answers in signed centimetres,
+// All three layers are logic/world.bend: the lattice, the roads, the frames,
+// the collectors, the entrance slots, what each block becomes and the streets
+// inside it. This file reads them in metres and fractions. The model answers in signed centimetres,
 // positions along a road or across a frame in 65536ths, densities in 1024ths.
 
 const u32 = (n: number) => n >>> 0;
@@ -122,7 +119,7 @@ const q16 = (t: number) => Math.min(65536, Math.max(0, Math.round(t * 65536)));
 const toPt = (p: Pt) => pt(metres(p.x), metres(p.z));
 const east = (dir: Dir) => dir === "E";
 
-// ---- Determinism, for the layers still in TypeScript --------------------------
+// ---- Determinism, for the parcels -----------------------------------------------
 
 const mix32 = (a: number, b: number): number => {
   let h = Math.imul(a ^ Math.imul(b, 0x9e3779b1), 0x85ebca6b) >>> 0;
@@ -135,8 +132,6 @@ export const hash = (seed: number, ...xs: number[]): number =>
   xs.reduce((h, x) => mix32(h, (x | 0) >>> 0), seed >>> 0) / 4294967296;
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const pt = (x: number, z: number): Pt => ({ x, z });
-const mixp = (p: Pt, q: Pt, t: number) => pt(lerp(p.x, q.x, t), lerp(p.z, q.z, t));
-export const dist = (p: Pt, q: Pt) => Math.hypot(p.x - q.x, p.z - q.z);
 
 /** The density field, in [0, 1). */
 export const density = (seed: number, x: number, z: number): number =>
@@ -190,22 +185,6 @@ export function frame(seed: number, i: number, j: number): Frame {
     mv: f.mv / 100,
     line: (axis, at) => W.frame_line_length(f, axis === "u", q16(at)) / 100,
   };
-}
-
-// ---- Entrance slots -----------------------------------------------------------
-
-function slots(seed: number, key: number[], len: number, avoid: number[]): number[] {
-  const far = 0xffffffff;
-  const [a0 = -1, a1 = -1] = avoid;
-  const at = (a: number) => (a < 0 ? far : q16(a));
-  const out: number[] = [];
-  for (
-    let l = W.slots(seed, u32(key[0]!), u32(key[1]!), u32(key[2]!), cm(len), at(a0), at(a1));
-    l.$ === "Con";
-    l = l.tail
-  )
-    out.push(l.head / 65536);
-  return out;
 }
 
 const NONE: Edge = { road: false, key: [], len: 0, avoid: [], t0: 0, t1: 0 };
@@ -336,36 +315,34 @@ export function cell(seed: number, i: number, j: number): Cell {
   return { i, j, lines, blocks, mouths, frame: F };
 }
 
-/** A ring's size by its court, long side by short side, metres. */
-const RING: Record<Court, [number, number]> = {
-  alun: [150, 125],
-  pasar: [110, 90],
-  sekolah: [120, 90],
-  gudang: [120, 95],
-};
-/** What is left beside a ring must be this wide to grow streets of its own. */
-const RING_REST = 100;
-/** Between a ring's lane and the streets beside it: two rows of lots. */
-const RING_GAP = 26;
-const LAND: BlockType[] = ["sawah", "kebun", "tree", "comb", "grid", "ring"];
+const LANDS: BlockType[] = ["sawah", "kebun", "tree", "comb", "grid", "ring", "shops"];
 const COURTS: Court[] = ["alun", "pasar", "sekolah", "gudang"];
+const SIDES: Side[] = ["S", "N", "W", "E"];
 
 // ---- Layer 3: fill a block ----------------------------------------------------
+// The model answers in the block's metric frame, centimetres from the frame's
+// first corner along u and v. A point maps back through the frame, and a
+// straight run in the frame is drawn every 10 m or so, so it bends with it.
 
-interface Slot {
-  name: Side;
-  t: number;
-  use: number;
-  shared: number;
-  own: number;
-}
-interface Box {
-  ru0: number;
-  ru1: number;
-  rv0: number;
-  rv1: number;
-}
-type Straight = (u0: number, v0: number, u1: number, v1: number) => Pt[];
+const list = <T>(l: List<T>): T[] => {
+  const out: T[] = [];
+  for (; l.$ === "Con"; l = l.tail) out.push(l.head);
+  return out;
+};
+
+const far = 0xffffffff;
+const toEdge = (e: Edge): BendEdge => ({
+  $: "Edge",
+  road: e.road,
+  k0: u32(e.key[0] ?? 0),
+  k1: u32(e.key[1] ?? 0),
+  k2: u32(e.key[2] ?? 0),
+  len: cm(e.len),
+  a0: e.avoid[0] === undefined || e.avoid[0] < 0 ? far : q16(e.avoid[0]),
+  a1: e.avoid[1] === undefined || e.avoid[1] < 0 ? far : q16(e.avoid[1]),
+  t0: q16(e.t0),
+  t1: q16(e.t1),
+});
 
 function fill(
   seed: number,
@@ -377,524 +354,62 @@ function fill(
   mouths: Mouth[],
 ) {
   const c = F.at((blk.u0 + blk.u1) / 2, (blk.v0 + blk.v1) / 2);
-  const d = density(seed, c.x, c.z);
-  blk.d = d;
-  const roll = hash(seed, 11, i, j, Math.round(blk.u0 * 1000), Math.round(blk.v0 * 1000));
-  // Sawah alternates with kebun and kampung; a ring is a civic court.
-  blk.type = LAND[W.land(Math.round(d * 1024), Math.floor(roll * 1024))]!;
-  // The ring sits behind the shops on a road side, and 12 m in from a side
-  // without one.
-  const inset = (e: Edge) => (e.road ? SHOPS : 12);
-  const ru0 = blk.u0 + inset(blk.edges.W) / F.mu;
-  const ru1 = blk.u1 - inset(blk.edges.E) / F.mu;
-  const rv0 = blk.v0 + inset(blk.edges.S) / F.mv;
-  const rv1 = blk.v1 - inset(blk.edges.N) / F.mv;
-  const open = blk.type === "sawah" || blk.type === "kebun";
-  if (open || (ru1 - ru0) * F.mu < 70 || (rv1 - rv0) * F.mv < 70) {
-    if (!open) blk.type = "shops";
-    return;
+  blk.d = density(seed, c.x, c.z);
+  const e = blk.edges;
+  const r = W.block_fill(
+    seed,
+    u32(i),
+    u32(j),
+    q16(blk.u0),
+    q16(blk.u1),
+    q16(blk.v0),
+    q16(blk.v1),
+    toEdge(e.S),
+    toEdge(e.N),
+    toEdge(e.W),
+    toEdge(e.E),
+  );
+  blk.type = LANDS[r.land]!;
+  const fu = (x: number) => metres(x) / F.mu;
+  const fv = (z: number) => metres(z) / F.mv;
+  if (r.court < 4) {
+    blk.court = COURTS[r.court]!;
+    blk.inner = { ru0: fu(r.ring.x0), ru1: fu(r.ring.x1), rv0: fv(r.ring.z0), rv1: fv(r.ring.z1) };
   }
-  const box: Box = { ru0, ru1, rv0, rv1 };
-  // The entrances into a rectangle of the block: slots on each road side it
-  // reaches that fall inside its span, each with the rolls both sides of the
-  // road share. Sorted, most wanted first.
-  const touches = (bx: Box, name: Side) =>
-    name === "S"
-      ? bx.rv0 === rv0
-      : name === "N"
-        ? bx.rv1 === rv1
-        : name === "W"
-          ? bx.ru0 === ru0
-          : bx.ru1 === ru1;
-  const entrances = (bx: Box): Slot[] => {
-    const out: Slot[] = [];
-    for (const name of Object.keys(blk.edges) as Side[]) {
-      const e = blk.edges[name];
-      if (!e.road || !touches(bx, name)) continue;
-      const span = name === "S" || name === "N" ? [bx.ru0, bx.ru1] : [bx.rv0, bx.rv1];
-      for (const t of slots(seed, e.key, e.len, e.avoid)) {
-        if (
-          t < e.t0 ||
-          t > e.t1 ||
-          t < span[0]! + LOK_FLOOR / e.len ||
-          t > span[1]! - LOK_FLOOR / e.len
-        )
-          continue;
-        const shared = hash(seed, 13, ...e.key, Math.round(t * 1e4));
-        const own = hash(
-          seed,
-          12,
-          ...e.key,
-          Math.round(t * 1e4),
-          name === "S" || name === "W" ? 1 : 0,
-        );
-        out.push({ name, t, use: Math.min(shared, own), shared, own });
-      }
+  if (blk.type === "tree" || blk.type === "ring")
+    blk.tips = { linked: r.linked, bulb: r.bulb, through: r.thru };
+  for (const st of list(r.streets)) {
+    const uv = list(st.pts).map((p) => [fu(p.x), fv(p.z)] as const);
+    const pts: Pt[] = [F.at(uv[0]![0], uv[0]![1])];
+    for (let k = 1; k < uv.length; k++) {
+      const [u0, v0] = uv[k - 1]!;
+      const [u1, v1] = uv[k]!;
+      const n = Math.max(1, Math.ceil(Math.hypot((u1 - u0) * F.mu, (v1 - v0) * F.mv) / 10));
+      for (let s = 1; s <= n; s++) pts.push(F.at(lerp(u0, u1, s / n), lerp(v0, v1, s / n)));
     }
-    return out.sort((x, y) => x.use - y.use);
-  };
-  // A slot both sides like (the shared roll) becomes a crossing of the road.
-  const pickUsed = (c: Slot[]) => c.filter((s, k) => k === 0 || s.shared < 0.3 || s.own < 0.22);
-  const cand = entrances(box);
-  if (!cand.length) {
-    blk.type = "shops";
-    return;
-  }
-  const used = pickUsed(cand);
-  // A straight line in the frame, drawn every 10 m or so on the ground.
-  const seg: Straight = (u0, v0, u1, v1) => {
-    const n = Math.max(4, Math.ceil(Math.hypot((u1 - u0) * F.mu, (v1 - v0) * F.mv) / 10));
-    return Array.from({ length: n + 1 }, (_, k) => F.at(lerp(u0, u1, k / n), lerp(v0, v1, k / n)));
-  };
-  if (blk.type === "tree")
-    return growTree(seed, i, j, F, blk, line, mouths, used, d, box, seg, cand, 0);
-
-  // A lane round a rectangle, and a mouth from each entrance to it.
-  const onRing: { axis: "u" | "v"; t: number }[] = []; // where streets meet the lane
-  const lane = (bx: Box, entries: Slot[]) => {
     line(
       LOK,
-      [
-        ...seg(bx.ru0, bx.rv0, bx.ru1, bx.rv0),
-        ...seg(bx.ru1, bx.rv0, bx.ru1, bx.rv1).slice(1),
-        ...seg(bx.ru1, bx.rv1, bx.ru0, bx.rv1).slice(1),
-        ...seg(bx.ru0, bx.rv1, bx.ru0, bx.rv0).slice(1),
-      ],
-      { ring: true },
+      pts,
+      st.tag === 0
+        ? { tree: true, ...(st.bulb ? { bulb: pts[pts.length - 1]! } : {}) }
+        : st.tag === 1
+          ? { ring: true }
+          : st.tag === 2
+            ? { mouth: true }
+            : { cross: true },
     );
-    for (const m of entries) {
-      const t = m.t;
-      const [a, b]: number[][] =
-        m.name === "S"
-          ? [
-              [t, blk.v0],
-              [t, bx.rv0],
-            ]
-          : m.name === "N"
-            ? [
-                [t, blk.v1],
-                [t, bx.rv1],
-              ]
-            : m.name === "W"
-              ? [
-                  [blk.u0, t],
-                  [bx.ru0, t],
-                ]
-              : [
-                  [blk.u1, t],
-                  [bx.ru1, t],
-                ];
-      line(LOK, seg(a![0]!, a![1]!, b![0]!, b![1]!), { mouth: true });
-      mouths.push({
-        side: m.name,
-        key: blk.edges[m.name].key.join(","),
-        t,
-        at: F.at(a![0]!, a![1]!),
-      });
-      onRing.push({ axis: m.name === "S" || m.name === "N" ? "u" : "v", t });
-    }
-  };
-
-  if (blk.type === "ring") {
-    // A ring is as big as its court and a row of houses round it. It faces
-    // the road at the block's most wanted entrance, centred on it; the rest of
-    // the block grows its own tree of streets.
-    const r2 = hash(seed, 14, i, j, Math.round(blk.u0 * 1000), Math.round(blk.v0 * 1000));
-    blk.court = COURTS[W.court(Math.round(d * 1024), Math.floor(r2 * 1024))]!;
-    const [long, short] = RING[blk.court];
-    let ring: Box = box;
-    let entries = used;
-    for (const m of cand) {
-      const across = m.name === "S" || m.name === "N";
-      // Along the road the long side, inward the short one.
-      const au = (across ? long : short) / F.mu;
-      const av = (across ? short : long) / F.mv;
-      const cu = across
-        ? Math.min(Math.max(m.t - au / 2, ru0), ru1 - au)
-        : m.name === "W"
-          ? ru0
-          : ru1 - au;
-      const cv = across
-        ? m.name === "S"
-          ? rv0
-          : rv1 - av
-        : Math.min(Math.max(m.t - av / 2, rv0), rv1 - av);
-      const bx: Box = {
-        ru0: Math.max(ru0, cu),
-        ru1: Math.min(ru1, cu + au),
-        rv0: Math.max(rv0, cv),
-        rv1: Math.min(rv1, cv + av),
-      };
-      // Where what is left is too thin to hold streets, the ring takes it too.
-      if ((bx.ru0 - ru0) * F.mu < RING_REST) bx.ru0 = ru0;
-      if ((ru1 - bx.ru1) * F.mu < RING_REST) bx.ru1 = ru1;
-      if ((bx.rv0 - rv0) * F.mv < RING_REST) bx.rv0 = rv0;
-      if ((rv1 - bx.rv1) * F.mv < RING_REST) bx.rv1 = rv1;
-      const e = entrances(bx);
-      if (!e.length) continue;
-      ring = bx;
-      entries = pickUsed(e);
-      break;
-    }
-    lane(ring, entries);
-    blk.inner = ring;
-    // What is left: a strip along the ring's open u side, then one along its
-    // open v side, each its own tree.
-    const rests: Box[] = [];
-    const gu = RING_GAP / F.mu;
-    const gv = RING_GAP / F.mv;
-    if (ring.ru1 < ru1) rests.push({ ru0: ring.ru1 + gu, ru1, rv0, rv1 });
-    if (ring.ru0 > ru0) rests.push({ ru0, ru1: ring.ru0 - gu, rv0, rv1 });
-    if (ring.rv1 < rv1) rests.push({ ru0: ring.ru0, ru1: ring.ru1, rv0: ring.rv1 + gv, rv1 });
-    if (ring.rv0 > rv0) rests.push({ ru0: ring.ru0, ru1: ring.ru1, rv0, rv1: ring.rv0 - gv });
-    rests.forEach((rest, k) => {
-      if ((rest.ru1 - rest.ru0) * F.mu < 70 || (rest.rv1 - rest.rv0) * F.mv < 70) return;
-      const e = entrances(rest);
-      if (e.length) growTree(seed, i, j, F, blk, line, mouths, pickUsed(e), d, rest, seg, e, k + 1);
-    });
-    return;
   }
-
-  lane(box, used);
-  // Streets across the ring: a comb one way, a grid both. They keep the lokal
-  // floor from every entrance on the ring. A comb's teeth lean, up to 25
-  // degrees, so the estate is not square to its frame; `lean` is how far a
-  // tooth's far end moves, in the frame.
-  const across = (
-    axis: "u" | "v",
-    lo: number,
-    hi: number,
-    metres: number,
-    gap: number,
-    lean = 0,
-  ) => {
-    const n = Math.floor(((hi - lo) * metres) / gap);
-    for (let k = 1; k < n; k++) {
-      const t = lerp(lo, hi, k / n);
-      const a = t - lean / 2;
-      const b = t + lean / 2;
-      if (Math.min(a, b) < lo + LOK_FLOOR / metres || Math.max(a, b) > hi - LOK_FLOOR / metres)
-        continue;
-      if (
-        onRing.some(
-          (o) =>
-            o.axis === axis &&
-            Math.min(Math.abs(o.t - a), Math.abs(o.t - b)) * metres < 1.5 * LOK_FLOOR,
-        )
-      )
-        continue;
-      line(LOK, axis === "u" ? seg(a, rv0, b, rv1) : seg(ru0, a, ru1, b), { cross: axis });
-    }
-  };
-  const gap = lerp(85, 55, d);
-  const longU = (ru1 - ru0) * F.mu >= (rv1 - rv0) * F.mv;
-  if (blk.type === "comb") {
-    const span = longU ? (rv1 - rv0) * F.mv : (ru1 - ru0) * F.mu;
-    const lean = (Math.tan((roll * 2 - 1) * 0.44) * span) / (longU ? F.mu : F.mv);
-    across(longU ? "u" : "v", longU ? ru0 : rv0, longU ? ru1 : rv1, longU ? F.mu : F.mv, gap, lean);
+  for (const m of list(r.mouths)) {
+    const side = SIDES[m.side]!;
+    const t = m.t / 65536;
+    const at =
+      side === "S"
+        ? F.at(t, blk.v0)
+        : side === "N"
+          ? F.at(t, blk.v1)
+          : side === "W"
+            ? F.at(blk.u0, t)
+            : F.at(blk.u1, t);
+    mouths.push({ side, key: e[side].key.join(","), t, at });
   }
-  if (blk.type === "grid") {
-    across("u", ru0, ru1, F.mu, gap * 1.2);
-    across("v", rv0, rv1, F.mv, gap * 1.4);
-  }
-}
-
-// ---- A tree -----------------------------------------------------------------
-// A trunk from each entrance, and branches that leave it at an angle, wander,
-// and branch again. Growth stops where a street would come within two lot
-// depths of another, or leave the block's inner rectangle. A tip that stops
-// near another street links to it, a T, when the link is short; otherwise it
-// ends in a turning circle, so a car can always turn round. Everything is a
-// function of the block, so the cell stays independent of its neighbours.
-const CLEAR = 26; // two rows of lots between streets
-const STEP = 6;
-const OPP: Record<Side, Side> = { S: "N", N: "S", W: "E", E: "W" };
-
-interface Placed {
-  u: number;
-  v: number;
-  p: Pt;
-  id: number;
-}
-
-function growTree(
-  seed: number,
-  i: number,
-  j: number,
-  F: Frame,
-  blk: Block,
-  line: AddLine,
-  mouths: Mouth[],
-  used: Slot[],
-  d: number,
-  box: Box,
-  seg: Straight,
-  cand: Slot[],
-  salt: number,
-) {
-  let state =
-    (hash(seed, 20, i, j, Math.round(blk.u0 * 1e4), Math.round(blk.v0 * 1e4), salt) *
-      4294967296) >>>
-    0;
-  const R = () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const between = (a: number, b: number) => a + (b - a) * R();
-  const placed: Placed[] = [];
-  const inBox = (u: number, v: number) => u > box.ru0 && u < box.ru1 && v > box.rv0 && v < box.rv1;
-  // The nearest other street point, ignoring the branch itself and the
-  // stretch of its parent it left from.
-  const nearest = (p: Pt, id: number, skip: (q: Placed) => boolean) => {
-    let best: { d: number; q: Placed } | null = null;
-    for (const q of placed) {
-      if (q.id === id || skip(q)) continue;
-      const dd = dist(p, q.p);
-      if (!best || dd < best.d) best = { d: dd, q };
-    }
-    return best;
-  };
-  let nextId = 0;
-  // Every junction made so far, so a new one keeps the lokal floor from them.
-  const joints: Pt[] = [];
-  const roomAt = (p: Pt) => joints.every((q) => dist(p, q) >= LOK_FLOOR * 1.2);
-  const tips = { linked: 0, bulb: 0, through: 0 };
-
-  // Where a slot's street leaves the frontage, and which way it faces inward.
-  const entry = (m: Slot) => {
-    const [u, v, h] =
-      m.name === "S"
-        ? [m.t, blk.v0, Math.PI / 2]
-        : m.name === "N"
-          ? [m.t, blk.v1, -Math.PI / 2]
-          : m.name === "W"
-            ? [blk.u0, m.t, 0]
-            : [blk.u1, m.t, Math.PI];
-    const [eu, ev] =
-      m.name === "S"
-        ? [u, box.rv0]
-        : m.name === "N"
-          ? [u, box.rv1]
-          : m.name === "W"
-            ? [box.ru0, v]
-            : [box.ru1, v];
-    return { u, v, h, eu, ev };
-  };
-  // The entrance itself runs straight through the frontage.
-  const open = (m: Slot) => {
-    const e = entry(m);
-    const mouthPts = seg(e.u, e.v, e.eu, e.ev);
-    line(LOK, mouthPts, { mouth: true });
-    mouths.push({ side: m.name, key: blk.edges[m.name].key.join(","), t: m.t, at: F.at(e.u, e.v) });
-    joints.push(mouthPts[mouthPts.length - 1]!);
-  };
-  // A slot no street uses yet, within 260 m and 50 degrees of a heading.
-  const freeSlotAhead = (q: Placed, h: number): Slot | null => {
-    let best: { c: Slot; dd: number } | null = null;
-    for (const c of cand) {
-      if (mouths.some((o) => o.side === c.name && Math.abs(o.t - c.t) < 1e-9)) continue;
-      const e = entry(c);
-      const du = (e.eu - q.u) * F.mu;
-      const dv = (e.ev - q.v) * F.mv;
-      const dd = Math.hypot(du, dv);
-      let off = Math.atan2(dv, du) - h;
-      off = Math.abs(Math.atan2(Math.sin(off), Math.cos(off)));
-      if (dd < 260 && off < 0.87 && roomAt(F.at(e.eu, e.ev)) && (!best || dd < best.dd))
-        best = { c, dd };
-    }
-    return best ? best.c : null;
-  };
-
-  // Grow one street from (u, v) heading `h` (radians in the metric frame).
-  // With a `target`, the street steers for it and ends there: a trunk that
-  // runs through the block from one big road to another.
-  function grow(
-    u: number,
-    v: number,
-    h: number,
-    maxLen: number,
-    depth: number,
-    parent: number,
-    from: Pt,
-    target: { u: number; v: number } | null = null,
-  ): number | null {
-    const id = nextId++;
-    const path: Placed[] = [{ u, v, p: F.at(u, v), id }];
-    let turn = 0;
-    let end: "bulb" | "through" | "link" = "bulb";
-    let linkTo: Placed | null = null;
-    let atEdge = false;
-    const skip = (q: Placed) => q.id === parent && dist(q.p, from) < CLEAR * 1.5;
-    for (let s = 0; s < maxLen; s += STEP) {
-      turn = turn * 0.8 + (R() - 0.5) * 0.07;
-      h += turn;
-      if (target) {
-        const du = (target.u - u) * F.mu;
-        const dv = (target.v - v) * F.mv;
-        if (Math.hypot(du, dv) < STEP * 1.5) {
-          path.push({ u: target.u, v: target.v, p: F.at(target.u, target.v), id });
-          end = "through";
-          break;
-        }
-        // Turn towards it, at most a few degrees a step, harder as it nears.
-        let want = Math.atan2(dv, du) - h;
-        want = Math.atan2(Math.sin(want), Math.cos(want));
-        h += Math.max(-0.12, Math.min(0.12, want * (s > 40 ? 0.35 : 0.1)));
-      }
-      const nu = u + (Math.cos(h) * STEP) / F.mu;
-      const nv = v + (Math.sin(h) * STEP) / F.mv;
-      if (!inBox(nu, nv) && s > CLEAR) {
-        atEdge = true;
-        break;
-      }
-      const p = F.at(nu, nv);
-      const hit = nearest(p, id, skip);
-      if (hit && hit.d < CLEAR) break;
-      u = nu;
-      v = nv;
-      path.push({ u, v, p, id });
-    }
-    const len = (path.length - 1) * STEP;
-    if (len < 30 || (target && end !== "through")) {
-      nextId--;
-      return null;
-    }
-    // Wherever it stopped, a tip with another street a short way ahead, and
-    // a clear way to it, links to it, so the tree has loops.
-    const tip = path[path.length - 1]!.p;
-    const near = nearest(tip, id, (q) => skip(q) || q.id === parent);
-    // A link goes on ahead, not back, and never to the branch it grew from,
-    // which would close a loop too small to hold a house.
-    const back = path[Math.max(0, path.length - 4)]!.p;
-    // At the back of the shops a street turns along them, a back lane, so
-    // there a link may run sideways and further.
-    const cosMin = atEdge ? 0 : 0.5;
-    const ahead = (q: Placed) =>
-      (tip.x - back.x) * (q.p.x - tip.x) + (tip.z - back.z) * (q.p.z - tip.z) >
-      cosMin * dist(tip, back) * dist(tip, q.p);
-    // Most streets lead on to another: a trunk nearly always, a branch more
-    // often than not, a twig a little less.
-    const linkP = depth === 1 ? 0.95 : depth === 2 ? 0.7 : 0.5;
-    if (
-      end !== "through" &&
-      near &&
-      near.d < (atEdge ? 80 : 60) &&
-      ahead(near.q) &&
-      roomAt(near.q.p) &&
-      R() < linkP
-    ) {
-      const crossing = placed.some(
-        (q) =>
-          q.id !== near.q.id && q.id !== id && dist(q.p, mixp(tip, near.q.p, 0.5)) < near.d / 2 - 2,
-      );
-      if (!crossing) {
-        linkTo = near.q;
-        end = "link";
-        joints.push(near.q.p);
-      }
-    }
-    for (const q of path) placed.push({ ...q, id });
-    const pts = path.map((q) => q.p);
-    if (linkTo) pts.push(linkTo.p);
-    line(LOK, pts, end === "bulb" ? { tree: true, bulb: pts[pts.length - 1]! } : { tree: true });
-    tips[end === "bulb" ? "bulb" : end === "through" ? "through" : "linked"]++;
-    // Branches leave at 60 to 100 degrees, every 45 to 80 m, on alternating
-    // sides, and now and then on both sides at once: a crossing.
-    if (depth < 3) {
-      let side = R() < 0.5 ? 1 : -1;
-      const every = lerp(80, 45, d);
-      for (
-        let at = between(0.6, 1.0) * every;
-        at < len - LOK_FLOOR;
-        at += between(0.8, 1.2) * every
-      ) {
-        const k = Math.round(at / STEP);
-        const q = path[k]!;
-        const q1 = path[Math.min(k + 1, path.length - 1)]!;
-        const hh = Math.atan2((q1.v - q.v) * F.mv, (q1.u - q.u) * F.mu);
-        if (!roomAt(q.p)) continue;
-        joints.push(q.p);
-        // Twigs are fewer than branches.
-        if (depth === 2 && R() < 0.6) {
-          side = -side;
-          continue;
-        }
-        const sides = R() < 0.15 ? [1, -1] : [side];
-        for (const sd of sides) {
-          const hb = hh + sd * between(1.05, 1.75);
-          // A branch that points at a free entrance on a big road steers for
-          // it, and becomes another way out of the block.
-          const x = depth === 1 ? freeSlotAhead(q, hb) : null;
-          if (x) {
-            const b = entry(x);
-            if (grow(q.u, q.v, hb, 600, depth + 1, id, q.p, { u: b.eu, v: b.ev }) !== null) {
-              open(x);
-              continue;
-            }
-          }
-          grow(q.u, q.v, hb, between(150, 320) / Math.sqrt(depth), depth + 1, id, q.p);
-        }
-        side = -side;
-      }
-    }
-    return id;
-  }
-
-  // The first entrance's trunk runs through to a slot on another big road,
-  // the opposite one if it can, so the tree is also a way through.
-  const first = used[0]!;
-  const exits = cand
-    .filter((c) => c.name !== first.name)
-    .sort(
-      (a, b) =>
-        (a.name === OPP[first.name] ? 0 : 1) - (b.name === OPP[first.name] ? 0 : 1) ||
-        a.use - b.use,
-    );
-  let through = false;
-  for (const x of exits.slice(0, 3)) {
-    const a = entry(first);
-    const b = entry(x);
-    const trunk = grow(a.eu, a.ev, a.h, 1200, 1, -1, F.at(a.eu, a.ev), { u: b.eu, v: b.ev });
-    if (trunk === null) continue;
-    open(first);
-    open(x);
-    through = true;
-    break;
-  }
-  // The other entrances grow trunks that, nearly always, join a street.
-  const rest = used.filter(
-    (m) =>
-      m !== first &&
-      (!through ||
-        !exits
-          .slice(0, 3)
-          .some((x) => x === m && mouths.some((o) => o.t === m.t && o.side === m.name))),
-  );
-  for (const m of through ? rest : used) {
-    if (
-      mouths.some(
-        (o) => o.t === m.t && o.side === m.name && o.key === blk.edges[m.name].key.join(","),
-      )
-    )
-      continue;
-    const e = entry(m);
-    const trunk = grow(
-      e.eu,
-      e.ev,
-      e.h + between(-0.3, 0.3),
-      between(260, 480),
-      1,
-      -1,
-      F.at(e.eu, e.ev),
-    );
-    if (trunk !== null) open(m);
-  }
-  if (blk.tips) {
-    blk.tips.linked += tips.linked;
-    blk.tips.bulb += tips.bulb;
-    blk.tips.through += tips.through;
-  } else blk.tips = tips;
 }
