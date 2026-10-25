@@ -101,7 +101,7 @@ Speed, lanes, lane changes, the gap to the car ahead and the verdict belong to
 proves both, and the TypeScript in `src/` reads the result and draws it.
 
 A crash ends the run: the panel lists each rule broken with its article and its
-fine, or says that no rule was broken.
+fine, or says that no article was broken.
 
 `town.html` lays the model out instead of driving it: a warped lattice of
 streets, framed whole. Geometry decides each junction's shape and duty, because
@@ -117,7 +117,7 @@ the town again, and the toon looks, with the knobs that tune them.
 `bend/rules.bend` holds three things:
 
 - **Scenario.** Six records — road, load, equipment, motion, priority, papers —
-  plus a sign act: the posted duty and the actions a sign rule reads.
+  plus an act: the posted duty, the manoeuvre, and the facts a single rule reads.
 - **Catalogue.** One entry per rule, each carrying `tier`, `months`, `days`,
   `fine`, the article that imposes the duty and the article that punishes
   breaking it.

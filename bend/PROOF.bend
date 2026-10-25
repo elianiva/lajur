@@ -416,6 +416,38 @@ def Laws.let_the_priority_vehicle_through(b):
     case False{}:
       {==}
 
+def Laws.a_motorcycle_keeps_the_left_lane(s):
+  match s:
+    case R.LaneLeft{}:
+      {==}
+    case R.LaneRight{}:
+      {==}
+
+def Laws.a_goods_vehicle_keeps_the_left_lane(s):
+  match s:
+    case R.LaneLeft{}:
+      {==}
+    case R.LaneRight{}:
+      {==}
+
+def Laws.a_slow_vehicle_keeps_out_of_the_right_lane(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.the_right_lane_serves_a_pass_or_a_turn(t):
+  match t:
+    case R.NoTurn{}:
+      {==}
+    case R.TurnLeft{}:
+      {==}
+    case R.TurnRight{}:
+      {==}
+    case R.TurnBack{}:
+      {==}
+
 def Laws.helmet_costs_one_month_and_250000():
   {==}
 
@@ -443,7 +475,7 @@ def Laws.leaving_a_crash_costs_three_years_and_75000000():
 def Laws.bike_lights_by_day_cost_fifteen_days_and_100000():
   {==}
 
-def Laws.the_catalogue_has_fifty_rules():
+def Laws.every_rule_has_its_own_id():
   {==}
 
 def Laws.eight_instruments_are_modelled():

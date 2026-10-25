@@ -260,6 +260,26 @@ law let_the_priority_vehicle_through:
   for b: Bool
   { R.contains(50, R.charges(R.with_emergency(True{}, b))) == Bool.not(b) : Bool }
 
+# Pasal 108 ayat (3): a motorcycle, a goods vehicle and a non-motorised vehicle
+# belong in the left lane, even when they are moving faster than the traffic.
+law a_motorcycle_keeps_the_left_lane:
+  for s: R.Lane
+  { R.contains(51, R.charges(R.in_lane(R.load_motorcycle(0), s, True{}, R.NoTurn{}))) == R.lane_is_right(s) : Bool }
+
+law a_goods_vehicle_keeps_the_left_lane:
+  for s: R.Lane
+  { R.contains(51, R.charges(R.in_lane(R.load_vehicle(R.Truck{}), s, True{}, R.NoTurn{}))) == R.lane_is_right(s) : Bool }
+
+# Pasal 108 ayat (4): the right lane serves a pass, a right turn or a U-turn,
+# and otherwise only a vehicle moving faster than the traffic beside it.
+law a_slow_vehicle_keeps_out_of_the_right_lane:
+  for b: Bool
+  { R.contains(52, R.charges(R.in_lane(R.load_vehicle(R.Car{}), R.LaneRight{}, b, R.NoTurn{}))) == Bool.not(b) : Bool }
+
+law the_right_lane_serves_a_pass_or_a_turn:
+  for t: R.Turn
+  { R.contains(52, R.charges(R.in_lane(R.load_vehicle(R.Car{}), R.LaneRight{}, False{}, t))) == Bool.not(R.right_lane_ground(False{}, t)) : Bool }
+
 # The penalties, as the statute states them.
 law helmet_costs_one_month_and_250000:
   { Bool.and(U32.is_eq(R.months_of(12), 1), U32.is_eq(R.fine_of(12), 250000)) == True{} : Bool }
@@ -292,8 +312,8 @@ law bike_lights_by_day_cost_fifteen_days_and_100000:
 # The catalogue itself
 # ===========================================================================
 
-law the_catalogue_has_fifty_rules:
-  { R.rule_count() == 50n : Nat }
+law every_rule_has_its_own_id:
+  { R.ids_contiguous() == True{} : Bool }
 
 law eight_instruments_are_modelled:
   { M.instrument_count() == 8 : U32 }

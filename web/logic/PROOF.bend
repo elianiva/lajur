@@ -270,6 +270,29 @@ law the_start_is_legal:
 def the_start_is_legal():
   {==}
 
+# Pasal 108 ayat (4): the start sits in the right lane because it is moving
+# faster than the car beside it, and the same player outrun by that car is
+# charged. The kerb lane asks nothing of the article.
+law the_start_holds_the_right_lane_lawfully:
+  { R.contains(52, R.charges(G.scenario_among(G.player_of(G.start()), G.traffic_of(G.start())))) == False{} : Bool }
+
+def the_start_holds_the_right_lane_lawfully():
+  {==}
+
+law a_slow_player_in_the_right_lane_is_charged:
+  { R.contains(52, R.charges(G.scenario_among(G.cruising(1000),
+      [ G.Car{1, G.Outer{}, 3000, 1400, G.Sedan{}, 0} ]))) == True{} : Bool }
+
+def a_slow_player_in_the_right_lane_is_charged():
+  {==}
+
+law the_kerb_lane_asks_nothing_of_pasal_108:
+  { G.spread(R.charges(G.scenario_among(G.Player{G.Outer{}, 1000, G.Off{}, 0, 0, G.Outer{}},
+      [ G.Car{1, G.Inner{}, 3000, 1400, G.Sedan{}, 0} ]))) == Nil{} : List<&2, U32> }
+
+def the_kerb_lane_asks_nothing_of_pasal_108():
+  {==}
+
 # ===========================================================================
 # Traffic: a car in the lane, inside the envelope, is a crash
 # ===========================================================================

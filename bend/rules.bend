@@ -71,12 +71,20 @@ type Turn is Data:
   TurnRight{}
   TurnBack{}
 
-type SignAct is Data:
-  SignAct{sign: M.Duty, turn: Turn, parking: Bool, lane_ok: Bool, chains: Bool,
-          following_m: U32, v_width: U32, v_length: U32, v_height: U32, v_axle: U32}
+# Which of the lanes in the direction of travel, Pasal 108 ayat (3) and (4).
+type Lane is Data:
+  LaneLeft{}
+  LaneRight{}
+
+# The act: the posted duty, the manoeuvre, and the facts a single rule reads
+# that the six records do not carry.
+type Act is Data:
+  Act{sign: M.Duty, turn: Turn, parking: Bool, lane_ok: Bool, chains: Bool,
+      following_m: U32, v_width: U32, v_length: U32, v_height: U32, v_axle: U32,
+      lane: Lane, faster: Bool}
 
 type Scenario is Data:
-  Scenario{road: Road, load: Payload, gear: Equipment, move: Motion, yield: Priority, docs: Papers, act: SignAct}
+  Scenario{road: Road, load: Payload, gear: Equipment, move: Motion, yield: Priority, docs: Papers, act: Act}
 
 # ---------------------------------------------------------------------------
 # Rule catalogue
@@ -145,6 +153,9 @@ def catalogue() -> List<Rule>:
   , Rule{48, General{}, 6, 0, 1500000, 189, 0, 309, 0}
   , Rule{49, General{}, 6, 0, 1500000, 237, 2, 313, 0}
   , Rule{50, General{}, 1, 0, 250000, 134, 0, 287, 4}
+    # 51-52: the lane within the direction of travel
+  , Rule{51, General{}, 0, 0, 0, 108, 3, 0, 0}
+  , Rule{52, General{}, 0, 0, 0, 108, 4, 0, 0}
   ]
 
 # ---------------------------------------------------------------------------
@@ -301,6 +312,32 @@ def turn_is_straight(t: Turn) -> Bool:
     case _:
       False{}
 
+def lane_is_right(l: Lane) -> Bool:
+  match l:
+    case LaneLeft{}:
+      False{}
+    case LaneRight{}:
+      True{}
+
+# Pasal 108 ayat (3): the classes the article names as belonging to the left
+# lane. A bus is slow too, but the article does not name it.
+def keeps_left(v: Vehicle) -> Bool:
+  match v:
+    case Motorcycle{}:
+      True{}
+    case Truck{}:
+      True{}
+    case Bicycle{}:
+      True{}
+    case Car{}:
+      False{}
+    case Bus{}:
+      False{}
+
+# Pasal 108 ayat (4): the right lane serves a pass, a right turn or a U-turn.
+def right_lane_ground(overtaking: Bool, +t: Turn) -> Bool:
+  Bool.or(overtaking, Bool.or(turn_is_right(t), turn_is_back(t)))
+
 def over_tonnes_if(zero: Bool, limit: U32, kg: U32) -> Bool:
   match zero:
     case True{}:
@@ -410,10 +447,10 @@ def subject_banned(+v: Vehicle, subjects: List<&2, M.Subject>) -> Bool:
 def lane_violation(v: Vehicle, s: M.Subject, ok: Bool) -> Bool:
   Bool.and(subject_bans_one(v, s), Bool.not(ok))
 
-def sign_violated(act: SignAct, side: Side, speed: U32, overtaking: Bool, stopping: Bool,
+def sign_violated(act: Act, side: Side, speed: U32, overtaking: Bool, stopping: Bool,
                   emergency_stop: Bool, yields_right: Bool, vehicle: Vehicle, weight: U32) -> Bool:
   match act:
-    case SignAct{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle}:
+    case Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle, +lane, +faster}:
       match sign:
         case M.NoDuty{}:
           False{}
@@ -602,12 +639,31 @@ def charges_service(s: Scenario) -> List<U32>:
         Bool.and(emergency_vehicle, Bool.not(yields_to_emergency)),
       ], 41)
 
+# ---------------------------------------------------------------------------
+# 51-52: which lane within the direction of travel, Pasal 108 ayat (3) and (4).
+# A right turn, a U-turn and a pass are the grounds the article allows; the
+# lane is charged only when none of them is why the vehicle is there.
+# ---------------------------------------------------------------------------
+def charges_position(s: Scenario) -> List<U32>:
+  match s:
+    case Scenario{road, load, gear, move, yield, docs, act}:
+      Payload{+vehicle, +weight, +cc, +passengers, +sidecar, +overloaded, +carries_people_in_truck, +special_goods, +special_goods_ok} = load
+      Motion{+speed, +overtaking, +overtake_side, +front_signals_right, +turning, +indicates_turn, +changing_lane, +indicates_lane, +racing, +slowing, +indicates_slow, +stopping, +parked_ok, +emergency_stop, +emergency_sign, +leaves_accident, +modified} = move
+      Act{+sign, +turn, +parking, +lane_ok, +chains, +following_m, +v_width, +v_length, +v_height, +v_axle, +lane, +faster} = act
+      +right = lane_is_right(lane)
+      +free = Bool.not(right_lane_ground(overtaking, turn))
+      pick([
+        Bool.and(right, Bool.and(keeps_left(vehicle), free)),
+        Bool.and(right, Bool.and(Bool.not(faster), free)),
+      ], 51)
+
 def charges(+s: Scenario) -> List<U32>:
   cat(charges_road(s),
   cat(charges_driver(s),
   cat(charges_event(s),
   cat(charges_vehicle(s),
-      charges_service(s)))))
+  cat(charges_service(s),
+      charges_position(s))))))
 
 # ---------------------------------------------------------------------------
 # Helpers the laws use
@@ -718,8 +774,8 @@ def clean_docs() -> Papers:
 
 # No posted sign, no turn, a car-sized vehicle, and every lane and chain duty
 # satisfied. A sign scenario changes the one field its rule reads.
-def clean_act() -> SignAct:
-  SignAct{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+def clean_act() -> Act:
+  Act{M.NoDuty{}, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}}
 
 def clean_car() -> Scenario:
   Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), clean_act()}
@@ -893,15 +949,19 @@ def days_of(+id: U32) -> U32:
 
 def fine_of(+id: U32) -> U32:
   fine_go(catalogue(), id, 0)
-def count_rules(rs: List<Rule>) -> Nat:
+
+# Every rule carries the next id, so the catalogue has no gap and no duplicate.
+def ids_run(rs: List<Rule>, +next: U32) -> Bool:
   match rs:
     case Nil{}:
-      0n
-    case h <> t:
-      1n+count_rules(t)
+      True{}
+    case +h <> t:
+      match h:
+        case Rule{+id, tier, months, days, fine, art, ay, pen_art, pen_ay}:
+          Bool.and(U32.is_eq(id, next), ids_run(t, U32.add(next, 1)))
 
-def rule_count() -> Nat:
-  count_rules(catalogue())
+def ids_contiguous() -> Bool:
+  ids_run(catalogue(), 1)
 
 # ---------------------------------------------------------------------------
 # Builders: one knob per law, so a law can say what changes when it changes.
@@ -1128,26 +1188,37 @@ def with_bike_lights(on: Bool) -> Scenario:
 
 # Sign knobs. Each builder posts one duty and leaves every other action lawful,
 # so the verdict isolates the rule the sign states.
-def act_sign(d: M.Duty) -> SignAct:
-  SignAct{d, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+def act_sign(d: M.Duty) -> Act:
+  Act{d, NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}}
 
-def act_parking(d: M.Duty, on: Bool) -> SignAct:
-  SignAct{d, NoTurn{}, on, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+def act_parking(d: M.Duty, on: Bool) -> Act:
+  Act{d, NoTurn{}, on, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}}
 
-def act_turn(d: M.Duty, t: Turn) -> SignAct:
-  SignAct{d, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500}
+def act_turn(d: M.Duty, t: Turn) -> Act:
+  Act{d, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}}
 
-def act_chains(d: M.Duty, on: Bool) -> SignAct:
-  SignAct{d, NoTurn{}, False{}, True{}, on, 100, 1800, 4500, 1500, 1500}
+def act_chains(d: M.Duty, on: Bool) -> Act:
+  Act{d, NoTurn{}, False{}, True{}, on, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}}
 
-def act_lane(d: M.Duty, ok: Bool) -> SignAct:
-  SignAct{d, NoTurn{}, False{}, ok, True{}, 100, 1800, 4500, 1500, 1500}
+def act_lane(d: M.Duty, ok: Bool) -> Act:
+  Act{d, NoTurn{}, False{}, ok, True{}, 100, 1800, 4500, 1500, 1500, LaneLeft{}, False{}}
 
-def act_following(d: M.Duty, metres: U32) -> SignAct:
-  SignAct{d, NoTurn{}, False{}, True{}, True{}, metres, 1800, 4500, 1500, 1500}
+def act_following(d: M.Duty, metres: U32) -> Act:
+  Act{d, NoTurn{}, False{}, True{}, True{}, metres, 1800, 4500, 1500, 1500, LaneLeft{}, False{}}
 
-def act_size(d: M.Duty, width: U32, length: U32, height: U32, axle: U32) -> SignAct:
-  SignAct{d, NoTurn{}, False{}, True{}, True{}, 100, width, length, height, axle}
+def act_size(d: M.Duty, width: U32, length: U32, height: U32, axle: U32) -> Act:
+  Act{d, NoTurn{}, False{}, True{}, True{}, 100, width, length, height, axle, LaneLeft{}, False{}}
+
+# Where the vehicle sits in its direction of travel, why, and what it is about
+# to do. Pasal 108 ayat (3) and (4) read the three together.
+def act_position(lane: Lane, faster: Bool, t: Turn) -> Act:
+  Act{M.NoDuty{}, t, False{}, True{}, True{}, 100, 1800, 4500, 1500, 1500, lane, faster}
+
+# One vehicle in one lane, at a speed above or below the traffic beside it, and
+# about to turn as stated.
+def in_lane(load: Payload, lane: Lane, faster: Bool, t: Turn) -> Scenario:
+  Scenario{clean_road(), load, clean_gear(), clean_move(), clean_yield(), clean_docs(),
+           act_position(lane, faster, t)}
 
 def sign_car(d: M.Duty) -> Scenario:
   Scenario{clean_road(), clean_load(), clean_gear(), clean_move(), clean_yield(), clean_docs(), act_sign(d)}

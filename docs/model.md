@@ -35,11 +35,11 @@ about. That is why the fifty behaviour laws each vary a single flag.
    catalogue entries carry the tiers the order names.
 5. **A scenario is one moment.** No history, no general following distance, no
    closing speed. Those need time. A posted following-distance sign reads the
-   gap the sign act records, not a trace.
+   gap the act records, not a trace.
 
 ## Scenario
 
-A scenario is six records and a sign act, so each constructor stays short enough to read.
+A scenario is six records and an act, so each constructor stays short enough to read.
 
 | Group | Fields | Meaning |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ A scenario is six records and a sign act, so each constructor stays short enough
 | `Motion` | `speed`, `overtaking`, `overtake_side`, `front_signals_right`, `turning`, `indicates_turn`, `changing_lane`, `indicates_lane`, `racing`, `slowing`, `indicates_slow`, `stopping`, `parked_ok`, `emergency_stop`, `emergency_sign`, `leaves_accident`, `modified` | What the vehicle is doing |
 | `Priority` | `oncoming`, `oncoming_room`, `grade`, `yields_to_uphill`, `pedestrian_waiting`, `yields_to_pedestrian`, `yields_to_emergency`, `at_junction`, `yields_right` | Who has right of way |
 | `Papers` | `sim`, `sim_fits`, `stnk`, `kir`, `stops_at_terminal`, `manifest`, `passenger_insurance`, `crew_insurance` | Documents the driver holds |
-| `SignAct` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle` | The posted duty and the actions a sign rule reads |
+| `Act` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle`, `lane`, `faster` | The posted duty, the manoeuvre, and the facts a single rule reads that the six records do not carry |
 
 ## The rule catalogue
 
@@ -108,6 +108,8 @@ A scenario is six records and a sign act, so each constructor stays short enough
 | 48 | Insure the passengers | Pasal 189 | 6 months, Rp1,500,000 (Pasal 309) |
 | 49 | Insure the crew | Pasal 237 ayat (2) | 6 months, Rp1,500,000 (Pasal 313) |
 | 50 | Let the priority vehicle through | Pasal 134 | 1 month, Rp250,000 (Pasal 287 ayat (4)) |
+| 51 | A motorcycle, a goods vehicle or a non-motorised vehicle keeps the left lane | Pasal 108 ayat (3) | none stated |
+| 52 | The right lane serves a pass, a right turn, a U-turn or a faster vehicle | Pasal 108 ayat (4) | none stated |
 
 ## The sign catalogue and its rules
 

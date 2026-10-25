@@ -466,15 +466,48 @@ def signalling(s: Signal) -> Bool:
     case ToRight{}:
       True{}
 
-def scenario_for(p: Player) -> R.Scenario:
+# The lane the game draws is the lane the statute names: the kerb lane is the
+# left lane, and the one beside the centre line is the right.
+def lane_use(l: Lane) -> R.Lane:
+  match l:
+    case Outer{}:
+      R.LaneLeft{}
+    case Inner{}:
+      R.LaneRight{}
+
+# A car in the other lane, close enough to be the traffic the player is moving
+# past, and slower than the player. A car in the player's own lane, one further
+# off, or one the player is closing on all leave the player faster.
+def outruns(c: Car, at: Lane, pace: U32) -> Bool:
+  match c:
+    case Car{id, lane, gap, +speed, body, colour}:
+      Bool.or(same_lane(lane, at),
+      Bool.or(Bool.not(U32.is_lt(gap, 4000)), U32.is_lt(speed, pace)))
+
+def outruns_all(+at: Lane, +speed: U32, cars: List<&2, Car>) -> Bool:
+  match cars:
+    case Nil{}:
+      True{}
+    case h <> t:
+      Bool.and(outruns(h, at, speed), outruns_all(at, speed, t))
+
+# Pasal 108 ayat (4): the right lane is for a vehicle moving faster than the
+# traffic beside it. With nothing beside it, nothing is slower.
+def scenario_among(p: Player, +cars: List<&2, Car>) -> R.Scenario:
   match p:
-    case Player{lane, speed, signal, lamp, moving, target}:
+    case Player{+lane, +speed, signal, lamp, moving, target}:
       +changing = Bool.or(signalling(signal), Bool.not(U32.is_eq(moving, 0)))
-      # A scenario now carries the signs in force at the moment; the game has
-      # no sign duty to add, so it names the clean act.
+      # A scenario carries the signs in force at the moment; the game posts no
+      # sign duty, so it names the clean act apart from the lane facts.
       R.Scenario{R.clean_road(), R.clean_load(), R.clean_gear(),
                  motion_for(kmh(speed), changing, changing),
-                 R.clean_yield(), R.clean_docs(), R.clean_act()}
+                 R.clean_yield(), R.clean_docs(),
+                 R.Act{M.NoDuty{}, R.NoTurn{}, False{}, True{}, True{}, 100, 1800, 4500,
+                       1500, 1500, lane_use(lane), outruns_all(lane, speed, cars)}}
+
+# A moment with no traffic beside the player, for the proofs that judge one car.
+def scenario_for(p: Player) -> R.Scenario:
+  scenario_among(p, Nil{})
 
 def status_after(hit: Bool) -> Status:
   match hit:
@@ -551,7 +584,7 @@ def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
       +hit = blocked(traffic2, lane_of(player2))
       assemble(moved(index, along, dist), U32.add(tick, 1), player2, traffic2,
                oncoming2, U32.add(distance, dist), limit,
-               spread(R.charges(scenario_for(player2))), status_after(hit),
+               spread(R.charges(scenario_among(player2, traffic2))), status_after(hit),
                input, residual, seed)
 
 def tick(w: World, input: Controls) -> World:
@@ -622,6 +655,12 @@ def lane_target(w: World) -> Lane:
 
 def lane_centre(w: World) -> U32:
   lane_offset(lane_of(player_of(w)))
+
+def traffic_of(w: World) -> List<&2, Car>:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, limit, charges, status,
+               held, residual, index, along, seed}:
+      traffic
 
 def index_of(w: World) -> U32:
   match w:
