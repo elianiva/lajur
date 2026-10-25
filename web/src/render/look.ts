@@ -422,9 +422,11 @@ const surface = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
   vertexShader: /* glsl */ `
     #include <common>
+    #include <batching_pars_vertex>
     varying vec3 vNormal;
     varying float vDepth;
     void main() {
+      #include <batching_vertex>
       #include <beginnormal_vertex>
       #include <defaultnormal_vertex>
       #include <begin_vertex>
