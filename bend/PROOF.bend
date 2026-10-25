@@ -551,6 +551,34 @@ def Laws.leaving_a_crash_costs_three_years_and_75000000():
 def Laws.bike_lights_by_day_cost_fifteen_days_and_100000():
   {==}
 
+def Laws.fire_comes_before_an_ambulance():
+  {==}
+
+def Laws.a_funeral_comes_before_a_convoy():
+  {==}
+
+def Laws.a_plain_road_has_no_priority_user():
+  {==}
+
+def Laws.no_priority_user_outranks_the_fire_engine(u):
+  match u:
+    case R.NoPriority{}:
+      {==}
+    case R.Fire{}:
+      {==}
+    case R.Ambulance{}:
+      {==}
+    case R.Rescue{}:
+      {==}
+    case R.StateLeader{}:
+      {==}
+    case R.ForeignGuest{}:
+      {==}
+    case R.Funeral{}:
+      {==}
+    case R.Convoy{}:
+      {==}
+
 def Laws.every_rule_has_its_own_id():
   {==}
 

@@ -43,7 +43,7 @@ A scenario is six records and an act, so each constructor stays short enough to 
 
 | Group | Fields | Meaning |
 | --- | --- | --- |
-| `Road` | `zone`, `side`, `police_directs`, `obeys_officer`, `signal_red`, `sign_forbids`, `marking_forbids`, `railway_crossing`, `crossing_closed`, `roundabout`, `emergency_vehicle`, `goods_route_ok` | Where the vehicle is and what the road authority says |
+| `Road` | `zone`, `side`, `police_directs`, `obeys_officer`, `signal_red`, `sign_forbids`, `marking_forbids`, `railway_crossing`, `crossing_closed`, `roundabout`, `priority_user`, `goods_route_ok` | Where the vehicle is and what the road authority says |
 | `Payload` | `vehicle`, `weight`, `cc`, `passengers`, `sidecar`, `overloaded`, `carries_people_in_truck`, `special_goods`, `special_goods_ok` | What is being driven and carried |
 | `Equipment` | `rider_helmet`, `passenger_helmet`, `seatbelt`, `cabin`, `night`, `lights_on`, `phone`, `technical`, `roadworthy`, `spare_kit`, `plate`, `interference`, `holds_vehicle` | What the driver and passengers wear, do, or fail to carry |
 | `Motion` | `speed`, `overtaking`, `overtake_side`, `front_signals_right`, `turning`, `indicates_turn`, `changing_lane`, `indicates_lane`, `racing`, `slowing`, `indicates_slow`, `stopping`, `parked_ok`, `emergency_stop`, `emergency_sign`, `leaves_accident`, `modified` | What the vehicle is doing |
@@ -107,7 +107,7 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | 47 | Call at the terminal | Pasal 36 | 1 month, Rp250,000 (Pasal 276) |
 | 48 | Insure the passengers | Pasal 189 | 6 months, Rp1,500,000 (Pasal 309) |
 | 49 | Insure the crew | Pasal 237 ayat (2) | 6 months, Rp1,500,000 (Pasal 313) |
-| 50 | Let the priority vehicle through | Pasal 134 | 1 month, Rp250,000 (Pasal 287 ayat (4)) |
+| 50 | Let the priority user through, in the order of Pasal 134 | Pasal 134 | 1 month, Rp250,000 (Pasal 287 ayat (4)) |
 | 51 | A motorcycle, a goods vehicle or a non-motorised vehicle keeps the left lane | Pasal 108 ayat (3) | none stated |
 | 52 | The right lane serves a pass, a right turn, a U-turn or a faster vehicle | Pasal 108 ayat (4) | none stated |
 | 53 | A left turn at a signal waits for a sign or an arrow | Pasal 112 ayat (3) | none stated |

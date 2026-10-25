@@ -310,7 +310,21 @@ law insure_the_crew:
 
 law let_the_priority_vehicle_through:
   for b: Bool
-  { R.contains(50, R.charges(R.with_emergency(True{}, b))) == Bool.not(b) : Bool }
+  { R.contains(50, R.charges(R.with_priority_user(R.Fire{}, b))) == Bool.not(b) : Bool }
+
+# Pasal 134 lists seven users in order, and a plain road has none of them.
+law fire_comes_before_an_ambulance:
+  { R.outranks(R.Fire{}, R.Ambulance{}) == True{} : Bool }
+
+law a_funeral_comes_before_a_convoy:
+  { R.outranks(R.Funeral{}, R.Convoy{}) == True{} : Bool }
+
+law a_plain_road_has_no_priority_user:
+  { R.has_priority(R.NoPriority{}) == False{} : Bool }
+
+law no_priority_user_outranks_the_fire_engine:
+  for u: R.PriorityUser
+  { R.outranks(u, R.Fire{}) == False{} : Bool }
 
 # Pasal 108 ayat (3): a motorcycle, a goods vehicle and a non-motorised vehicle
 # belong in the left lane, even when they are moving faster than the traffic.
