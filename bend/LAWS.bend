@@ -27,6 +27,16 @@ law overtake_on_the_right:
   for s: R.Side
   { R.contains(2, R.charges(R.with_move(R.move_overtake(True{}, s, False{})))) == R.side_is_left(s) : Bool }
 
+# Pasal 109 ayat (1): a pass also needs a clear sight line and enough room.
+# Ayat (2)'s left-side cases are not stated by the instrument, so they stay out.
+law a_pass_needs_a_clear_sight_line:
+  for b: Bool
+  { R.contains(2, R.charges(R.overtake_with(True{}, b))) == Bool.not(b) : Bool }
+
+law a_pass_needs_room:
+  for b: Bool
+  { R.contains(2, R.charges(R.overtake_with(b, True{}))) == Bool.not(b) : Bool }
+
 law do_not_pass_a_vehicle_signalling_right:
   for b: Bool
   { R.contains(3, R.charges(R.with_move(R.move_overtake(True{}, R.Right{}, b)))) == b : Bool }

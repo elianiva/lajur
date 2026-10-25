@@ -49,7 +49,7 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | `Motion` | `speed`, `overtaking`, `overtake_side`, `front_signals_right`, `turning`, `indicates_turn`, `changing_lane`, `indicates_lane`, `racing`, `slowing`, `indicates_slow`, `stopping`, `parked_ok`, `emergency_stop`, `emergency_sign`, `leaves_accident`, `modified` | What the vehicle is doing |
 | `Priority` | `oncoming`, `oncoming_room`, `grade`, `yields_to_uphill`, `pedestrian_waiting`, `yields_to_pedestrian`, `yields_to_emergency`, `at_junction`, `yields_right` | Who has right of way |
 | `Papers` | `sim`, `sim_fits`, `stnk`, `kir`, `stops_at_terminal`, `manifest`, `passenger_insurance`, `crew_insurance` | Documents the driver holds |
-| `Act` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle`, `lane`, `faster` | The posted duty, the manoeuvre, and the facts a single rule reads that the six records do not carry |
+| `Act` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle`, `lane`, `faster`, `sight_clear`, `room_ok` | The posted duty, the manoeuvre, and the facts a single rule reads that the six records do not carry |
 
 ## The rule catalogue
 
@@ -59,7 +59,7 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | Id | Rule | Article | Sanction |
 | --- | --- | --- | --- |
 | 1 | Use the left side of the road | UU 22/2009 Pasal 108 ayat (1) | none stated |
-| 2 | Overtake on the right | Pasal 109 ayat (1) | none stated |
+| 2 | Overtake on the right, with a clear sight line and room | Pasal 109 ayat (1) | none stated |
 | 3 | Do not overtake a vehicle that signals right | Pasal 109 ayat (3) | none stated |
 | 4 | Give oncoming traffic room on the right | Pasal 110 ayat (1) | none stated |
 | 5 | On a narrow grade, downhill yields to uphill | Pasal 111 | none stated |

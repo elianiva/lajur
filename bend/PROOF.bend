@@ -29,6 +29,20 @@ def Laws.overtake_on_the_right(s):
     case R.Right{}:
       {==}
 
+def Laws.a_pass_needs_a_clear_sight_line(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.a_pass_needs_room(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.do_not_pass_a_vehicle_signalling_right(b):
   match b:
     case True{}:
