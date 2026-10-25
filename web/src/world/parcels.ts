@@ -332,8 +332,6 @@ export function parcels(seed: number, c: Cell): Plan {
     ru1 -= m / F.mu;
     rv0 += m / F.mv;
     rv1 -= m / F.mv;
-    if (b.mid?.axis === "u") ru1 = b.mid.t - 6 / F.mu;
-    if (b.mid?.axis === "v") rv1 = b.mid.t - 6 / F.mv;
     // A court is town-sized, not block-sized: it sits against the ring lane
     // and the rest of the inside is kampung.
     const cap = COURT[b.court];

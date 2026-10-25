@@ -16,7 +16,7 @@
  *            entrance slots both sides of it share.
  *
  * Layers 1 and 2, and the choice of what each block becomes, are
- * `logic/world.bend`, with their laws in `logic/PROOF.bend`. The streets inside
+ * `logic/world.bend`, with their laws in `logic/PROOF_WORLD.bend`. The streets inside
  * a block are still TypeScript, until they are ported too.
  */
 import W from "../world.mjs";
@@ -90,8 +90,6 @@ export interface Block {
   /** A ring block's lane, in the frame, and the civic court inside it. */
   inner?: { ru0: number; ru1: number; rv0: number; rv1: number };
   court?: Court;
-  /** A big ring's street across the middle. */
-  mid?: { axis: "u" | "v"; t: number };
   tips?: { linked: number; bulb: number; through: number };
 }
 
@@ -338,6 +336,17 @@ export function cell(seed: number, i: number, j: number): Cell {
   return { i, j, lines, blocks, mouths, frame: F };
 }
 
+/** A ring's size by its court, long side by short side, metres. */
+const RING: Record<Court, [number, number]> = {
+  alun: [150, 125],
+  pasar: [110, 90],
+  sekolah: [120, 90],
+  gudang: [120, 95],
+};
+/** What is left beside a ring must be this wide to grow streets of its own. */
+const RING_REST = 100;
+/** Between a ring's lane and the streets beside it: two rows of lots. */
+const RING_GAP = 26;
 const LAND: BlockType[] = ["sawah", "kebun", "tree", "comb", "grid", "ring"];
 const COURTS: Court[] = ["alun", "pasar", "sekolah", "gudang"];
 
@@ -385,80 +394,168 @@ function fill(
     if (!open) blk.type = "shops";
     return;
   }
-  // The entrances: slots on each road side that fall inside the ring's span,
-  // each used by this side with its own roll, and at least one in all.
-  const cand: Slot[] = [];
-  for (const name of Object.keys(blk.edges) as Side[]) {
-    const e = blk.edges[name];
-    if (!e.road) continue;
-    const span = name === "S" || name === "N" ? [ru0, ru1] : [rv0, rv1];
-    for (const t of slots(seed, e.key, e.len, e.avoid)) {
-      if (
-        t < e.t0 ||
-        t > e.t1 ||
-        t < span[0]! + LOK_FLOOR / e.len ||
-        t > span[1]! - LOK_FLOOR / e.len
-      )
-        continue;
-      const shared = hash(seed, 13, ...e.key, Math.round(t * 1e4));
-      const own = hash(
-        seed,
-        12,
-        ...e.key,
-        Math.round(t * 1e4),
-        name === "S" || name === "W" ? 1 : 0,
-      );
-      cand.push({ name, t, use: Math.min(shared, own), shared, own });
+  const box: Box = { ru0, ru1, rv0, rv1 };
+  // The entrances into a rectangle of the block: slots on each road side it
+  // reaches that fall inside its span, each with the rolls both sides of the
+  // road share. Sorted, most wanted first.
+  const touches = (bx: Box, name: Side) =>
+    name === "S"
+      ? bx.rv0 === rv0
+      : name === "N"
+        ? bx.rv1 === rv1
+        : name === "W"
+          ? bx.ru0 === ru0
+          : bx.ru1 === ru1;
+  const entrances = (bx: Box): Slot[] => {
+    const out: Slot[] = [];
+    for (const name of Object.keys(blk.edges) as Side[]) {
+      const e = blk.edges[name];
+      if (!e.road || !touches(bx, name)) continue;
+      const span = name === "S" || name === "N" ? [bx.ru0, bx.ru1] : [bx.rv0, bx.rv1];
+      for (const t of slots(seed, e.key, e.len, e.avoid)) {
+        if (
+          t < e.t0 ||
+          t > e.t1 ||
+          t < span[0]! + LOK_FLOOR / e.len ||
+          t > span[1]! - LOK_FLOOR / e.len
+        )
+          continue;
+        const shared = hash(seed, 13, ...e.key, Math.round(t * 1e4));
+        const own = hash(
+          seed,
+          12,
+          ...e.key,
+          Math.round(t * 1e4),
+          name === "S" || name === "W" ? 1 : 0,
+        );
+        out.push({ name, t, use: Math.min(shared, own), shared, own });
+      }
     }
-  }
+    return out.sort((x, y) => x.use - y.use);
+  };
+  // A slot both sides like (the shared roll) becomes a crossing of the road.
+  const pickUsed = (c: Slot[]) => c.filter((s, k) => k === 0 || s.shared < 0.3 || s.own < 0.22);
+  const cand = entrances(box);
   if (!cand.length) {
     blk.type = "shops";
     return;
   }
-  cand.sort((a, b) => a.use - b.use);
-  // A slot both sides like (the shared roll) becomes a crossing of the road.
-  const used = cand.filter((s, k) => k === 0 || s.shared < 0.3 || s.own < 0.22);
+  const used = pickUsed(cand);
   // A straight line in the frame, drawn every 10 m or so on the ground.
   const seg: Straight = (u0, v0, u1, v1) => {
     const n = Math.max(4, Math.ceil(Math.hypot((u1 - u0) * F.mu, (v1 - v0) * F.mv) / 10));
     return Array.from({ length: n + 1 }, (_, k) => F.at(lerp(u0, u1, k / n), lerp(v0, v1, k / n)));
   };
   if (blk.type === "tree")
-    return growTree(seed, i, j, F, blk, line, mouths, used, d, { ru0, ru1, rv0, rv1 }, seg, cand);
-  const ringPts = [
-    ...seg(ru0, rv0, ru1, rv0),
-    ...seg(ru1, rv0, ru1, rv1).slice(1),
-    ...seg(ru1, rv1, ru0, rv1).slice(1),
-    ...seg(ru0, rv1, ru0, rv0).slice(1),
-  ];
-  line(LOK, ringPts, { ring: true });
-  const onRing: { axis: "u" | "v"; t: number }[] = []; // where streets meet the ring
-  for (const m of used) {
-    const t = m.t;
-    const [a, b] =
-      m.name === "S"
-        ? [
-            [t, blk.v0],
-            [t, rv0],
-          ]
-        : m.name === "N"
+    return growTree(seed, i, j, F, blk, line, mouths, used, d, box, seg, cand, 0);
+
+  // A lane round a rectangle, and a mouth from each entrance to it.
+  const onRing: { axis: "u" | "v"; t: number }[] = []; // where streets meet the lane
+  const lane = (bx: Box, entries: Slot[]) => {
+    line(
+      LOK,
+      [
+        ...seg(bx.ru0, bx.rv0, bx.ru1, bx.rv0),
+        ...seg(bx.ru1, bx.rv0, bx.ru1, bx.rv1).slice(1),
+        ...seg(bx.ru1, bx.rv1, bx.ru0, bx.rv1).slice(1),
+        ...seg(bx.ru0, bx.rv1, bx.ru0, bx.rv0).slice(1),
+      ],
+      { ring: true },
+    );
+    for (const m of entries) {
+      const t = m.t;
+      const [a, b]: number[][] =
+        m.name === "S"
           ? [
-              [t, blk.v1],
-              [t, rv1],
+              [t, blk.v0],
+              [t, bx.rv0],
             ]
-          : m.name === "W"
+          : m.name === "N"
             ? [
-                [blk.u0, t],
-                [ru0, t],
+                [t, blk.v1],
+                [t, bx.rv1],
               ]
-            : [
-                [blk.u1, t],
-                [ru1, t],
-              ];
-    line(LOK, seg(a[0]!, a[1]!, b[0]!, b[1]!), { mouth: true });
-    mouths.push({ side: m.name, key: blk.edges[m.name].key.join(","), t, at: F.at(a[0]!, a[1]!) });
-    onRing.push({ axis: m.name === "S" || m.name === "N" ? "u" : "v", t });
+            : m.name === "W"
+              ? [
+                  [blk.u0, t],
+                  [bx.ru0, t],
+                ]
+              : [
+                  [blk.u1, t],
+                  [bx.ru1, t],
+                ];
+      line(LOK, seg(a![0]!, a![1]!, b![0]!, b![1]!), { mouth: true });
+      mouths.push({
+        side: m.name,
+        key: blk.edges[m.name].key.join(","),
+        t,
+        at: F.at(a![0]!, a![1]!),
+      });
+      onRing.push({ axis: m.name === "S" || m.name === "N" ? "u" : "v", t });
+    }
+  };
+
+  if (blk.type === "ring") {
+    // A ring is as big as its court and a row of houses round it. It faces
+    // the road at the block's most wanted entrance, centred on it; the rest of
+    // the block grows its own tree of streets.
+    const r2 = hash(seed, 14, i, j, Math.round(blk.u0 * 1000), Math.round(blk.v0 * 1000));
+    blk.court = COURTS[W.court(Math.round(d * 1024), Math.floor(r2 * 1024))]!;
+    const [long, short] = RING[blk.court];
+    let ring: Box = box;
+    let entries = used;
+    for (const m of cand) {
+      const across = m.name === "S" || m.name === "N";
+      // Along the road the long side, inward the short one.
+      const au = (across ? long : short) / F.mu;
+      const av = (across ? short : long) / F.mv;
+      const cu = across
+        ? Math.min(Math.max(m.t - au / 2, ru0), ru1 - au)
+        : m.name === "W"
+          ? ru0
+          : ru1 - au;
+      const cv = across
+        ? m.name === "S"
+          ? rv0
+          : rv1 - av
+        : Math.min(Math.max(m.t - av / 2, rv0), rv1 - av);
+      const bx: Box = {
+        ru0: Math.max(ru0, cu),
+        ru1: Math.min(ru1, cu + au),
+        rv0: Math.max(rv0, cv),
+        rv1: Math.min(rv1, cv + av),
+      };
+      // Where what is left is too thin to hold streets, the ring takes it too.
+      if ((bx.ru0 - ru0) * F.mu < RING_REST) bx.ru0 = ru0;
+      if ((ru1 - bx.ru1) * F.mu < RING_REST) bx.ru1 = ru1;
+      if ((bx.rv0 - rv0) * F.mv < RING_REST) bx.rv0 = rv0;
+      if ((rv1 - bx.rv1) * F.mv < RING_REST) bx.rv1 = rv1;
+      const e = entrances(bx);
+      if (!e.length) continue;
+      ring = bx;
+      entries = pickUsed(e);
+      break;
+    }
+    lane(ring, entries);
+    blk.inner = ring;
+    // What is left: a strip along the ring's open u side, then one along its
+    // open v side, each its own tree.
+    const rests: Box[] = [];
+    const gu = RING_GAP / F.mu;
+    const gv = RING_GAP / F.mv;
+    if (ring.ru1 < ru1) rests.push({ ru0: ring.ru1 + gu, ru1, rv0, rv1 });
+    if (ring.ru0 > ru0) rests.push({ ru0, ru1: ring.ru0 - gu, rv0, rv1 });
+    if (ring.rv1 < rv1) rests.push({ ru0: ring.ru0, ru1: ring.ru1, rv0: ring.rv1 + gv, rv1 });
+    if (ring.rv0 > rv0) rests.push({ ru0: ring.ru0, ru1: ring.ru1, rv0, rv1: ring.rv0 - gv });
+    rests.forEach((rest, k) => {
+      if ((rest.ru1 - rest.ru0) * F.mu < 70 || (rest.rv1 - rest.rv0) * F.mv < 70) return;
+      const e = entrances(rest);
+      if (e.length) growTree(seed, i, j, F, blk, line, mouths, pickUsed(e), d, rest, seg, e, k + 1);
+    });
+    return;
   }
+
+  lane(box, used);
   // Streets across the ring: a comb one way, a grid both. They keep the lokal
   // floor from every entrance on the ring. A comb's teeth lean, up to 25
   // degrees, so the estate is not square to its frame; `lean` is how far a
@@ -500,19 +597,6 @@ function fill(
     across("u", ru0, ru1, F.mu, gap * 1.2);
     across("v", rv0, rv1, F.mv, gap * 1.4);
   }
-  if (blk.type === "ring") {
-    // A big ring keeps one street across its middle; the court takes one half.
-    if (Math.min((ru1 - ru0) * F.mu, (rv1 - rv0) * F.mv) > 120) {
-      const lo = longU ? ru0 : rv0;
-      const hi = longU ? ru1 : rv1;
-      const metres = longU ? F.mu : F.mv;
-      across(longU ? "u" : "v", lo, hi, metres, ((hi - lo) * metres) / 2 - 0.5);
-      blk.mid = { axis: longU ? "u" : "v", t: (lo + hi) / 2 };
-    }
-    const r2 = hash(seed, 14, i, j, Math.round(blk.u0 * 1000), Math.round(blk.v0 * 1000));
-    blk.inner = { ru0, ru1, rv0, rv1 };
-    blk.court = COURTS[W.court(Math.round(d * 1024), Math.floor(r2 * 1024))]!;
-  }
 }
 
 // ---- A tree -----------------------------------------------------------------
@@ -546,9 +630,12 @@ function growTree(
   box: Box,
   seg: Straight,
   cand: Slot[],
+  salt: number,
 ) {
   let state =
-    (hash(seed, 20, i, j, Math.round(blk.u0 * 1e4), Math.round(blk.v0 * 1e4)) * 4294967296) >>> 0;
+    (hash(seed, 20, i, j, Math.round(blk.u0 * 1e4), Math.round(blk.v0 * 1e4), salt) *
+      4294967296) >>>
+    0;
   const R = () => {
     state = (state + 0x6d2b79f5) >>> 0;
     let t = state;
@@ -805,5 +892,9 @@ function growTree(
     );
     if (trunk !== null) open(m);
   }
-  blk.tips = tips;
+  if (blk.tips) {
+    blk.tips.linked += tips.linked;
+    blk.tips.bulb += tips.bulb;
+    blk.tips.through += tips.through;
+  } else blk.tips = tips;
 }
