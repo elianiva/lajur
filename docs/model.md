@@ -49,7 +49,7 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | `Motion` | `speed`, `overtaking`, `overtake_side`, `front_signals_right`, `turning`, `indicates_turn`, `changing_lane`, `indicates_lane`, `racing`, `slowing`, `indicates_slow`, `stopping`, `parked_ok`, `emergency_stop`, `emergency_sign`, `leaves_accident`, `modified` | What the vehicle is doing |
 | `Priority` | `oncoming`, `oncoming_room`, `grade`, `yields_to_uphill`, `pedestrian_waiting`, `yields_to_pedestrian`, `yields_to_emergency`, `at_junction`, `yields_right` | Who has right of way |
 | `Papers` | `sim`, `sim_fits`, `stnk`, `kir`, `stops_at_terminal`, `manifest`, `passenger_insurance`, `crew_insurance` | Documents the driver holds |
-| `Act` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle`, `lane`, `faster`, `sight_clear`, `room_ok`, `train_coming`, `crossing_traffic`, `yields_to_crossing`, `left_turn_allowed`, `hazard`, `bus_stopping` | The posted duty, the manoeuvre, and the facts a single rule reads that the six records do not carry |
+| `Act` | `sign`, `turn`, `parking`, `lane_ok`, `chains`, `following_m`, `v_width`, `v_length`, `v_height`, `v_axle`, `lane`, `faster`, `sight_clear`, `room_ok`, `train_coming`, `crossing_traffic`, `yields_to_crossing`, `left_turn_allowed`, `hazard`, `bus_stopping`, `towing`, `towing_ok`, `parking_in_line` | The posted duty, the manoeuvre, and the facts a single rule reads that the six records do not carry |
 
 ## The rule catalogue
 
@@ -114,6 +114,8 @@ A scenario is six records and an act, so each constructor stays short enough to 
 | 54 | Give way to the vehicle already on the crossing | Pasal 114 huruf c | none stated |
 | 55 | Slow before a stated hazard (the seven grounds of Pasal 116 ayat (2)) | Pasal 116 ayat (2) | none stated |
 | 56 | Stop behind a bus taking passengers | Pasal 119 ayat (2) | none stated |
+| 57 | Tow only as the procedure requires | Pasal 106 ayat (4) huruf h | 1 month, Rp250,000 (Pasal 287 ayat (6)) |
+| 58 | Park in line with the traffic | Pasal 120 | none stated |
 
 ## The sign catalogue and its rules
 

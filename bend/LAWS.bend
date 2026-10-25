@@ -216,6 +216,18 @@ law a_stopped_bus_stops_the_traffic_behind:
   for b: Bool
   { R.contains(56, R.charges(R.bus_stopped(b, False{}))) == b : Bool }
 
+# Pasal 106 ayat (4) huruf h: the manner of towing, fined by Pasal 287 ayat (6).
+# The procedure itself sits in an implementing regulation the corpus does not
+# carry, so the model records whether it was met.
+law tow_only_as_the_procedure_requires:
+  for b: Bool
+  { R.contains(57, R.charges(R.towing_with(b))) == Bool.not(b) : Bool }
+
+# Pasal 120: parking is parallel to the traffic, or at an angle to it.
+law park_in_line_with_the_traffic:
+  for b: Bool
+  { R.contains(58, R.charges(R.parked_in_line(b))) == Bool.not(b) : Bool }
+
 law signal_before_slowing:
   for b: Bool
   { R.contains(30, R.charges(R.with_move(R.move_slowing(True{}, b)))) == Bool.not(b) : Bool }

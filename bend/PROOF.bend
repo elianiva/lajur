@@ -331,6 +331,20 @@ def Laws.a_stopped_bus_stops_the_traffic_behind(b):
     case False{}:
       {==}
 
+def Laws.tow_only_as_the_procedure_requires(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.park_in_line_with_the_traffic(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.signal_before_slowing(b):
   match b:
     case True{}:
