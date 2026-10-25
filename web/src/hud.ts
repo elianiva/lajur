@@ -40,7 +40,7 @@ export class Hud {
     if (state.charges.length === 0) {
       const clean = document.createElement("li");
       clean.className = "clean";
-      clean.textContent = "No rule broken";
+      clean.textContent = "No article broken";
       this.causes.append(clean);
     }
     for (const id of state.charges) {

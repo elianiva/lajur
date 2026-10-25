@@ -228,6 +228,15 @@ law park_in_line_with_the_traffic:
   for b: Bool
   { R.contains(58, R.charges(R.parked_in_line(b))) == Bool.not(b) : Bool }
 
+# Pasal 310 ayat (1): a collision caused by negligence, with damage to a
+# vehicle or to property, is an offence in its own right.
+law a_collision_is_charged_under_pasal_310:
+  for b: Bool
+  { R.contains(59, R.charges(R.collision_after(b))) == b : Bool }
+
+law a_collision_costs_six_months_and_1000000:
+  { Bool.and(U32.is_eq(R.months_of(59), 6), U32.is_eq(R.fine_of(59), 1000000)) == True{} : Bool }
+
 law signal_before_slowing:
   for b: Bool
   { R.contains(30, R.charges(R.with_move(R.move_slowing(True{}, b)))) == Bool.not(b) : Bool }

@@ -497,7 +497,7 @@ def outruns_all(+at: Lane, +speed: U32, cars: List<&2, Car>) -> Bool:
 
 # Pasal 108 ayat (4): the right lane is for a vehicle moving faster than the
 # traffic beside it. With nothing beside it, nothing is slower.
-def scenario_among(p: Player, +cars: List<&2, Car>, zone: M.Zone) -> R.Scenario:
+def scenario_among(p: Player, +cars: List<&2, Car>, zone: M.Zone, hit: Bool) -> R.Scenario:
   match p:
     case Player{+lane, +speed, signal, lamp, moving, target}:
       +changing = Bool.or(signalling(signal), Bool.not(U32.is_eq(moving, 0)))
@@ -506,15 +506,19 @@ def scenario_among(p: Player, +cars: List<&2, Car>, zone: M.Zone) -> R.Scenario:
       R.Scenario{R.road_in(zone), R.clean_load(), R.clean_gear(),
                  motion_for(kmh(speed), changing, changing),
                  R.clean_yield(), R.clean_docs(),
-                 R.act_in_lane(lane_use(lane), outruns_all(lane, speed, cars))}
+                 R.act_in_lane(lane_use(lane), outruns_all(lane, speed, cars), hit)}
 
 # A moment with no traffic beside the player, for the proofs that judge one car.
 def scenario_for(p: Player) -> R.Scenario:
-  scenario_among(p, Nil{}, M.Urban{})
+  scenario_among(p, Nil{}, M.Urban{}, False{})
 
 # The same moment in a named zone, for the laws about the ceiling.
 def scenario_in(p: Player, zone: M.Zone) -> R.Scenario:
-  scenario_among(p, Nil{}, zone)
+  scenario_among(p, Nil{}, zone, False{})
+
+# The same moment after a collision, for the laws about Pasal 310.
+def scenario_crash(p: Player, hit: Bool) -> R.Scenario:
+  scenario_among(p, Nil{}, M.Urban{}, hit)
 
 def status_after(hit: Bool) -> Status:
   match hit:
@@ -591,7 +595,7 @@ def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
       +hit = blocked(traffic2, lane_of(player2))
       assemble(moved(index, along, dist), U32.add(tick, 1), player2, traffic2,
                oncoming2, U32.add(distance, dist), zone,
-               spread(R.charges(scenario_among(player2, traffic2, zone))), status_after(hit),
+               spread(R.charges(scenario_among(player2, traffic2, zone, hit))), status_after(hit),
                input, residual, seed)
 
 def tick(w: World, input: Controls) -> World:
@@ -731,6 +735,8 @@ def rule_name(id: U32) -> String:
       "Signal before a lane change"
     case 21:
       "Speed limit"
+    case 59:
+      "Negligent collision"
     case _:
       "Road rule"
 

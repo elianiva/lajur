@@ -345,6 +345,16 @@ def Laws.park_in_line_with_the_traffic(b):
     case False{}:
       {==}
 
+def Laws.a_collision_is_charged_under_pasal_310(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.a_collision_costs_six_months_and_1000000():
+  {==}
+
 def Laws.signal_before_slowing(b):
   match b:
     case True{}:
