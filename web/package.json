@@ -9,7 +9,8 @@
     "preview": "vp preview",
     "logic": "vpx scripts/bend.ts logic/game.bend -o src/game.mjs",
     "proof": "vpx scripts/bend.ts proof",
-    "layers": "vpx scripts/layers.ts"
+    "layers": "vpx scripts/layers.ts",
+    "plan": "vpx scripts/plan.ts"
   },
   "dependencies": {
     "three": "^0.186.1"

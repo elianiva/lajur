@@ -37,6 +37,7 @@ vp run proof             # bend logic/PROOF.bend
 vpr proof --verdict      # the same through the Lean kernel
 vp check                 # format, lint, types
 vp run layers            # the town's numbers per layer, and a flat SVG per seed
+vp run plan              # the lab world's checks, and a flat plan SVG per seed
 vp dev                   # serves on $PORT
 ```
 
