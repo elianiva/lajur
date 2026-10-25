@@ -61,6 +61,7 @@ export type Post = "PriorityWarning" | "GiveWaySign" | "StopSign" | "NoSign";
 export type Control = "Signal" | "Roundabout" | "Uncontrolled";
 export type Shape = "FourEqual" | "FourMajor" | "StraightT" | "SkewT" | "Bend";
 export type LotKind = "Ruko" | "Warung" | "House" | "Kos" | "Petak" | "Filler";
+export type PropKind = "Mangga" | "Palm" | "Kamboja" | "Semak" | "Pole" | "Pot";
 
 export interface Approach {
   d: DirName;
@@ -72,6 +73,12 @@ export interface Approach {
   zebra: number;
   head: boolean;
   post: Post;
+}
+
+export interface Prop extends Pt {
+  /** The ground it takes, in centimetres: half a crown for a tree. */
+  r: number;
+  kind: PropKind;
 }
 
 export interface Lot extends Pt {
@@ -184,6 +191,17 @@ export function lotAt(i: number, j: number, side: number, ring: number, k: numbe
     w: l.w as number,
     d: l.d as number,
     kind: (l.kind as Bend).$ as LotKind,
+  };
+}
+
+/** The prop that stands on the pavement in front of lot `t`. */
+export function propAt(i: number, j: number, side: number, t: number): Prop {
+  const p = g.prop_at(i, j, side, t, SEED) as Bend;
+  return {
+    x: p.x as number,
+    z: p.z as number,
+    r: p.r as number,
+    kind: (p.kind as Bend).$ as PropKind,
   };
 }
 

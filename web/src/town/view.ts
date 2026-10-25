@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { bake, box, mats } from "../assets/kit.ts";
 import { filler, house, kos, petak, ruko, warung } from "../assets/buildings.ts";
+import { powerPole, pot } from "../assets/street.ts";
+import { kamboja, mangga, palm, semak } from "../assets/trees.ts";
 import * as T from "./model.ts";
 
 /**
@@ -426,6 +428,43 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
         for (let b = 0; b < deep; b += 1) {
           const lot = T.coreLotAt(i, j, a, b);
           place(lot, hash(i * 13 + a, j * 11 + b, lot.kind.length));
+        }
+      }
+    }
+  }
+
+  // --- street furniture -----------------------------------------------------
+  //
+  // One prop in front of every frontage lot, on the lot's own centre line. A
+  // tree is scaled to the radius the model gave it, so the drawn crown is the
+  // crown the law bounds.
+
+  const trees = { Mangga: mangga, Palm: palm, Kamboja: kamboja };
+  for (let i = 0; i + 1 < T.COLS; i += 1) {
+    for (let j = 0; j + 1 < T.ROWS; j += 1) {
+      if (!T.blockExists(i, j)) continue;
+      for (let side = 0; side < 4; side += 1) {
+        const lots = T.lotsOn(i, j, side, 0);
+        for (let k = 0; k < lots; k += 1) {
+          const prop = T.propAt(i, j, side, k);
+          const seed = hash(i * 13 + k, j * 7 + side, prop.r);
+          let mesh: THREE.Object3D;
+          if (prop.kind === "Pole") {
+            mesh = powerPole();
+          } else if (prop.kind === "Pot") {
+            mesh = pot(seed);
+          } else if (prop.kind === "Semak") {
+            mesh = semak(seed, Math.min(prop.r * 2 * CM, 3));
+          } else {
+            const tree = trees[prop.kind](seed);
+            const box = new THREE.Box3().setFromObject(tree);
+            const reach = Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z);
+            if (reach > 0) tree.scale.setScalar((prop.r * CM) / reach);
+            mesh = tree;
+          }
+          mesh.position.set(prop.x * CM, WALK, prop.z * CM);
+          mesh.rotation.y = (seed - 0.5) * 0.6;
+          buildings.add(mesh);
         }
       }
     }

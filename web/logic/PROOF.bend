@@ -657,3 +657,36 @@ law every_lot_of_a_block_holds_a_building_that_fits:
 
 def every_lot_of_a_block_holds_a_building_that_fits():
   {==}
+
+# ---------------------------------------------------------------------------
+# A prop fits its pavement
+#
+# One prop stands in front of every frontage lot, on the lot's own centre line,
+# so two props are a lot apart. A lot holds two of the widest crown, so no two
+# crowns meet, and the prop line is between the kerb and the buildings.
+# ---------------------------------------------------------------------------
+
+law no_two_crowns_meet:
+  { U32.is_le(U32.mul(2, T.widest_crown_cm()), T.pitch_of(0)) == True{} : Bool }
+
+def no_two_crowns_meet():
+  {==}
+
+law a_prop_stands_on_the_pavement:
+  { Bool.and(T.prop_on_pavement(3, 3, 0), Bool.and(T.prop_on_pavement(3, 3, 1),
+             Bool.and(T.prop_on_pavement(3, 3, 2), T.prop_on_pavement(3, 3, 3)))) == True{} : Bool }
+
+def a_prop_stands_on_the_pavement():
+  {==}
+
+law the_props_of_a_frontage_keep_apart:
+  { T.props_apart(2n, 0, 3, 3, 0, T.seed_of_town()) == True{} : Bool }
+
+def the_props_of_a_frontage_keep_apart():
+  {==}
+
+law a_pole_spans_forty_metres:
+  { U32.is_le(4000, U32.mul(7, T.pitch_of(0))) == True{} : Bool }
+
+def a_pole_spans_forty_metres():
+  {==}

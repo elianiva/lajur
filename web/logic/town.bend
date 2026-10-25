@@ -1591,6 +1591,123 @@ def lots_fit(fuel: Nat, +t: U32, +side: U32, +ring: U32, +i: U32, +j: U32, +seed
                              U32.is_le(kind_depth_cm(kind), row_depth_cm())))
       Bool.and(ok, lots_fit(p, U32.add(t, 1), side, ring, i, j, seed))
 
+# ===========================================================================
+# The pavement: one prop in front of every frontage lot
+#
+# A tree, a hedge, a pole or a pot stands on the pavement in front of each lot
+# of a block's frontage ring, on that lot's own centre line. Two props are
+# therefore one lot apart, and no lot is cut narrower than twice the widest
+# crown, so no two crowns can meet — which is the Permen PU 05/PRT/M/2012 rule
+# that street trees are set out at their crown diameter, kept by construction
+# instead of by test. Nothing is sampled and nothing is rejected.
+#
+# The prop stands half a metre off the kerb, the planting line the same
+# regulation sets, and within twenty metres of a junction only low planting
+# stands, so the approach keeps the sight distance the guideline asks of it.
+# Poles stand on one pavement of each street, one every seventh lot: seven lots
+# of six metres is PLN's span for a low-voltage line.
+# ===========================================================================
+
+type PropKind is Data:
+  Mangga{}
+  Palm{}
+  Kamboja{}
+  Semak{}
+  Pole{}
+  Pot{}
+
+# The ground a prop takes: half a crown for a tree, half its length for a hedge
+# and a small footprint for furniture. The view draws a tree to this radius.
+def crown_cm(k: PropKind) -> U32:
+  match k:
+    case Mangga{}:
+      220
+    case Palm{}:
+      200
+    case Kamboja{}:
+      130
+    case Semak{}:
+      150
+    case Pole{}:
+      20
+    case Pot{}:
+      70
+
+# The widest crown any prop reaches. A lot has to hold two of them.
+def widest_crown_cm() -> U32:
+  220
+
+# How far a prop stands from its street's centre line: half a metre off the
+# kerb, which is inside the pavement and in front of every building.
+def prop_off_cm(+i: U32, +j: U32, +side: U32) -> U32:
+  U32.add(half_cm(street_of(side_i(i, side), side_j(j, side), side_dir(side))), 50)
+
+# Within twenty metres of a junction only low planting stands. The lot is
+# measured from the node, not from the end of the frontage, because the mouth
+# already stands a kerb return and half the crossing street away from it.
+def prop_low(+i: U32, +j: U32, +side: U32, +t: U32, +seed: U32) -> Bool:
+  +w = lot_width(i, j, side, 0, seed)
+  +at = U32.add(U32.mul(t, w), U32.div(w, 2))
+  +near = mouth_cm(side_i(i, side), side_j(j, side), side_dir(side), seed)
+  +far = mouth_cm(far_i(i, side), far_j(j, side), opposite(side_dir(side)), seed)
+  Bool.or(U32.is_lt(U32.add(near, at), 2200),
+          U32.is_lt(U32.add(far, U32.sub(frontage_cm(i, j, side, seed), at)), 2200))
+
+# A pole every seventh lot, on one pavement of each street.
+def prop_pole(+side: U32, +t: U32) -> Bool:
+  Bool.and(U32.is_lt(side, 2), U32.is_eq(U32.mod(t, 7), 3))
+
+def prop_pick(low: Bool, pole: Bool, +roll: U32) -> PropKind:
+  Bool.pick(PropKind, pole, Pole{},
+            Bool.pick(PropKind, low, Semak{},
+                      Bool.pick(PropKind, U32.is_lt(roll, 52), Mangga{},
+                                Bool.pick(PropKind, U32.is_lt(roll, 78), Palm{},
+                                          Bool.pick(PropKind, U32.is_lt(roll, 90), Kamboja{},
+                                                    Pot{})))))
+
+def prop_kind(+i: U32, +j: U32, +side: U32, +t: U32, +seed: U32) -> PropKind:
+  +roll = U32.mod(mix(U32.add(t, U32.mul(side, 17)), U32.add(seed, U32.mul(i, 13))), 100)
+  prop_pick(prop_low(i, j, side, t, seed), prop_pole(side, t), roll)
+
+type Prop is Data:
+  Prop{x: U32, z: U32, r: U32, kind: PropKind}
+
+def push_out(p: Pt, +f: Frame, +side: U32, +reach: U32) -> Pt:
+  match p:
+    case Pt{px, pz}:
+      Pt{push_along(px, negate(inward_x(f, side)), reach),
+         push_along(pz, negate(inward_z(f, side)), reach)}
+
+# The prop in front of lot t of a frontage: the lot's centre line, moved back
+# out to the planting line.
+def prop_at(+i: U32, +j: U32, +side: U32, +t: U32, +seed: U32) -> Prop:
+  +a = front_pt(i, j, side, lot_edge_t(i, j, side, 0, t, seed), 0, seed)
+  +b = front_pt(i, j, side, lot_edge_t(i, j, side, 0, U32.add(t, 1), seed), 0, seed)
+  +kind = prop_kind(i, j, side, t, seed)
+  +here = push_out(mid_pt(a, b), frame_of(i, j, seed), side, U32.sub(pavement_cm(), 50))
+  Prop{pt_x(here), pt_z(here), crown_cm(kind), kind}
+
+# A prop stands between the kerb and the far side of the pavement: never in the
+# carriageway, never where the buildings begin.
+def prop_on_pavement(+i: U32, +j: U32, +side: U32) -> Bool:
+  +half = half_cm(street_of(side_i(i, side), side_j(j, side), side_dir(side)))
+  Bool.and(U32.is_lt(half, prop_off_cm(i, j, side)),
+           U32.is_lt(prop_off_cm(i, j, side), U32.add(half, pavement_cm())))
+
+# Every prop of a frontage, walked by counting lots up: two crowns are narrower
+# than the lot between them, and a tree never stands near a junction.
+def props_apart(fuel: Nat, +t: U32, +i: U32, +j: U32, +side: U32, +seed: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+p:
+      +next = U32.add(t, 1)
+      +live = U32.is_lt(next, lots_on(i, j, side, 0, seed))
+      +pair = U32.add(crown_cm(prop_kind(i, j, side, t, seed)),
+                      crown_cm(prop_kind(i, j, side, next, seed)))
+      +ok = Bool.or(Bool.not(live), U32.is_le(pair, lot_width(i, j, side, 0, seed)))
+      Bool.and(ok, props_apart(p, next, i, j, side, seed))
+
 # The frame of an approach: its own street's chord from the node, and the
 # perpendicular to it, which is the left of travel. A mouth is square to the
 # street it belongs to, not to the block beside it, so each approach brings its
