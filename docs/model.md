@@ -18,7 +18,7 @@ law bike_driver_must_wear_helmet:
 Half of a law like that is a scenario. `R.with_bike(0, b, True{})` builds a
 clean road, one motorcycle, no passenger, and sets the rider's helmet to `b`.
 Everything else stays lawful, so the verdict isolates the one thing the rule is
-about. That is why the fifty behaviour laws each vary a single flag.
+about. That is why each behaviour law varies a single flag.
 
 ## Five rules of construction
 
@@ -194,6 +194,11 @@ provision names, for Pasal 50 ayat (1), the type-test duty Pasal 277 punishes.
 | Articles about permits and tariffs | They bind an operator's paperwork, not a driver | Modelled only where they change what is carried (`service.bend`) |
 | Fines in practice | Court and police practice vary from the statutory maximum | Out of scope; show the statutory maximum and say so |
 | Values printed on a leaf | A length, height, width, following distance or speed sign carries its number on the leaf; the rule table records a variable sign with a limit of zero | A scenario that supplies the number the leaf states |
+| Markings | Pasal 106 ayat (4) huruf b is modelled as rule 9, but its instrument, PM 34/2014 tentang Marka Jalan, is not in the corpus, so the rule has no table behind it | Adding PM 34/2014 with its checksum and its marking families |
+| Slowing for a warning sign | Pasal 116 ayat (1) asks for the brake where a sign warns, and every warning sign carries `NoDuty`; a warning is a picture, not a rule, in this slice | A `Slow` duty on the warning table, and the sign act that reads it |
+| Pasal 109 ayat (2) and 110 ayat (2) | Both defer their cases to circumstances an implementing regulation states, not UU 22/2009 | The implementing regulation, then a fact for each case |
+| Junctions in the drive | `town.bend` answers a junction's duty, but the drive has no junction, so those duties reach no charge | A signal or a give-way junction on the arterial, wired to rules 7, 31 and 32 |
+| Pasal 105, 123, 132 and 133 | General conduct, a deaf cyclist's marker, pedestrian duties and traffic demand management: no addressee in a moment, or no number | Out of scope by design |
 
 ## Why Bend
 

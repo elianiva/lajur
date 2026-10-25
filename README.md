@@ -210,11 +210,16 @@ Not covered:
 
 - **Legal reading.** The model encodes the plain text of the cited articles. It
   is not legal advice, and it does not resolve conflicting local practice.
-- **Sequence.** A scenario is one moment. Following too closely, and the duty to
-  slow before a hazard, need time, so they are out of the slice.
+- **Sequence.** A scenario is one moment. Following too closely, and whether a
+  driver braked early enough for a hazard, need time; the grounds to slow are
+  stated (rule 55), the timing is not.
 - **Unbounded counts.** The passenger law checks the range the scenarios use. A
   proof for every natural number needs induction the current model does not
   carry.
+- **Markings.** Pasal 106 ayat (4) huruf b is rule 9, but its instrument,
+  PM 34/2014 tentang Marka Jalan, is not in the corpus yet.
+- **Slowing for a warning sign.** Pasal 116 ayat (1) needs a duty on the
+  warning table, which carries none: a warning sign only warns here.
 - **Local rules.** Provincial and municipal regulations add signs and limits.
   They are out of scope until the rule package has a jurisdiction field.
 - **Values printed on a leaf.** A length, height, width, following distance or
@@ -228,7 +233,7 @@ Not covered:
 - **A clock.** Rule packages with an effective window, so an amendment re-dates
   a rule instead of rewriting it.
 - **A trace.** A scenario that carries its history, so following distance and
-  hazard braking can be stated at all.
+  the timing of a brake can be stated at all.
 - **Jurisdictions.** A jurisdiction field, and rule packages that override the
   national text, for the provincial and municipal signs and limits.
 - **The town, driven.** The lattice is laid out and drawn. Driving it turns the
