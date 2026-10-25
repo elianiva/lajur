@@ -1120,10 +1120,17 @@ def post_at(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Post:
 # ===========================================================================
 # Blocks and lots
 #
-# A block is filled from its south street northwards: a frontage row facing
-# the street, a gang, a row facing back, and so on until the block runs out.
-# Nothing is tested for overlap, because nothing can overlap: every row owns a
-# band of depth and every lot owns a share of its row's width.
+# A block is four frontages: one for each street that bounds it. A lot's front
+# line is the street's own curve pushed back by the kerb and the pavement, so
+# every building faces the road it stands on instead of a chord drawn between
+# two junctions. Lots are cut by the fraction of the street they take, so a
+# row of them tiles its frontage exactly, and the sides of a lot are square to
+# the street because both come from the same two fractions.
+#
+# The same construction repeats inward: a second ring of lots faces the gang
+# behind the first, and the block stops when the rings meet in the middle. That
+# is the offset subdivision CityEngine documents and Vanegas et al. derive from
+# the straight skeleton, kept to index arithmetic so a law can talk about it.
 # ===========================================================================
 
 # Integer square root by Newton's method, from above. Thirty-two steps reach
@@ -1149,6 +1156,18 @@ def length(a: Pt, b: Pt) -> U32:
           +dz = U32.sub(bz, az)
           sqrt(U32.add(U32.mul(dx, dx), U32.mul(dz, dz)))
 
+def mix_pt(p: Pt, q: Pt, +t: U32) -> Pt:
+  match p:
+    case Pt{px, pz}:
+      match q:
+        case Pt{qx, qz}:
+          Pt{lerp(px, qx, t), lerp(pz, qz, t)}
+
+# The block as a bilinear patch: a point is found by travelling `u` along the
+# south edge and `v` from there to the north edge.
+def quad_point(a: Pt, b: Pt, c: Pt, d: Pt, +u: U32, +v: U32) -> Pt:
+  mix_pt(mix_pt(a, b, u), mix_pt(d, c, u), v)
+
 def span_of(s: Signed) -> U32:
   match s:
     case Signed{size, down}:
@@ -1167,7 +1186,7 @@ def push_along(base: U32, u: Signed, dist: U32) -> U32:
 type Frame is Data:
   Frame{origin: Pt, ux: Signed, uz: Signed, nx: Signed, nz: Signed}
 
-# The block's own axes: along its south street, and into the block.
+# The block's own axes: along its row j street, and into the block.
 def chord(ax: U32, az: U32, bx: U32, bz: U32) -> U32:
   +dx = U32.sub(bx, ax)
   +dz = U32.sub(bz, az)
@@ -1201,17 +1220,6 @@ def negate(s: Signed) -> Signed:
     case Signed{size, down}:
       Signed{size, Bool.not(down)}
 
-# The inward normal is the along direction turned a quarter clockwise, which is
-# what walking the block south, east, north, west always gives.
-def in_frame(f: Frame, +along: U32, +depth: U32) -> Pt:
-  match f:
-    case Frame{origin, ux, uz, nx, nz}:
-      match origin:
-        case Pt{ox, oz}:
-          +x = push_along(push_along(ox, ux, along), nx, depth)
-          +z = push_along(push_along(oz, uz, along), nz, depth)
-          Pt{x, z}
-
 # A block's south street and north street, which are rows j and j+1.
 def south_half(+i: U32, +j: U32) -> U32:
   half_cm(street_of(i, j, East{}))
@@ -1234,96 +1242,136 @@ def block_depth(+i: U32, +j: U32, +seed: U32) -> U32:
 def block_width(+i: U32, +j: U32, +seed: U32) -> U32:
   length(site(i, j, seed), site(U32.add(i, 1), j, seed))
 
-# ---------------------------------------------------------------------------
-# The frontage a block offers
-#
-# A block's west edge is column i's street and its east edge is column i + 1's,
-# so a corner lot would stand in the crossing carriageway unless the frontage
-# stops at the kerb of the street it crosses. The inset is that kerb: half a
-# carriageway, and the bite the junction's kerb return takes out of the corner
-# (see the junction box below). On the ring there is no crossing street, and
-# the inset is nothing.
-# ---------------------------------------------------------------------------
-
-def corner_cm(open: Bool, street: Street, +radius: U32) -> U32:
-  match open:
-    case True{}:
-      U32.add(half_cm(street), U32.max(pavement_cm(), U32.div(U32.add(U32.mul(3, radius), 9), 10)))
-    case False{}:
-      0
-
-def west_corner(+i: U32, +j: U32, +seed: U32) -> U32:
-  corner_cm(has(i, j, South{}), street_of(i, j, South{}), junction_radius_cm(i, j, seed))
-
-def east_corner(+i: U32, +j: U32, +seed: U32) -> U32:
-  corner_cm(has(U32.add(i, 1), j, South{}), street_of(U32.add(i, 1), j, South{}),
-            junction_radius_cm(U32.add(i, 1), j, seed))
-
-def frontage_cm(+i: U32, +j: U32, +seed: U32) -> U32:
-  U32.sub(U32.sub(block_width(i, j, seed), west_corner(i, j, seed)), east_corner(i, j, seed))
-
-# The block as a bilinear patch: a point is found by travelling `u` along the
-# south edge and `v` from there to the north edge. Nothing can leave the block,
-# because every u and v leaves a point inside the four corners.
-def mix_pt(p: Pt, q: Pt, +t: U32) -> Pt:
-  match p:
-    case Pt{px, pz}:
-      match q:
-        case Pt{qx, qz}:
-          Pt{lerp(px, qx, t), lerp(pz, qz, t)}
-
-def quad_point(a: Pt, b: Pt, c: Pt, d: Pt, +u: U32, +v: U32) -> Pt:
-  +low = mix_pt(a, b, u)
-  +high = mix_pt(d, c, u)
-  mix_pt(low, high, v)
-
-# From the south kerb across the pavement, as a fraction of the block's depth.
-def front_v(+i: U32, +j: U32, +seed: U32) -> U32:
-  U32.div(U32.mul(U32.add(south_half(i, j), pavement_cm()), 1024), block_depth(i, j, seed))
-
-def row_v(+i: U32, +j: U32, +seed: U32) -> U32:
-  U32.div(U32.mul(row_depth_cm(), 1024), block_depth(i, j, seed))
-
-def gang_v(+i: U32, +j: U32, +seed: U32) -> U32:
-  U32.div(U32.mul(gang_cm(), 1024), block_depth(i, j, seed))
-
 # A block exists where both of the streets that bound it do. The river leaves
 # a column of cells with no east street, and those are water, not blocks.
 def block_exists(+i: U32, +j: U32) -> Bool:
   Bool.and(has(i, j, East{}), has(i, j, South{}))
 
-def rows_measured(+i: U32, +j: U32, +seed: U32) -> U32:
-  +room = U32.sub(block_depth(i, j, seed),
-                  U32.add(U32.add(U32.add(south_half(i, j), north_half(i, j)),
-                                  U32.mul(2, pavement_cm())), 200))
-  +each = U32.add(row_depth_cm(), gang_cm())
-  U32.min(U32.max(U32.div(U32.add(room, gang_cm()), each), 1), 4)
+# ---------------------------------------------------------------------------
+# The four frontages of a block
+#
+# Side 0 is the street along row j, side 1 the street down column i + 1, side 2
+# the street along row j + 1 and side 3 the street down column i. The block
+# lies to one fixed side of each, and that side is the direction a lot is
+# pushed to reach its own depth.
+# ---------------------------------------------------------------------------
 
-def rows_where(on: Bool, +i: U32, +j: U32, +seed: U32) -> U32:
+def side_i(+i: U32, +side: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(side, 1), U32.add(i, 1), i)
+
+def side_j(+j: U32, +side: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(side, 2), U32.add(j, 1), j)
+
+def side_dir(side: U32) -> Dir:
+  Bool.pick(Dir, U32.is_eq(U32.mod(side, 2), 0), East{}, South{})
+
+# The node at the far end of that frontage.
+def far_i(+i: U32, +side: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(side, 3), i, U32.add(i, 1))
+
+def far_j(+j: U32, +side: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(side, 0), j, U32.add(j, 1))
+
+# A frontage only exists where its street does. The river leaves a column with
+# no street, and the edge of the town leaves the blocks beside it without one,
+# so a side that has no street carries no lot.
+def side_open(+i: U32, +j: U32, +side: U32) -> Bool:
+  has(side_i(i, side), side_j(j, side), side_dir(side))
+
+def side_len(+i: U32, +j: U32, +side: U32, +seed: U32) -> U32:
+  length(site(side_i(i, side), side_j(j, side), seed),
+         site(far_i(i, side), far_j(j, side), seed))
+
+def inward_x(f: Frame, +side: U32) -> Signed:
+  match f:
+    case Frame{origin, +ux, +uz, +nx, +nz}:
+      Bool.pick(Signed, U32.is_lt(side, 2),
+                Bool.pick(Signed, U32.is_eq(side, 0), nx, negate(ux)),
+                Bool.pick(Signed, U32.is_eq(side, 2), negate(nx), ux))
+
+def inward_z(f: Frame, +side: U32) -> Signed:
+  match f:
+    case Frame{origin, +ux, +uz, +nx, +nz}:
+      Bool.pick(Signed, U32.is_lt(side, 2),
+                Bool.pick(Signed, U32.is_eq(side, 0), nz, negate(uz)),
+                Bool.pick(Signed, U32.is_eq(side, 2), negate(nz), uz))
+
+def mid_pt(a: Pt, b: Pt) -> Pt:
+  match a:
+    case Pt{ax, az}:
+      match b:
+        case Pt{bx, bz}:
+          Pt{U32.div(U32.add(ax, bx), 2), U32.div(U32.add(az, bz), 2)}
+
+# A point pushed `reach` centimetres into the block from the side it is on.
+def push_in(p: Pt, +f: Frame, +side: U32, +reach: U32) -> Pt:
+  match p:
+    case Pt{px, pz}:
+      Pt{push_along(px, inward_x(f, side), reach), push_along(pz, inward_z(f, side), reach)}
+
+# How far a frontage line stands from its street's centre line.
+def kerb_cm(+i: U32, +j: U32, +side: U32) -> U32:
+  U32.add(half_cm(street_of(side_i(i, side), side_j(j, side), side_dir(side))), pavement_cm())
+
+# A point on a frontage line: a fraction of the street, in thousand-and-
+# twenty-fourths, pushed back from the kerb by `back` centimetres.
+def front_pt(+i: U32, +j: U32, +side: U32, +t: U32, +back: U32, +seed: U32) -> Pt:
+  push_in(at(curve_of(side_i(i, side), side_j(j, side), side_dir(side), seed), t),
+          frame_of(i, j, seed), side, U32.add(kerb_cm(i, j, side), back))
+
+# Where the frontage starts and ends: the two mouths of its street, as
+# fractions of it.
+def near_t(+i: U32, +j: U32, +side: U32, +seed: U32) -> U32:
+  +m = mouth_cm(side_i(i, side), side_j(j, side), side_dir(side), seed)
+  U32.min(U32.div(U32.mul(m, 1024), U32.max(side_len(i, j, side, seed), 1)), 1024)
+
+def far_t(+i: U32, +j: U32, +side: U32, +seed: U32) -> U32:
+  +m = mouth_cm(far_i(i, side), far_j(j, side), opposite(side_dir(side)), seed)
+  U32.min(U32.div(U32.mul(m, 1024), U32.max(side_len(i, j, side, seed), 1)), 1024)
+
+# The span between the two mouths. A street shorter than its own mouths has no
+# frontage at all, and says so instead of wrapping round to a huge one.
+def span_t(+i: U32, +j: U32, +side: U32, +seed: U32) -> U32:
+  +taken = U32.add(near_t(i, j, side, seed), far_t(i, j, side, seed))
+  Bool.pick(U32, U32.is_lt(taken, 1024), U32.sub(1024, taken), 0)
+
+# The frontage a block can build on, in centimetres.
+def frontage_cm(+i: U32, +j: U32, +side: U32, +seed: U32) -> U32:
+  U32.div(U32.mul(span_t(i, j, side, seed), side_len(i, j, side, seed)), 1024)
+
+# A frontage lot is a shop-house six metres across; the rings behind take
+# kampung plots eleven metres across, which is what a yard and a terrace need.
+# The count follows the frontage, so a lot is never narrower than its pitch —
+# `lots` lots share the frontage exactly, and `lots` is the frontage divided by
+# the pitch, so the share cannot fall below the pitch itself.
+def pitch_of(ring: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(ring, 0), 600, 1100)
+
+
+def lots_where(on: Bool, +i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
   match on:
     case True{}:
-      rows_measured(i, j, seed)
+      U32.min(U32.div(frontage_cm(i, j, side, seed), pitch_of(ring)), 12)
     case False{}:
       0
 
-# How many rows fit between the two pavements.
-def rows_in(+i: U32, +j: U32, +seed: U32) -> U32:
-  rows_where(block_exists(i, j), i, j, seed)
+def lots_on(+i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
+  lots_where(side_open(i, j, side), i, j, side, ring, seed)
 
-# A row's lots are seven hundred centimetres each, at least one and at most
-# twelve, and they share the frontage exactly.
-def lots_where(on: Bool, +i: U32, +j: U32, +seed: U32) -> U32:
-  match on:
-    case True{}:
-      U32.min(U32.max(U32.div(frontage_cm(i, j, seed), 700), 1), 12)
-    case False{}:
-      0
+def lot_width(+i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
+  U32.div(frontage_cm(i, j, side, seed), U32.max(lots_on(i, j, side, ring, seed), 1))
 
-def lots_in(+i: U32, +j: U32, +seed: U32) -> U32:
-  lots_where(block_exists(i, j), i, j, seed)
+# The fraction of the street where lot t of a frontage starts.
+def lot_edge_t(+i: U32, +j: U32, +side: U32, +ring: U32, +t: U32, +seed: U32) -> U32:
+  U32.add(near_t(i, j, side, seed),
+          U32.div(U32.mul(U32.mul(t, span_t(i, j, side, seed)), 1),
+                  U32.max(lots_on(i, j, side, ring, seed), 1)))
 
-def lot_width(+i: U32, +j: U32, +seed: U32) -> U32:
-  U32.div(frontage_cm(i, j, seed), lots_in(i, j, seed))
+# How many rings of lots fit between two opposite frontages before they meet.
+def rings_in(+i: U32, +j: U32, +seed: U32) -> U32:
+  +room = U32.sub(U32.min(block_depth(i, j, seed), block_width(i, j, seed)),
+                  U32.mul(2, U32.add(half_cm(Ring{}), pavement_cm())))
+  U32.min(U32.max(U32.div(room, U32.mul(2, U32.add(row_depth_cm(), gang_cm()))), 1), 3)
 
 type LotKind is Data:
   Ruko{}
@@ -1331,72 +1379,179 @@ type LotKind is Data:
   House{}
   Kos{}
   Petak{}
+  Filler{}
 
-def kind_at(frontage: Bool, shop: Bool, house: Bool, rooms: Bool) -> LotKind:
-  match frontage:
-    case True{}:
-      match shop:
-        case True{}:
-          Ruko{}
-        case False{}:
-          Warung{}
-    case False{}:
-      match house:
-        case True{}:
-          House{}
-        case False{}:
-          match rooms:
-            case True{}:
-              Kos{}
-            case False{}:
-              Petak{}
+# What a kind needs of its lot: the frontage it cannot be narrower than, and
+# the depth it takes out of its ring. The renderer draws every building to
+# exactly its lot, so these two numbers are the whole of the non-overlap
+# argument — a lot is cut at least `min` wide, and no kind is deeper than a
+# ring.
+def kind_min_cm(k: LotKind) -> U32:
+  match k:
+    case Ruko{}:
+      450
+    case Warung{}:
+      350
+    case House{}:
+      700
+    case Kos{}:
+      520
+    case Petak{}:
+      340
+    case Filler{}:
+      500
 
-def kind_of(+i: U32, +j: U32, +row: U32, +k: U32, +seed: U32) -> LotKind:
-  +roll = U32.mod(mix(U32.add(k, U32.mul(row, 31)), U32.add(seed, U32.mul(i, 7))), 100)
-  kind_at(U32.is_eq(row, 0), U32.is_lt(roll, 55), U32.is_lt(roll, 45), U32.is_lt(roll, 70))
+def kind_depth_cm(k: LotKind) -> U32:
+  match k:
+    case Ruko{}:
+      1200
+    case Warung{}:
+      500
+    case House{}:
+      1200
+    case Kos{}:
+      1000
+    case Petak{}:
+      800
+    case Filler{}:
+      1000
+
+def kind_fits(k: LotKind, w: U32) -> Bool:
+  U32.is_le(kind_min_cm(k), w)
+
+# The frontage ring is shop-houses and the rings behind are kampung plots. A
+# kind is chosen only from those that fit the lot it will stand in, and the
+# narrowest kind of its ring is the fallback, so no roll can ask for a building
+# wider than the ground under it.
+def kind_pick(frontage: Bool, +w: U32, +roll: U32) -> LotKind:
+  Bool.pick(LotKind, frontage,
+            Bool.pick(LotKind, U32.is_lt(roll, 78),
+                      Bool.pick(LotKind, kind_fits(Ruko{}, w), Ruko{}, Warung{}),
+                      Warung{}),
+            Bool.pick(LotKind, U32.is_lt(roll, 42),
+                      Bool.pick(LotKind, kind_fits(House{}, w), House{}, Petak{}),
+                      Bool.pick(LotKind, U32.is_lt(roll, 66),
+                                Bool.pick(LotKind, kind_fits(Kos{}, w), Kos{}, Petak{}),
+                                Petak{})))
+
+def kind_of(+i: U32, +j: U32, +side: U32, +ring: U32, +t: U32, +seed: U32) -> LotKind:
+  +roll = U32.mod(mix(U32.add(t, U32.mul(ring, 31)), U32.add(seed, U32.mul(side, 7))), 100)
+  kind_pick(U32.is_eq(ring, 0), lot_width(i, j, side, ring, seed), roll)
+
+# Every roll the picker can see, at one width: the law that a kind fits the lot
+# it is chosen for, checked over the whole roll space rather than sampled.
+def every_roll_fits(fuel: Nat, +roll: U32, +frontage: Bool, +w: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(kind_fits(kind_pick(frontage, w, roll), w),
+               every_roll_fits(p, U32.add(roll, 1), frontage, w))
 
 type Lot is Data:
   Lot{x: U32, z: U32, fx: Signed, fz: Signed, w: U32, d: U32, kind: LotKind}
 
-def facing(row: U32) -> Bool:
-  U32.is_eq(U32.mod(row, 2), 0)
+# An even ring faces the street it stands on; an odd ring faces the gang behind
+# the ring in front of it.
+def outward(ring: U32) -> Bool:
+  U32.is_eq(U32.mod(ring, 2), 0)
 
-# A front faces the street: an even row faces back down the inward normal, an
-# odd row faces along it, across the gang.
-def face_x(f: Frame, even: Bool) -> Signed:
-  match f:
-    case Frame{origin, ux, uz, nx, nz}:
-      match even:
-        case True{}:
-          negate(nx)
-        case False{}:
-          nx
+def face_x(+f: Frame, +side: U32, +ring: U32) -> Signed:
+  Bool.pick(Signed, outward(ring), negate(inward_x(f, side)), inward_x(f, side))
 
-def face_z(f: Frame, even: Bool) -> Signed:
-  match f:
-    case Frame{origin, ux, uz, nx, nz}:
-      match even:
-        case True{}:
-          negate(nz)
-        case False{}:
-          nz
-
-def lot_from(here: Pt, +f: Frame, +face: Bool, w: U32, depth: U32, kind: LotKind) -> Lot:
-  match here:
-    case Pt{x, z}:
-      Lot{x, z, face_x(f, face), face_z(f, face), w, depth, kind}
+def face_z(+f: Frame, +side: U32, +ring: U32) -> Signed:
+  Bool.pick(Signed, outward(ring), negate(inward_z(f, side)), inward_z(f, side))
 
 # One lot: its footprint centre, the way its front looks, its width and depth.
-def lot_at(+i: U32, +j: U32, +row: U32, +k: U32, +seed: U32) -> Lot:
-  +w = lot_width(i, j, seed)
-  +along = U32.add(west_corner(i, j, seed), U32.add(U32.mul(k, w), U32.div(w, 2)))
-  +u = U32.div(U32.mul(along, 1024), U32.max(block_width(i, j, seed), 1))
-  +start = U32.add(front_v(i, j, seed), U32.mul(row, U32.add(row_v(i, j, seed), gang_v(i, j, seed))))
-  +v = U32.add(start, U32.div(row_v(i, j, seed), 2))
-  +here = quad_point(site(i, j, seed), site(U32.add(i, 1), j, seed),
-                     site(U32.add(i, 1), U32.add(j, 1), seed), site(i, U32.add(j, 1), seed), u, v)
-  lot_from(here, frame_of(i, j, seed), facing(row), lot_width(i, j, seed), row_depth_cm(),
-           kind_of(i, j, row, k, seed))
+def lot_at(+i: U32, +j: U32, +side: U32, +ring: U32, +t: U32, +seed: U32) -> Lot:
+  +kind = kind_of(i, j, side, ring, t, seed)
+  +depth = kind_depth_cm(kind)
+  +back = U32.mul(ring, U32.add(row_depth_cm(), gang_cm()))
+  +a = front_pt(i, j, side, lot_edge_t(i, j, side, ring, t, seed), back, seed)
+  +b = front_pt(i, j, side, lot_edge_t(i, j, side, ring, U32.add(t, 1), seed), back, seed)
+  +w = length(a, b)
+  +mid = mid_pt(a, b)
+  +f = frame_of(i, j, seed)
+  +reach = U32.add(kerb_cm(i, j, side), U32.add(back, U32.div(depth, 2)))
+  +here = push_in(mid, f, side, reach)
+  Lot{pt_x(here), pt_z(here), face_x(f, side, ring), face_z(f, side, ring), w, depth, kind}
+
+# ---------------------------------------------------------------------------
+# The core of a block
+#
+# The rings stop where the block runs out of depth, and what is left in the
+# middle is filled by a grid of lots that face nothing in particular: a terrace
+# or a kos with no street of its own. The grid is cut from the block's own
+# frame, because the core has no kerb to follow, and every cell is one lot.
+# ---------------------------------------------------------------------------
+
+def core_in(+i: U32, +j: U32, +side: U32, +seed: U32) -> U32:
+  U32.add(kerb_cm(i, j, side),
+          U32.mul(rings_in(i, j, seed), U32.add(row_depth_cm(), gang_cm())))
+
+# The node a core corner stands at: the pair of sides that meet there names it.
+def corner_i(+i: U32, +a: U32, +b: U32) -> U32:
+  Bool.pick(U32, Bool.or(U32.is_eq(a, 3), U32.is_eq(b, 3)), i, U32.add(i, 1))
+
+def corner_j(+j: U32, +a: U32, +b: U32) -> U32:
+  Bool.pick(U32, Bool.or(U32.is_eq(a, 0), U32.is_eq(b, 0)), j, U32.add(j, 1))
+
+# One corner of the core: the block's own node there, pushed in from both
+# streets that meet at it.
+def core_corner(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> Pt:
+  push_in(push_in(site(corner_i(i, a, b), corner_j(j, a, b), seed), frame_of(i, j, seed), a,
+                  core_in(i, j, a, seed)),
+          frame_of(i, j, seed), b, core_in(i, j, b, seed))
+
+def core_widest(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.max(U32.max(core_in(i, j, 0, seed), core_in(i, j, 1, seed)),
+          U32.max(core_in(i, j, 2, seed), core_in(i, j, 3, seed)))
+
+# The core only exists where all four streets do and the rings leave room for
+# it: it is the middle of a block, and a block with a missing side, or one too
+# narrow for its own frontages, has no middle to speak of.
+def core_ready(+i: U32, +j: U32, +seed: U32) -> Bool:
+  Bool.and(side_open(i, j, 0), Bool.and(side_open(i, j, 1),
+  Bool.and(side_open(i, j, 2), Bool.and(side_open(i, j, 3),
+           U32.is_lt(U32.mul(2, core_widest(i, j, seed)),
+                     U32.min(block_depth(i, j, seed), block_width(i, j, seed)))))))
+
+def core_at(+i: U32, +j: U32, +u: U32, +v: U32, +seed: U32) -> Pt:
+  quad_point(core_corner(i, j, 3, 0, seed), core_corner(i, j, 0, 1, seed),
+             core_corner(i, j, 1, 2, seed), core_corner(i, j, 2, 3, seed), u, v)
+
+def core_width(+i: U32, +j: U32, +seed: U32) -> U32:
+  length(core_corner(i, j, 3, 0, seed), core_corner(i, j, 0, 1, seed))
+
+def core_depth(+i: U32, +j: U32, +seed: U32) -> U32:
+  length(core_corner(i, j, 3, 0, seed), core_corner(i, j, 2, 3, seed))
+
+def core_lots_w(+i: U32, +j: U32, +seed: U32) -> U32:
+  Bool.pick(U32, core_ready(i, j, seed),
+            U32.min(U32.max(U32.div(core_width(i, j, seed), 1100), 1), 4), 0)
+
+def core_lots_d(+i: U32, +j: U32, +seed: U32) -> U32:
+  Bool.pick(U32, core_ready(i, j, seed),
+            U32.min(U32.max(U32.div(core_depth(i, j, seed), 1100), 1), 4), 0)
+
+# A core lot has no street to face, so it takes a filler: a terrace with a
+# window on every side instead of one front and three blank walls.
+def core_kind(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> LotKind:
+  Filler{}
+
+def core_lot_width(+i: U32, +j: U32, +seed: U32) -> U32:
+  U32.div(core_width(i, j, seed), core_lots_w(i, j, seed))
+
+def core_lot_at(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> Lot:
+  +nw = core_lots_w(i, j, seed)
+  +nd = core_lots_d(i, j, seed)
+  +u = U32.div(U32.mul(U32.add(U32.mul(a, 2), 1), 1024), U32.mul(nw, 2))
+  +v = U32.div(U32.mul(U32.add(U32.mul(b, 2), 1), 1024), U32.mul(nd, 2))
+  +here = core_at(i, j, u, v, seed)
+  +kind = core_kind(i, j, a, b, seed)
+  +f = frame_of(i, j, seed)
+  Lot{pt_x(here), pt_z(here), face_x(f, 3, 0), face_z(f, 3, 0),
+      core_lot_width(i, j, seed), kind_depth_cm(kind), kind}
 
 # ---------------------------------------------------------------------------
 # Reading the lots back, so a law can walk a block.
@@ -1408,15 +1563,33 @@ def lot_inside(l: Lot) -> Bool:
       Bool.and(U32.is_lt(0, x), Bool.and(U32.is_lt(x, 90000),
       Bool.and(U32.is_lt(0, z), U32.is_lt(z, 90000))))
 
-# One lot from each row of a block, walked by counting rows down.
-def rows_inside_block(fuel: Nat, +row: U32, +i: U32, +j: U32, +seed: U32) -> Bool:
+# The first and last lot of each of the four frontages, walked by counting
+# sides up. Between them they carry the ends of every row, which is where a lot
+# could leave the town.
+def sides_inside(fuel: Nat, +side: U32, +i: U32, +j: U32, +seed: U32) -> Bool:
   match fuel:
     case 0n:
       True{}
     case 1n+p:
-      +live = U32.is_lt(row, rows_in(i, j, seed))
-      +ok = Bool.or(Bool.not(live), lot_inside(lot_at(i, j, row, 0, seed)))
-      Bool.and(ok, rows_inside_block(p, U32.add(row, 1), i, j, seed))
+      +lots = lots_on(i, j, side, 0, seed)
+      +ok = Bool.or(U32.is_eq(lots, 0),
+                    Bool.and(lot_inside(lot_at(i, j, side, 0, 0, seed)),
+                             lot_inside(lot_at(i, j, side, 0, U32.sub(lots, 1), seed))))
+      Bool.and(ok, sides_inside(p, U32.add(side, 1), i, j, seed))
+
+# Every lot of a block fits the kind that stands in it: the kind is never wider
+# than the lot it was chosen for, and never deeper than a ring.
+def lots_fit(fuel: Nat, +t: U32, +side: U32, +ring: U32, +i: U32, +j: U32, +seed: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+p:
+      +live = U32.is_lt(t, lots_on(i, j, side, ring, seed))
+      +kind = kind_of(i, j, side, ring, t, seed)
+      +ok = Bool.or(Bool.not(live),
+                    Bool.and(U32.is_le(kind_min_cm(kind), lot_width(i, j, side, ring, seed)),
+                             U32.is_le(kind_depth_cm(kind), row_depth_cm())))
+      Bool.and(ok, lots_fit(p, U32.add(t, 1), side, ring, i, j, seed))
 
 # The frame of an approach: its own street's chord from the node, and the
 # perpendicular to it, which is the left of travel. A mouth is square to the

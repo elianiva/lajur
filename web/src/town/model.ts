@@ -60,7 +60,7 @@ export type Mark = "StopLine" | "GiveWayLine" | "NoLine";
 export type Post = "PriorityWarning" | "GiveWaySign" | "StopSign" | "NoSign";
 export type Control = "Signal" | "Roundabout" | "Uncontrolled";
 export type Shape = "FourEqual" | "FourMajor" | "StraightT" | "SkewT" | "Bend";
-export type LotKind = "Ruko" | "Warung" | "House" | "Kos" | "Petak";
+export type LotKind = "Ruko" | "Warung" | "House" | "Kos" | "Petak" | "Filler";
 
 export interface Approach {
   d: DirName;
@@ -136,12 +136,14 @@ export function blockExists(i: number, j: number): boolean {
   return bool(g.block_exists(i, j));
 }
 
-export function rowsIn(i: number, j: number): number {
-  return g.rows_in(i, j, SEED) as number;
+/** How many rings of lots a block holds, counting the frontage as ring 0. */
+export function ringsIn(i: number, j: number): number {
+  return g.rings_in(i, j, SEED) as number;
 }
 
-export function lotsIn(i: number, j: number): number {
-  return g.lots_in(i, j, SEED) as number;
+/** Lots on one of a block's four frontages, at one ring in from it. */
+export function lotsOn(i: number, j: number, side: number, ring: number): number {
+  return g.lots_on(i, j, side, ring, SEED) as number;
 }
 
 /** How far from the node an approach's kerb stops, in centimetres. */
@@ -172,8 +174,26 @@ export function junctionRadius(i: number, j: number): number {
   return g.junction_radius_cm(i, j, SEED) as number;
 }
 
-export function lotAt(i: number, j: number, row: number, k: number): Lot {
-  const l = g.lot_at(i, j, row, k, SEED) as Bend;
+export function lotAt(i: number, j: number, side: number, ring: number, k: number): Lot {
+  const l = g.lot_at(i, j, side, ring, k, SEED) as Bend;
+  return {
+    x: l.x as number,
+    z: l.z as number,
+    fx: signed(l.fx),
+    fz: signed(l.fz),
+    w: l.w as number,
+    d: l.d as number,
+    kind: (l.kind as Bend).$ as LotKind,
+  };
+}
+
+/** The grid of lots that fills a block's core. */
+export function coreLots(i: number, j: number): [number, number] {
+  return [g.core_lots_w(i, j, SEED) as number, g.core_lots_d(i, j, SEED) as number];
+}
+
+export function coreLotAt(i: number, j: number, a: number, b: number): Lot {
+  const l = g.core_lot_at(i, j, a, b, SEED) as Bend;
   return {
     x: l.x as number,
     z: l.z as number,

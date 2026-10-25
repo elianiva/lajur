@@ -119,27 +119,33 @@ export function ruko(seed: number, width: number, depth: number): THREE.Group {
 
   piece(group, [depth, height, width], wall, [0, height / 2, 0]);
   // Parapet with a cornice: the flat-topped ruko silhouette.
-  piece(group, [depth + 0.2, 0.25, width + 0.1], mats.concrete, [0, height + 0.12, 0]);
-  piece(group, [0.3, 0.9, width], wall, [front - 0.15, height + 0.6, 0]);
+  piece(group, [depth - 0.1, 0.25, width - 0.1], mats.concrete, [0, height + 0.12, 0]);
+  piece(group, [0.3, 0.9, width - 0.2], wall, [front - 0.15, height + 0.6, 0]);
 
   // Ground floor: shutter or open shop with goods, then the sign and awning.
   const open = (seed * 7) % 1 > 0.35;
-  piece(group, [0.1, 2.7, width * 0.86], open ? mats.glass : mats.steel, [front + 0.02, 1.4, 0]);
+  piece(group, [0.1, 2.7, width * 0.86], open ? mats.glass : mats.steel, [front - 0.05, 1.4, 0]);
   if (!open) {
     for (let y = 0.3; y < 2.7; y += 0.3)
-      piece(group, [0.04, 0.04, width * 0.86], mats.metal, [front + 0.08, y, 0]);
+      piece(group, [0.04, 0.04, width * 0.86], mats.metal, [front - 0.1, y, 0]);
   }
-  piece(group, [0.16, 1.0, width * 0.92], shopSign(seed), [front + 0.12, 3.3, 0]);
-  const awning = piece(group, [1.6, 0.1, width], pick(tarps, seed, 5), [front + 0.8, 2.85, 0]);
-  awning.rotation.z = -0.18;
+  piece(group, [0.16, 1.0, width * 0.92], shopSign(seed), [front - 0.08, 3.3, 0]);
+  // The awning hangs inside the front line, over the shop's own forecourt: a
+  // building fills its lot and never reaches past it.
+  const awning = piece(group, [1.6, 0.1, width * 0.96], pick(tarps, seed, 5), [
+    front - 0.85,
+    2.85,
+    0,
+  ]);
+  awning.rotation.z = -0.12;
 
   // Upper floors: windows, a balcony rail, a split AC unit.
   for (let floor = 1; floor < floors; floor += 1) {
     const y = floor * 3.3 + 1.6;
-    panes(group, front + 0.02, y, width * 0.8, 2, [width * 0.3, 1.4], seed + floor);
-    piece(group, [0.8, 0.1, width * 0.9], mats.white, [front + 0.4, floor * 3.3 + 0.2, 0]);
-    piece(group, [0.05, 0.8, width * 0.9], mats.metal, [front + 0.78, floor * 3.3 + 0.6, 0]);
-    piece(group, [0.5, 0.5, 0.8], mats.white, [front + 0.25, y + 1.1, width * 0.35]);
+    panes(group, front - 0.05, y, width * 0.8, 2, [width * 0.3, 1.4], seed + floor);
+    piece(group, [0.8, 0.1, width * 0.9], mats.white, [front - 0.4, floor * 3.3 + 0.2, 0]);
+    piece(group, [0.05, 0.8, width * 0.9], mats.metal, [front - 0.78, floor * 3.3 + 0.6, 0]);
+    piece(group, [0.5, 0.5, 0.8], mats.white, [front - 0.25, y + 1.1, width * 0.35]);
   }
   if (seed > 0.4) toren(group, [-depth * 0.2, height + 0.25, -width * 0.2], seed);
   if (seed > 0.8) dish(group, [depth * 0.1, height + 0.25, width * 0.25]);
@@ -147,32 +153,34 @@ export function ruko(seed: number, width: number, depth: number): THREE.Group {
 }
 
 /** A warung: tarpaulin roof, counter, benches, crates, and a painted name. */
-export function warung(seed: number): THREE.Group {
+export function warung(seed: number, width: number, depth: number): THREE.Group {
   const group = new THREE.Group();
-  const width = 3.6;
   const wall = pick(walls, seed, 2);
+  const front = depth / 2;
 
-  piece(group, [2.6, 2.6, width], wall, [-0.6, 1.3, 0]);
-  piece(group, [0.6, 0.95, width * 0.85], mats.wood, [1.1, 0.48, 0]);
-  piece(group, [0.8, 0.08, width * 0.9], mats.woodDark, [1.1, 0.98, 0]);
+  // The back half is a shed; the front half is the counter under the tarp.
+  piece(group, [depth * 0.5, 2.5, width * 0.94], wall, [-depth * 0.22, 1.25, 0]);
+  piece(group, [0.6, 0.95, width * 0.8], mats.wood, [front - 0.5, 0.48, 0]);
+  piece(group, [0.8, 0.08, width * 0.85], mats.woodDark, [front - 0.5, 0.98, 0]);
   // Snacks hung in strips and jars on the counter.
   for (let k = 0; k < 4; k += 1) {
-    piece(group, [0.08, 0.7, 0.2], pick(tarps, seed + k * 0.1, 3), [0.75, 1.9, -1.2 + k * 0.8]);
-    cyl(group, 0.13, 0.13, 0.3, mats.mirror, [1.1, 1.17, -1.2 + k * 0.8], 6);
+    const z = -width * 0.3 + k * width * 0.2;
+    piece(group, [0.08, 0.7, 0.2], pick(tarps, seed + k * 0.1, 3), [front - 0.85, 1.9, z]);
+    cyl(group, 0.13, 0.13, 0.3, mats.mirror, [front - 0.5, 1.17, z], 6);
   }
-  for (const z of [-width / 2, width / 2]) piece(group, [0.1, 2.5, 0.1], mats.wood, [2.0, 1.25, z]);
-  const tarp = piece(group, [3.0, 0.1, width + 0.6], pick(tarps, seed, 4), [0.9, 2.65, 0]);
-  tarp.rotation.z = -0.12;
+  for (const z of [-width * 0.45, width * 0.45])
+    piece(group, [0.1, 2.4, 0.1], mats.wood, [front - 0.1, 1.2, z]);
+  piece(group, [depth * 0.94, 0.1, width * 0.96], pick(tarps, seed, 4), [0, 2.55, 0]);
   piece(
     group,
     [0.12, 0.7, width * 0.9],
     board(seed > 0.5 ? "WARUNG" : "WARTEG", "#fffdf2", "#e8382f"),
-    [1.0, 3.15, 0],
+    [front - 0.1, 3.05, 0],
   );
   // A long bench out front, crates and a gas bottle.
-  piece(group, [0.4, 0.45, width * 0.8], mats.wood, [2.5, 0.23, 0]);
-  piece(group, [0.5, 0.4, 0.6], mats.red, [1.8, 0.2, width * 0.55]);
-  cyl(group, 0.18, 0.18, 0.5, mats.green, [2.2, 0.25, -width * 0.6], 8);
+  piece(group, [0.4, 0.45, width * 0.7], mats.wood, [front - 1.1, 0.23, 0]);
+  piece(group, [0.5, 0.4, 0.6], mats.red, [front - 1.6, 0.2, width * 0.3]);
+  cyl(group, 0.18, 0.18, 0.5, mats.green, [front - 1.6, 0.25, -width * 0.3], 8);
   return group;
 }
 
@@ -185,15 +193,15 @@ export function house(seed: number, width: number, depth: number): THREE.Group {
   const hipped = (seed * 5) % 1 > 0.35;
   const inner = depth - 2;
 
-  piece(group, [inner, height, width], wall, [-1, height / 2, 0]);
-  roof(group, depth + 0.6, width + 0.6, Math.min(width, depth) * 0.32, hipped, cover, [
+  piece(group, [inner, height, width * 0.92], wall, [-1, height / 2, 0]);
+  roof(group, depth - 0.2, width * 0.92, Math.min(width, depth) * 0.32, hipped, cover, [
     0,
     height,
     0,
   ]);
-  if (!hipped) piece(group, [depth + 0.6, 0.1, 0.1], mats.white, [0, height, width / 2 + 0.3]);
+  if (!hipped) piece(group, [depth - 0.2, 0.1, 0.1], mats.white, [0, height, width * 0.46 + 0.3]);
   // Teras: posts, a door, two windows with white frames.
-  for (const z of [-width * 0.4, width * 0.4])
+  for (const z of [-width * 0.36, width * 0.36])
     piece(group, [0.2, height, 0.2], mats.white, [depth / 2 - 0.2, height / 2, z]);
   piece(group, [0.12, 2.1, 0.95], mats.woodDark, [inner / 2 - 0.94, 1.05, -width * 0.15]);
   for (const z of [width * 0.22, -width * 0.38]) {
@@ -201,11 +209,11 @@ export function house(seed: number, width: number, depth: number): THREE.Group {
     piece(group, [0.14, 1.2, 1.0], mats.white, [inner / 2 - 0.95, 1.7, z]);
     piece(group, [0.18, 1.0, 0.8], mats.glass, [inner / 2 - 0.94, 1.7, z]);
   }
-  piece(group, [2.0, 0.12, width], mats.paving, [depth / 2 - 1, 0.06, 0]);
+  piece(group, [2.0, 0.12, width * 0.9], mats.paving, [depth / 2 - 1, 0.06, 0]);
   // A low fence with a gate gap, and a pot or two.
   if (seed > 0.3) {
-    piece(group, [0.15, 0.9, width * 0.35], mats.white, [depth / 2 + 0.5, 0.45, -width * 0.32]);
-    piece(group, [0.15, 0.9, width * 0.35], mats.white, [depth / 2 + 0.5, 0.45, width * 0.32]);
+    piece(group, [0.15, 0.9, width * 0.32], mats.white, [depth / 2 - 0.1, 0.45, -width * 0.32]);
+    piece(group, [0.15, 0.9, width * 0.32], mats.white, [depth / 2 - 0.1, 0.45, width * 0.32]);
   }
   cyl(group, 0.25, 0.18, 0.4, mats.rust, [depth / 2 - 0.3, 0.2, width * 0.3], 6);
   cyl(group, 0.35, 0.35, 0.5, mats.leaf, [depth / 2 - 0.3, 0.6, width * 0.3], 6);
@@ -214,47 +222,110 @@ export function house(seed: number, width: number, depth: number): THREE.Group {
 }
 
 /** Kos-kosan: two floors of rented rooms, a corridor, a row of doors and slippers. */
-export function kos(seed: number): THREE.Group {
+export function kos(seed: number, width: number, depth: number): THREE.Group {
   const group = new THREE.Group();
-  const width = 12;
-  const depth = 8;
   const wall = pick(walls, seed, 4);
-  piece(group, [depth - 1.6, 6.4, width], wall, [-0.8, 3.2, 0]);
-  piece(group, [1.6, 0.2, width], mats.concrete, [depth / 2 - 0.8, 3.2, 0]);
-  piece(group, [0.08, 1.0, width], mats.metal, [depth / 2 - 0.05, 3.8, 0]);
-  for (let k = 0; k < 4; k += 1) {
-    const z = -width / 2 + 1.5 + k * 3;
+  // Rooms line the width; the corridor runs the depth in front of them.
+  const units = Math.min(Math.max(Math.floor(width / 2.8), 1), 6);
+  const unit = width / units;
+  const body = depth - 1.6;
+  piece(group, [body, 6.4, width * 0.96], wall, [-0.8, 3.2, 0]);
+  piece(group, [1.6, 0.2, width * 0.96], mats.concrete, [depth / 2 - 0.8, 3.2, 0]);
+  piece(group, [0.08, 1.0, width * 0.96], mats.metal, [depth / 2 - 0.06, 3.8, 0]);
+  for (let k = 0; k < units; k += 1) {
+    const z = -width / 2 + unit * (k + 0.5);
     for (const y of [1.05, 4.25]) {
-      piece(group, [0.1, 2.1, 0.9], pick(signs, seed + k, 2), [depth / 2 - 1.58, y, z]);
-      piece(group, [0.1, 0.8, 0.8], mats.glass, [depth / 2 - 1.58, y + 0.3, z + 1.1]);
+      piece(group, [0.1, 2.1, unit * 0.7], pick(signs, seed + k, 2), [depth / 2 - 1.58, y, z]);
+      piece(group, [0.1, 0.8, unit * 0.6], mats.glass, [depth / 2 - 1.58, y + 0.3, z + unit * 0.1]);
     }
   }
-  roof(group, depth + 0.6, width + 0.6, 2.2, false, pick(roofs, seed, 3), [0, 6.4, 0]);
-  piece(group, [0.16, 0.8, 3.2], board("KOS PUTRI", "#d2489a"), [depth / 2 + 0.1, 3.0, 0]);
+  roof(group, depth - 0.2, width * 0.96, 2.2, false, pick(roofs, seed, 3), [0, 6.4, 0]);
+  piece(group, [0.16, 0.8, Math.min(3.2, width * 0.5)], board("KOS PUTRI", "#d2489a"), [
+    depth / 2 - 0.05,
+    3.0,
+    0,
+  ]);
   laundry(group, depth / 2 - 0.4, 6.0, 0, width * 0.8, seed);
   return group;
 }
 
 /** Rumah petak: a terrace of tiny kampung homes under one long roof. */
-export function petak(seed: number): THREE.Group {
+export function petak(seed: number, width: number, depth: number): THREE.Group {
   const group = new THREE.Group();
-  const units = 4;
-  const unit = 3.4;
-  const width = units * unit;
-  const depth = 6;
+  const units = Math.min(Math.max(Math.floor(width / 3.4), 1), 6);
+  const unit = width / units;
   for (let k = 0; k < units; k += 1) {
     const z = -width / 2 + unit * (k + 0.5);
     const wall = pick(walls, seed + k * 0.13, 5);
-    piece(group, [depth, 3, unit - 0.05], wall, [0, 1.5, z]);
-    piece(group, [0.1, 1.9, 0.8], mats.woodDark, [depth / 2 + 0.01, 0.95, z - 0.7]);
-    piece(group, [0.1, 0.8, 0.9], mats.glass, [depth / 2 + 0.01, 1.6, z + 0.6]);
+    piece(group, [depth - 0.2, 3, unit - 0.06], wall, [0, 1.5, z]);
+    piece(group, [0.1, 1.9, unit * 0.28], mats.woodDark, [depth / 2 - 0.06, 0.95, z - unit * 0.2]);
+    piece(group, [0.1, 0.8, unit * 0.3], mats.glass, [depth / 2 - 0.06, 1.6, z + unit * 0.18]);
     if ((k + Math.floor(seed * 10)) % 2 === 0) {
-      cyl(group, 0.22, 0.16, 0.35, mats.rust, [depth / 2 + 0.4, 0.18, z + 1.2], 6);
-      cyl(group, 0.3, 0.3, 0.4, mats.leafLight, [depth / 2 + 0.4, 0.55, z + 1.2], 6);
+      cyl(group, 0.22, 0.16, 0.35, mats.rust, [depth / 2 - 0.5, 0.18, z + unit * 0.3], 6);
+      cyl(group, 0.3, 0.3, 0.4, mats.leafLight, [depth / 2 - 0.5, 0.55, z + unit * 0.3], 6);
     }
   }
-  roof(group, depth + 1.2, width + 0.4, 1.8, false, seed > 0.5 ? mats.tile : mats.tin, [0.3, 3, 0]);
-  laundry(group, depth / 2 + 0.7, 2.2, 0, width * 0.6, seed);
+  roof(group, depth - 0.2, width * 0.98, 1.8, false, seed > 0.5 ? mats.tile : mats.tin, [0, 3, 0]);
+  laundry(group, depth / 2 - 0.6, 2.2, 0, width * 0.5, seed);
+  return group;
+}
+
+/**
+ * A filler block: a terrace with two floors of windows on every side, a broken
+ * roofline and clutter on all four corners of the roof.
+ *
+ * Every other building here has one face, the one that looks at the road, and
+ * blank walls elsewhere. A lot in the middle of a block has no road to look at,
+ * so it takes this instead: nothing on it is a back.
+ */
+export function filler(seed: number, width: number, depth: number): THREE.Group {
+  const group = new THREE.Group();
+  const wall = pick(walls, seed, 11);
+  const height = 6.2;
+  piece(group, [depth, height, width], wall, [0, height / 2, 0]);
+  piece(group, [depth - 0.1, 0.25, width - 0.1], mats.concrete, [0, height + 0.1, 0]);
+
+  // A row of gables across the width: the roofline of a terrace, not a box.
+  const units = Math.max(2, Math.min(5, Math.round(width / 3.2)));
+  const unit = width / units;
+  for (let k = 0; k < units; k += 1) {
+    const z = -width / 2 + unit * (k + 0.5);
+    const hipped = (k + Math.floor(seed * 9)) % 3 === 0;
+    roof(
+      group,
+      depth - 0.2,
+      unit - 0.04,
+      Math.min(unit, depth) * 0.3,
+      hipped,
+      k % 2 ? mats.tileDark : mats.tile,
+      [0, height, z],
+    );
+  }
+
+  // Two floors of windows on all four sides, and a door on the long ones.
+  for (let k = 0; k < 4; k += 1) {
+    const long = k < 2;
+    const sign = k % 2 === 0 ? 1 : -1;
+    const span = long ? width : depth;
+    const count = Math.max(2, Math.round(span / 2.6));
+    for (const y of [1.6, 4.4]) {
+      for (let w = 0; w < count; w += 1) {
+        const t = -span / 2 + (span / count) * (w + 0.5);
+        const lit = (Math.floor(seed * 977) + w + k * 3) % 4 === 0;
+        const mat = lit ? mats.glow : mats.glass;
+        if (long) piece(group, [0.1, 1.2, 1.1], mat, [sign * (depth / 2 - 0.04), y, t]);
+        else piece(group, [1.1, 1.2, 0.1], mat, [t, y, sign * (width / 2 - 0.04)]);
+      }
+    }
+    if (long && (k + Math.floor(seed * 5)) % 2 === 0)
+      piece(group, [0.12, 2.0, 0.9], mats.woodDark, [sign * (depth / 2 - 0.05), 1.0, span * 0.3]);
+  }
+
+  // Clutter on every side of the roof, so no view of it is blank.
+  if (seed > 0.25) toren(group, [-depth * 0.22, height + 0.2, -width * 0.22], seed);
+  if (seed > 0.55) toren(group, [depth * 0.2, height + 0.2, width * 0.18], seed);
+  if (seed > 0.45) dish(group, [depth * 0.15, height + 0.2, -width * 0.3]);
+  laundry(group, depth / 2 - 0.5, height - 1.2, -width * 0.15, Math.min(width * 0.5, 6), seed);
   return group;
 }
 
@@ -415,10 +486,11 @@ export const shelf: Shelf = {
   title: "Homes and shops",
   assets: [
     { name: "Rumah", build: (seed) => house(seed, 7 + seed * 4, 9 + seed * 3) },
-    { name: "Rumah petak", build: petak },
-    { name: "Kos", build: kos },
-    { name: "Ruko", build: (seed) => ruko(seed, 4.5 + seed * 2, 10) },
-    { name: "Warung", build: warung },
+    { name: "Rumah petak", build: (seed) => petak(seed, 11, 8) },
+    { name: "Kos", build: (seed) => kos(seed, 11, 10) },
+    { name: "Pengisi", build: (seed) => filler(seed, 11, 10) },
+    { name: "Ruko", build: (seed) => ruko(seed, 4.5 + seed * 2, 12) },
+    { name: "Warung", build: (seed) => warung(seed, 5.5, 5) },
     { name: "Minimarket", build: minimarket },
     { name: "Bengkel", build: bengkel },
     { name: "Gudang", build: gudang },

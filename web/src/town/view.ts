@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { bake, box, mats } from "../assets/kit.ts";
-import { house, kos, petak, ruko, warung } from "../assets/buildings.ts";
+import { filler, house, kos, petak, ruko, warung } from "../assets/buildings.ts";
 import * as T from "./model.ts";
 
 /**
@@ -393,26 +393,39 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
 
   // --- buildings ------------------------------------------------------------
 
-  const kinds = { Ruko: ruko, Warung: warung, House: house, Kos: kos, Petak: petak };
+  const AIR = 0.16;
+  const kinds = {
+    Ruko: ruko,
+    Warung: warung,
+    House: house,
+    Kos: kos,
+    Petak: petak,
+    Filler: filler,
+  };
+  const place = (lot: T.Lot, seed: number): void => {
+    const mesh = kinds[lot.kind](seed, lot.w * CM - AIR, lot.d * CM - AIR);
+    mesh.position.set(lot.x * CM, 0, lot.z * CM);
+    mesh.rotation.y = Math.atan2(-lot.fz, lot.fx);
+    buildings.add(mesh);
+  };
   for (let i = 0; i + 1 < T.COLS; i += 1) {
     for (let j = 0; j + 1 < T.ROWS; j += 1) {
       if (!T.blockExists(i, j)) continue;
-      const rows = T.rowsIn(i, j);
-      const lots = T.lotsIn(i, j);
-      for (let row = 0; row < rows; row += 1) {
-        for (let k = 0; k < lots; k += 1) {
-          const lot = T.lotAt(i, j, row, k);
-          const seed = hash(i * 31 + k, j * 17 + row, lot.kind.length);
-          const width = lot.w * CM;
-          const depth = lot.d * CM;
-          const kind = lot.kind;
-          const mesh =
-            kind === "Ruko" || kind === "House"
-              ? kinds[kind](seed, width, depth)
-              : kinds[kind](seed);
-          mesh.position.set(lot.x * CM, 0, lot.z * CM);
-          mesh.rotation.y = Math.atan2(-lot.fz, lot.fx);
-          buildings.add(mesh);
+      const rings = T.ringsIn(i, j);
+      for (let side = 0; side < 4; side += 1) {
+        for (let ring = 0; ring < rings; ring += 1) {
+          const lots = T.lotsOn(i, j, side, ring);
+          for (let k = 0; k < lots; k += 1) {
+            const lot = T.lotAt(i, j, side, ring, k);
+            place(lot, hash(i * 31 + k, j * 17 + side * 7 + ring, lot.kind.length));
+          }
+        }
+      }
+      const [across, deep] = T.coreLots(i, j);
+      for (let a = 0; a < across; a += 1) {
+        for (let b = 0; b < deep; b += 1) {
+          const lot = T.coreLotAt(i, j, a, b);
+          place(lot, hash(i * 13 + a, j * 11 + b, lot.kind.length));
         }
       }
     }

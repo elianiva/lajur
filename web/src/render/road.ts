@@ -207,7 +207,7 @@ export class RoadView {
         const cue = hash(index * 3 + unit + side * 29);
         const building =
           size === 0
-            ? warung(cue)
+            ? warung(cue, width, depth)
             : size === 1
               ? ruko(cue, width, depth)
               : house(cue, width, depth);

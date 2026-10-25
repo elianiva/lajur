@@ -561,28 +561,27 @@ law a_line_stands_behind_the_box:
 def a_line_stands_behind_the_box():
   {==}
 
-law a_corner_lot_clears_the_kerb_return:
-  { U32.is_le(U32.mul(3, T.junction_radius_cm(3, 3, T.seed_of_town())),
-              U32.mul(10, U32.sub(T.west_corner(3, 3, T.seed_of_town()),
-                                  T.half_cm(T.Local{})))) == True{} : Bool }
+# ---------------------------------------------------------------------------
+# A building fits its lot
+#
+# A lot's front line is the street's own curve pushed back by the kerb and the
+# pavement, cut by the fraction of the street it takes. The building is drawn
+# to that lot and no bigger, so a building can only collide with another if a
+# lot is narrower than the building standing in it. These laws rule that out
+# twice: from the three numbers that bound the lattice, and over every roll the
+# kind picker can see.
+# ---------------------------------------------------------------------------
 
-def a_corner_lot_clears_the_kerb_return():
+law a_block_holds_at_least_one_ring:
+  { U32.is_le(1, T.rings_in(3, 3, T.seed_of_town())) == True{} : Bool }
+
+def a_block_holds_at_least_one_ring():
   {==}
 
-# ---------------------------------------------------------------------------
-# Blocks and lots
-# ---------------------------------------------------------------------------
+law every_frontage_holds_a_lot_inside_the_town:
+  { T.sides_inside(2n, 0, 3, 3, T.seed_of_town()) == True{} : Bool }
 
-law a_block_holds_at_least_one_row:
-  { U32.is_le(1, T.rows_in(3, 3, T.seed_of_town())) == True{} : Bool }
-
-def a_block_holds_at_least_one_row():
-  {==}
-
-law a_block_holds_at_least_one_lot:
-  { U32.is_le(1, T.lots_in(3, 3, T.seed_of_town())) == True{} : Bool }
-
-def a_block_holds_at_least_one_lot():
+def every_frontage_holds_a_lot_inside_the_town():
   {==}
 
 law a_frontage_row_is_twelve_metres_deep:
@@ -591,8 +590,70 @@ law a_frontage_row_is_twelve_metres_deep:
 def a_frontage_row_is_twelve_metres_deep():
   {==}
 
-law every_row_lands_inside_the_town:
-  { T.rows_inside_block(4n, 0, 3, 3, T.seed_of_town()) == True{} : Bool }
+law a_frontage_starts_behind_the_box:
+  { U32.is_le(T.mouth_cm(3, 3, T.East{}, T.seed_of_town()),
+              T.side_len(3, 3, 0, T.seed_of_town())) == True{} : Bool }
 
-def every_row_lands_inside_the_town():
+def a_frontage_starts_behind_the_box():
+  {==}
+
+law a_lot_is_never_narrower_than_its_pitch:
+  { U32.is_le(T.pitch_of(0), T.lot_width(3, 3, 0, 0, T.seed_of_town())) == True{} : Bool }
+
+def a_lot_is_never_narrower_than_its_pitch():
+  {==}
+
+law a_frontage_lot_holds_a_shop_house:
+  { U32.is_le(T.kind_min_cm(T.Ruko{}), T.pitch_of(0)) == True{} : Bool }
+
+def a_frontage_lot_holds_a_shop_house():
+  {==}
+
+law a_frontage_lot_holds_a_warung:
+  { U32.is_le(T.kind_min_cm(T.Warung{}), T.pitch_of(0)) == True{} : Bool }
+
+def a_frontage_lot_holds_a_warung():
+  {==}
+
+law a_rear_lot_holds_a_house:
+  { U32.is_le(T.kind_min_cm(T.House{}), T.pitch_of(1)) == True{} : Bool }
+
+def a_rear_lot_holds_a_house():
+  {==}
+
+law a_rear_lot_holds_a_kos:
+  { U32.is_le(T.kind_min_cm(T.Kos{}), T.pitch_of(1)) == True{} : Bool }
+
+def a_rear_lot_holds_a_kos():
+  {==}
+
+law a_rear_lot_holds_a_terrace:
+  { U32.is_le(T.kind_min_cm(T.Petak{}), T.pitch_of(1)) == True{} : Bool }
+
+def a_rear_lot_holds_a_terrace():
+  {==}
+
+law no_building_outgrows_its_ring:
+  { Bool.and(U32.is_le(T.kind_depth_cm(T.Ruko{}), T.row_depth_cm()),
+    Bool.and(U32.is_le(T.kind_depth_cm(T.Warung{}), T.row_depth_cm()),
+    Bool.and(U32.is_le(T.kind_depth_cm(T.House{}), T.row_depth_cm()),
+    Bool.and(U32.is_le(T.kind_depth_cm(T.Kos{}), T.row_depth_cm()),
+    Bool.and(U32.is_le(T.kind_depth_cm(T.Petak{}), T.row_depth_cm()),
+             U32.is_le(T.kind_depth_cm(T.Filler{}), T.row_depth_cm())))))) == True{} : Bool }
+
+def no_building_outgrows_its_ring():
+  {==}
+
+law every_kind_fits_the_lot_it_is_chosen_for:
+  { Bool.and(T.every_roll_fits(100n, 0, True{}, T.pitch_of(0)),
+             T.every_roll_fits(100n, 0, False{}, T.pitch_of(1))) == True{} : Bool }
+
+def every_kind_fits_the_lot_it_is_chosen_for():
+  {==}
+
+law every_lot_of_a_block_holds_a_building_that_fits:
+  { Bool.and(T.lots_fit(2n, 0, 0, 0, 3, 3, T.seed_of_town()),
+             T.lots_fit(2n, 0, 1, 1, 3, 3, T.seed_of_town())) == True{} : Bool }
+
+def every_lot_of_a_block_holds_a_building_that_fits():
   {==}
