@@ -12,19 +12,22 @@ function lajurLogic(): Plugin {
       const built = buildLogic();
       if (!built.ok) this.error(built.output);
       this.addWatchFile("logic/game.bend");
+      this.addWatchFile("logic/town.bend");
+      this.addWatchFile("logic/world.bend");
       this.addWatchFile("logic/PROOF.bend");
     },
 
     // Editing the model rebuilds it rather than reloading a stale copy.
     handleHotUpdate({ file, server }) {
-      if (!file.endsWith("logic/game.bend")) return;
+      const model = /logic\/(game|town|world)\.bend$/.exec(file);
+      if (!model) return;
       const built = buildLogic();
       if (!built.ok) {
         // Keep the last good module: a broken law should not take the page down.
         console.error(built.output);
         return;
       }
-      const module = server.moduleGraph.getModuleById(resolve("src/game.mjs"));
+      const module = server.moduleGraph.getModuleById(resolve(`src/${model[1]}.mjs`));
       if (module) server.moduleGraph.invalidateModule(module);
       server.ws.send({ type: "full-reload" });
       return [];

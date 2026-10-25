@@ -15,9 +15,11 @@
  *            round a civic court. Lokal streets reach a main road only at
  *            entrance slots both sides of it share.
  *
- * This is the lab's generator. It lives in TypeScript until it is ported to
- * `logic/`; the game does not read it.
+ * Layers 1 and 2, and the choice of what each block becomes, are
+ * `logic/world.bend`, with their laws in `logic/PROOF.bend`. The streets inside
+ * a block are still TypeScript, until they are ported too.
  */
+import W from "../world.mjs";
 
 export interface Pt {
   x: number;
@@ -29,12 +31,8 @@ export type Dir = "E" | "S";
 /** A side of a cell or block, in the frame: v = 0 is south, u = 0 is west. */
 export type Side = "S" | "N" | "W" | "E";
 
-export const P = 650; // lattice pitch, metres
-const JIT = 210; // how far a crossing may move each way
 const SHOPS = 35; // depth of the frontage row on a main road
-const GAP = 100; // nearest two junctions on a main road, metres
 const LOK_FLOOR = 20; // nearest two junctions on a lokal street
-const SLOT = 130; // spacing of the entrance slots along a main road
 export const RIVER_HALF = 14;
 
 /** Road classes. A line of kind 0 is a river. */
@@ -62,6 +60,8 @@ export interface Frame {
   /** Metres per unit of u, and of v. */
   mu: number;
   mv: number;
+  /** The length of the line across the frame at a fixed u (or v), metres. */
+  line(axis: "u" | "v", at: number): number;
 }
 
 /** A road along one edge of a block, and the stretch of it the block owns. */
@@ -111,7 +111,20 @@ export interface Cell {
   frame: Frame;
 }
 
-// ---- Determinism ------------------------------------------------------------
+// ---- The model --------------------------------------------------------------
+// Layers 1 and 2 are logic/world.bend: the lattice, the roads, the frames, the
+// collectors, the entrance slots and what each block becomes. This file reads
+// them in metres and fractions. The model answers in signed centimetres,
+// positions along a road or across a frame in 65536ths, densities in 1024ths.
+
+const u32 = (n: number) => n >>> 0;
+const metres = (cm: number) => (cm | 0) / 100;
+const cm = (m: number) => u32(Math.round(m * 100));
+const q16 = (t: number) => Math.min(65536, Math.max(0, Math.round(t * 65536)));
+const toPt = (p: Pt) => pt(metres(p.x), metres(p.z));
+const east = (dir: Dir) => dir === "E";
+
+// ---- Determinism, for the layers still in TypeScript --------------------------
 
 const mix32 = (a: number, b: number): number => {
   let h = Math.imul(a ^ Math.imul(b, 0x9e3779b1), 0x85ebca6b) >>> 0;
@@ -119,174 +132,81 @@ const mix32 = (a: number, b: number): number => {
   h = Math.imul(h, 0xc2b2ae35) >>> 0;
   return (h ^ (h >>> 16)) >>> 0;
 };
-/** A number in [0, 1) from the seed and any integers. */
+/** A number in [0, 1) from the seed and any integers: the model's own mix. */
 export const hash = (seed: number, ...xs: number[]): number =>
   xs.reduce((h, x) => mix32(h, (x | 0) >>> 0), seed >>> 0) / 4294967296;
-const smooth = (t: number) => t * t * (3 - 2 * t);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const pt = (x: number, z: number): Pt => ({ x, z });
 const mixp = (p: Pt, q: Pt, t: number) => pt(lerp(p.x, q.x, t), lerp(p.z, q.z, t));
 export const dist = (p: Pt, q: Pt) => Math.hypot(p.x - q.x, p.z - q.z);
 
-/** The density field: 2-D value noise over the world, 1.5 km cells. */
-export function density(seed: number, x: number, z: number): number {
-  const g = 1500;
-  const fx = x / g;
-  const fz = z / g;
-  const i = Math.floor(fx);
-  const j = Math.floor(fz);
-  const h = (a: number, b: number) => hash(seed, 77, a, b);
-  const u = smooth(fx - i);
-  const v = smooth(fz - j);
-  return lerp(lerp(h(i, j), h(i + 1, j), u), lerp(h(i, j + 1), h(i + 1, j + 1), u), v);
-}
+/** The density field, in [0, 1). */
+export const density = (seed: number, x: number, z: number): number =>
+  W.density(seed, cm(x), cm(z)) / 1024;
 
-// ---- Layer 1: the lattice ---------------------------------------------------
+// ---- Layer 1: the lattice -----------------------------------------------------
 
-export const node = (seed: number, i: number, j: number): Pt =>
-  pt(i * P + (hash(seed, 1, i, j) - 0.5) * 2 * JIT, j * P + (hash(seed, 2, i, j) - 0.5) * 2 * JIT);
-
-// Crossings with both indices even each drop at most one of their four
-// segments. No other crossing owns a segment, so a crossing loses at most two
-// and keeps at least two: a road may bend, but it never ends.
-const removedBy = (seed: number, i: number, j: number): Side | null => {
-  if (i % 2 || j % 2) return null;
-  const r = hash(seed, 3, i, j);
-  return r < 0.09 ? "E" : r < 0.18 ? "W" : r < 0.27 ? "N" : r < 0.36 ? "S" : null;
-};
+export const node = (seed: number, i: number, j: number): Pt => toPt(W.node(seed, u32(i), u32(j)));
 
 /** The segment from (i, j) east to (i + 1, j), or south to (i, j + 1). */
 export const segExists = (seed: number, i: number, j: number, dir: Dir): boolean =>
-  dir === "E"
-    ? removedBy(seed, i, j) !== "E" && removedBy(seed, i + 1, j) !== "W"
-    : removedBy(seed, i, j) !== "S" && removedBy(seed, i, j + 1) !== "N";
+  W.has_road(seed, u32(i), u32(j), east(dir));
 
 export const segKind = (i: number, j: number, dir: Dir): number =>
-  (dir === "E" ? j : i) % 3 === 0 ? ART : COL;
+  W.road_code(u32(i), u32(j), east(dir));
 
-/** A Catmull-Rom segment through the lattice, as a cubic Bezier. */
+/** A Catmull-Rom segment through the lattice. */
 export function segCurve(seed: number, i: number, j: number, dir: Dir): (t: number) => Pt {
-  const [di, dj] = dir === "E" ? [1, 0] : [0, 1];
-  const p0 = node(seed, i - di, j - dj);
-  const p1 = node(seed, i, j);
-  const p2 = node(seed, i + di, j + dj);
-  const p3 = node(seed, i + 2 * di, j + 2 * dj);
-  const b = pt(p1.x + (p2.x - p0.x) / 6, p1.z + (p2.z - p0.z) / 6);
-  const c = pt(p2.x - (p3.x - p1.x) / 6, p2.z - (p3.z - p1.z) / 6);
-  return (t) => {
-    const s = 1 - t;
-    return pt(
-      s * s * s * p1.x + 3 * s * s * t * b.x + 3 * s * t * t * c.x + t * t * t * p2.x,
-      s * s * s * p1.z + 3 * s * s * t * b.z + 3 * s * t * t * c.z + t * t * t * p2.z,
-    );
-  };
+  const curve = W.curve_of(seed, u32(i), u32(j), east(dir));
+  return (t) => toPt(W.curve_at(curve, q16(t)));
 }
 
 /** `n + 1` points along `f`, from t = 0 to t = 1. */
 export const along = (f: (t: number) => Pt, n: number): Pt[] =>
   Array.from({ length: n + 1 }, (_, k) => f(k / n));
 
-// Rivers run along every fourth row of cells, mid-cell, with a wiggle that is
-// a function of the global column, so it meets itself across cells.
-export const riverRow = (j: number) => ((j % 4) + 4) % 4 === 2;
-export function riverV(seed: number, i: number, j: number, u: number): number {
-  const x = i + u;
-  const k = Math.floor(x);
-  const f = smooth(x - k);
-  return 0.5 + 0.14 * (lerp(hash(seed, 5, k, j), hash(seed, 5, k + 1, j), f) * 2 - 1);
-}
+export const riverRow = (j: number) => W.river_row(u32(j));
+export const riverV = (seed: number, i: number, j: number, u: number): number =>
+  W.river_v(seed, u32(i), u32(j), q16(u)) / 65536;
 
-// Collectors across a cell: one at u = uc (running from its south road to its
-// north road) and one at v = vc. Where a collector meets a lattice segment, the
-// mouth's position comes from that segment alone, through a rule both sides
-// share: the two sides of a road either meet it at the same point, a four-way
-// crossing, or at least 0.25 of the segment apart.
-// Side 0 is the cell south (or west) of the segment, side 1 north (or east).
-function sideMouth(seed: number, i: number, j: number, dir: Dir, side: 0 | 1): number {
-  // One position per column of cells (for east-running segments) or per row
-  // (for south-running ones), so a collector meets both of its roads at the
-  // same u and can carry straight on into the next cell.
-  const f = 0.33 + 0.08 * (dir === "E" ? hash(seed, 6, i, 0) : hash(seed, 6, 0, j));
-  const aligned = hash(seed, 7, i, j, dir === "E" ? 0 : 1) < 0.6;
-  return side === 0 || aligned ? f : 1 - f;
-}
+// Where a collector meets a lattice road. Side 0 is the cell south (or west)
+// of it, side 1 north (or east).
+const sideMouth = (seed: number, i: number, j: number, dir: Dir, side: 0 | 1): number =>
+  W.side_mouth(seed, u32(i), u32(j), east(dir), side) / 65536;
 
 export function cellCuts(seed: number, i: number, j: number) {
-  const d = density(seed, (i + 0.5) * P, (j + 0.5) * P);
-  const cut: { uc: number | null; vc: number | null } = { uc: null, vc: null };
-  const want = 0.35 + 0.5 * d;
-  // A cut needs both its roads.
-  if (hash(seed, 8, i, j) < want && segExists(seed, i, j, "E") && segExists(seed, i, j + 1, "E")) {
-    const a = sideMouth(seed, i, j, "E", 1);
-    const b = sideMouth(seed, i, j + 1, "E", 0);
-    if (a === b) cut.uc = a;
-  }
-  if (
-    !riverRow(j) &&
-    hash(seed, 9, i, j) < want * 0.7 &&
-    segExists(seed, i, j, "S") &&
-    segExists(seed, i + 1, j, "S")
-  ) {
-    const a = sideMouth(seed, i, j, "S", 1);
-    const b = sideMouth(seed, i + 1, j, "S", 0);
-    if (a === b) cut.vc = a;
-  }
-  return cut;
-}
-
-/** A curve's arc length, from 32 chords. */
-function arc(f: (t: number) => Pt): number {
-  let len = 0;
-  let p = f(0);
-  for (let k = 1; k <= 32; k++) {
-    const q = f(k / 32);
-    len += dist(p, q);
-    p = q;
-  }
-  return len;
+  const c = W.cell_cuts(seed, u32(i), u32(j));
+  return { uc: c.uc ? c.uc / 65536 : null, vc: c.vc ? c.vc / 65536 : null };
 }
 
 export const segLength = (seed: number, i: number, j: number, dir: Dir) =>
-  arc(segCurve(seed, i, j, dir));
+  W.road_length(seed, u32(i), u32(j), east(dir)) / 100;
 
-// ---- The cell's frame -------------------------------------------------------
+// ---- The cell's frame ---------------------------------------------------------
 
 export function frame(seed: number, i: number, j: number): Frame {
-  const S = segCurve(seed, i, j, "E");
-  const N = segCurve(seed, i, j + 1, "E");
-  const W = segCurve(seed, i, j, "S");
-  const E = segCurve(seed, i + 1, j, "S");
-  const A = node(seed, i, j);
-  const B = node(seed, i + 1, j);
-  const C = node(seed, i + 1, j + 1);
-  const D = node(seed, i, j + 1);
-  const at = (u: number, v: number) => {
-    const s = S(u);
-    const n = N(u);
-    const w = W(v);
-    const e = E(v);
-    const bil = mixp(mixp(A, B, u), mixp(D, C, u), v);
-    return pt(
-      (1 - v) * s.x + v * n.x + (1 - u) * w.x + u * e.x - bil.x,
-      (1 - v) * s.z + v * n.z + (1 - u) * w.z + u * e.z - bil.z,
-    );
+  const f = W.frame_of(seed, u32(i), u32(j));
+  return {
+    at: (u, v) => toPt(W.frame_at(f, q16(u), q16(v))),
+    mu: f.mu / 100,
+    mv: f.mv / 100,
+    line: (axis, at) => W.frame_line_length(f, axis === "u", q16(at)) / 100,
   };
-  // Metres per unit of u and of v, from the chords.
-  const mu = (dist(A, B) + dist(D, C)) / 2;
-  const mv = (dist(A, D) + dist(B, C)) / 2;
-  return { at, mu, mv };
 }
 
-// ---- Entrance slots ---------------------------------------------------------
-// The positions, as a parameter along a road piece, where a lokal street may
-// meet it. Both sides of the piece compute the same list, so a lokal street
-// from one side either lines up with one from the other or is a slot apart.
+// ---- Entrance slots -----------------------------------------------------------
+
 function slots(seed: number, key: number[], len: number, avoid: number[]): number[] {
+  const far = 0xffffffff;
+  const [a0 = -1, a1 = -1] = avoid;
+  const at = (a: number) => (a < 0 ? far : q16(a));
   const out: number[] = [];
-  const off = hash(seed, 10, ...key) * SLOT;
-  for (let m = GAP + off; m < len - GAP; m += SLOT) {
-    if (avoid.every((a) => Math.abs(a * len - m) >= GAP)) out.push(m / len);
-  }
+  for (
+    let l = W.slots(seed, u32(key[0]!), u32(key[1]!), u32(key[2]!), cm(len), at(a0), at(a1));
+    l.$ === "Con";
+    l = l.tail
+  )
+    out.push(l.head / 65536);
   return out;
 }
 
@@ -354,8 +274,8 @@ export function cell(seed: number, i: number, j: number): Cell {
 
   // Blocks: the cell cut by uc and vc, in the frame. River cells are split by
   // the water instead, which leaves a green bank on each side of it.
-  const lenU = uc === null ? 0 : arc((v) => F.at(uc, v));
-  const lenV = vc === null ? 0 : arc((u) => F.at(u, vc));
+  const lenU = uc === null ? 0 : F.line("u", uc);
+  const lenV = vc === null ? 0 : F.line("v", vc);
   const us = uc === null ? [0, 1] : [0, uc, 1];
   const vs = vc === null ? [0, 1] : [0, vc, 1];
   for (let a = 0; a + 1 < us.length; a++)
@@ -418,6 +338,9 @@ export function cell(seed: number, i: number, j: number): Cell {
   return { i, j, lines, blocks, mouths, frame: F };
 }
 
+const LAND: BlockType[] = ["sawah", "kebun", "tree", "comb", "grid", "ring"];
+const COURTS: Court[] = ["alun", "pasar", "sekolah", "gudang"];
+
 // ---- Layer 3: fill a block ----------------------------------------------------
 
 interface Slot {
@@ -449,32 +372,7 @@ function fill(
   blk.d = d;
   const roll = hash(seed, 11, i, j, Math.round(blk.u0 * 1000), Math.round(blk.v0 * 1000));
   // Sawah alternates with kebun and kampung; a ring is a civic court.
-  blk.type =
-    d < 0.15
-      ? roll < 0.75
-        ? "sawah"
-        : "kebun"
-      : d < 0.4
-        ? roll < 0.45
-          ? "tree"
-          : roll < 0.62
-            ? "kebun"
-            : roll < 0.72
-              ? "ring"
-              : "sawah"
-        : d < 0.62
-          ? roll < 0.5
-            ? "tree"
-            : roll < 0.78
-              ? "comb"
-              : "ring"
-          : roll < 0.35
-            ? "grid"
-            : roll < 0.65
-              ? "tree"
-              : roll < 0.82
-                ? "comb"
-                : "ring";
+  blk.type = LAND[W.land(Math.round(d * 1024), Math.floor(roll * 1024))]!;
   // The ring sits behind the shops on a road side, and 12 m in from a side
   // without one.
   const inset = (e: Edge) => (e.road ? SHOPS : 12);
@@ -613,18 +511,7 @@ function fill(
     }
     const r2 = hash(seed, 14, i, j, Math.round(blk.u0 * 1000), Math.round(blk.v0 * 1000));
     blk.inner = { ru0, ru1, rv0, rv1 };
-    blk.court =
-      d > 0.6
-        ? r2 < 0.4
-          ? "pasar"
-          : r2 < 0.75
-            ? "alun"
-            : "sekolah"
-        : r2 < 0.3
-          ? "alun"
-          : r2 < 0.7
-            ? "sekolah"
-            : "gudang";
+    blk.court = COURTS[W.court(Math.round(d * 1024), Math.floor(r2 * 1024))]!;
   }
 }
 

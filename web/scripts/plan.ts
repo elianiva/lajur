@@ -10,10 +10,20 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cell, hash, node, type Pt } from "../src/world/cells.ts";
-import { Grid, ROAD, area, bbox, inPoly, parcels, pointSeg } from "../src/world/parcels.ts";
-import { planSvg } from "../src/world/plan.ts";
-import { extent, world } from "../src/world/world.ts";
+import { buildLogic } from "./bend.ts";
+import type { Pt } from "../src/world/cells.ts";
+
+// The world's first layers are the model; compile it before reading it.
+const built = buildLogic();
+if (!built.ok) {
+  console.error(built.output);
+  process.exit(1);
+}
+const { cell, hash, node } = await import("../src/world/cells.ts");
+const { Grid, ROAD, area, bbox, inPoly, parcels, pointSeg } =
+  await import("../src/world/parcels.ts");
+const { planSvg } = await import("../src/world/plan.ts");
+const { extent, world } = await import("../src/world/world.ts");
 
 const seeds = process.argv.slice(2).map(Number).filter(Number.isFinite);
 if (seeds.length === 0) seeds.push(20261024, 2, 5, 11, 17, 23);

@@ -48,6 +48,7 @@ export function buildLogic(): Built {
     for (const [from, to] of [
       ["game.bend", "src/game.mjs"],
       ["town.bend", "src/town.mjs"],
+      ["world.bend", "src/world.mjs"],
     ]) {
       execFileSync(findBend(), [`${BEND_DIR}/${from}`, "-o", to], {
         stdio: "pipe",
