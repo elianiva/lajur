@@ -248,6 +248,27 @@ def Laws.park_where_it_is_allowed(b):
     case False{}:
       {==}
 
+def Laws.a_toll_road_forbids_stopping(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.a_no_stopping_place_forbids_stopping(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.a_dangerous_place_forbids_stopping(b):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
 def Laws.signal_before_slowing(b):
   match b:
     case True{}:

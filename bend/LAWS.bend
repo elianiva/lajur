@@ -162,6 +162,20 @@ law park_where_it_is_allowed:
   for b: Bool
   { R.contains(29, R.charges(R.with_move(R.move_stopping(True{}, b)))) == Bool.not(b) : Bool }
 
+# Pasal 118: stopping is lawful except in three places, and each one is charged
+# on its own.
+law a_toll_road_forbids_stopping:
+  for b: Bool
+  { R.contains(29, R.charges(R.car_stopping(b, False{}, False{}))) == b : Bool }
+
+law a_no_stopping_place_forbids_stopping:
+  for b: Bool
+  { R.contains(29, R.charges(R.car_stopping(False{}, b, False{}))) == b : Bool }
+
+law a_dangerous_place_forbids_stopping:
+  for b: Bool
+  { R.contains(29, R.charges(R.car_stopping(False{}, False{}, b))) == b : Bool }
+
 law signal_before_slowing:
   for b: Bool
   { R.contains(30, R.charges(R.with_move(R.move_slowing(True{}, b)))) == Bool.not(b) : Bool }

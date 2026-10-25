@@ -121,7 +121,7 @@ def catalogue() -> List<Rule>:
   , Rule{26, General{}, 12, 0, 3000000, 115, 0, 297, 0}
   , Rule{27, General{}, 2, 0, 500000, 121, 1, 298, 0}
   , Rule{28, General{}, 36, 0, 75000000, 231, 1, 312, 0}
-  , Rule{29, Marking{}, 1, 0, 250000, 120, 0, 287, 3}
+  , Rule{29, General{}, 1, 0, 250000, 106, 4, 287, 3}
   , Rule{30, General{}, 0, 0, 0, 117, 0, 0, 0}
   , Rule{31, General{}, 0, 0, 0, 113, 1, 0, 0}
   , Rule{32, General{}, 0, 0, 0, 113, 2, 0, 0}
@@ -257,6 +257,12 @@ def more_than(count: U32, threshold: U32) -> Bool:
 # a triangle or a hazard lamp, so rule 27 does not reach it.
 def no_triangle_needed(v: Vehicle, sidecar: Bool) -> Bool:
   Bool.and(is_motorcycle(v), Bool.not(sidecar))
+
+# Pasal 118: a vehicle may stop anywhere except where a sign or a solid line
+# forbids it, in a place that endangers other users, or on a toll road. Rule 29
+# reads the answer, not the reasons.
+def stopping_allowed(toll: Bool, forbidden: Bool, endangers: Bool) -> Bool:
+  Bool.and(Bool.not(toll), Bool.and(Bool.not(forbidden), Bool.not(endangers)))
 
 # ---------------------------------------------------------------------------
 # What a posted sign requires
@@ -1010,6 +1016,20 @@ def move_slowing(on: Bool, signals: Bool) -> Motion:
 
 def move_stopping(on: Bool, ok: Bool) -> Motion:
   Motion{40, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, on, ok, False{}, False{}, False{}, False{}}
+
+# A car stopped, and the three grounds of Pasal 118 that make stopping unlawful.
+def zone_for(toll: Bool) -> M.Zone:
+  match toll:
+    case True{}:
+      M.Motorway{}
+    case False{}:
+      M.Urban{}
+
+def car_stopping(+toll: Bool, forbidden: Bool, endangers: Bool) -> Scenario:
+  Scenario{Road{zone_for(toll), Left{}, False{}, True{}, False{}, False{}, False{}, False{}, False{}, False{}, False{}, True{}},
+           clean_load(), clean_gear(),
+           move_stopping(True{}, stopping_allowed(toll, forbidden, endangers)),
+           clean_yield(), clean_docs(), clean_act()}
 
 def move_stop_emergency(on: Bool, sign: Bool) -> Motion:
   Motion{40, False{}, Right{}, False{}, False{}, True{}, False{}, True{}, False{}, False{}, True{}, False{}, True{}, on, sign, False{}, False{}}

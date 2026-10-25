@@ -86,7 +86,7 @@ A scenario is six records and a sign act, so each constructor stays short enough
 | 26 | No racing | Pasal 115 huruf b | 1 year, Rp3,000,000 (Pasal 297) |
 | 27 | Mark a breakdown (a motorcycle without a sidecar is exempt, Pasal 121 ayat (2)) | Pasal 121 ayat (1) | 2 months, Rp500,000 (Pasal 298) |
 | 28 | Stay after a crash | Pasal 231 ayat (1) | 3 years, Rp75,000,000 (Pasal 312) |
-| 29 | Park where it is allowed | Pasal 120 | 1 month, Rp250,000 (Pasal 287 ayat (3)) |
+| 29 | Park where it is allowed (the three grounds of Pasal 118) | Pasal 106 ayat (4) huruf e | 1 month, Rp250,000 (Pasal 287 ayat (3)) |
 | 30 | Signal before slowing | Pasal 117 | none stated |
 | 31 | Give way at an unguarded junction | Pasal 113 ayat (1) | none stated |
 | 32 | Give way on a roundabout | Pasal 113 ayat (2) | none stated |
