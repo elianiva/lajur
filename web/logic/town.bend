@@ -62,10 +62,10 @@ def seed_of_town() -> U32:
 # the ring. Behind the four frontage rows sits the block's own gang, which no
 # junction indexes: a lane, not a street.
 def major_col(i: U32) -> Bool:
-  U32.is_eq(U32.mod(i, 2), 0)
+  U32.is_eq(U32.and(i, 1), 0)
 
 def major_row(j: U32) -> Bool:
-  U32.is_eq(U32.mod(j, 2), 0)
+  U32.is_eq(U32.and(j, 1), 0)
 
 # The river runs between column three and column four, and only the two bridges
 # cross it. That is the town's one edge, and every bridge approach is a T
@@ -336,7 +336,7 @@ def gap_cm(near: U32, far: U32) -> Signed:
 # A point a fraction `t` of the way from a to b, in thousand-and-twenty-fourths.
 def lerp(+a: U32, +b: U32, t: U32) -> U32:
   +d = gap_cm(a, b)
-  place(a, U32.div(U32.mul(span(d), t), 1024), below(d))
+  place(a, U32.shrn(U32.mul(span(d), t), 10n), below(d))
 
 def sixth(a: U32, b: U32) -> Signed:
   +d = gap_cm(a, b)
@@ -1152,12 +1152,18 @@ def root(fuel: Nat, +n: U32, +x: U32) -> U32:
     case 0n:
       x
     case 1n+p:
-      +next = U32.div(U32.add(x, U32.div(n, U32.max(x, 1))), 2)
+      +next = U32.shrn(U32.add(x, U32.div(n, U32.max(x, 1))), 1n)
       root(p, n, Bool.pick(U32, U32.is_le(x, next), x, next))
 
-# Newton from the number itself, capped, converges inside twenty steps.
+# Newton from the first power of two at or above the root, so the estimate is
+# within a factor of two and six steps reach the root of any thirty-two-bit
+# number. Starting from the number itself took twenty, and a root is the most
+# expensive thing the checker evaluates: a division a step.
+def sqrt_start(+n: U32) -> U32:
+  U32.shln(1, U32.to_nat(U32.shrn(U32.add(U32.from_nat(U32.log2(n)), 2), 1n)))
+
 def sqrt(+n: U32) -> U32:
-  root(20n, n, U32.min(n, 65535))
+  root(6n, n, U32.min(sqrt_start(n), 65535))
 
 def length(a: Pt, b: Pt) -> U32:
   match a:
@@ -1193,7 +1199,7 @@ def unit(a: U32, b: U32, wide: U32) -> Signed:
 def push_along(base: U32, u: Signed, dist: U32) -> U32:
   match u:
     case Signed{size, down}:
-      place(base, U32.div(U32.mul(size, dist), 1024), down)
+      place(base, U32.shrn(U32.mul(size, dist), 10n), down)
 
 type Frame is Data:
   Frame{origin: Pt, ux: Signed, uz: Signed, nx: Signed, nz: Signed}
@@ -1275,7 +1281,7 @@ def side_j(+j: U32, +side: U32) -> U32:
   Bool.pick(U32, U32.is_eq(side, 2), U32.add(j, 1), j)
 
 def side_dir(side: U32) -> Dir:
-  Bool.pick(Dir, U32.is_eq(U32.mod(side, 2), 0), East{}, South{})
+  Bool.pick(Dir, U32.is_eq(U32.and(side, 1), 0), East{}, South{})
 
 # The node at the far end of that frontage.
 def far_i(+i: U32, +side: U32) -> U32:
@@ -1313,7 +1319,7 @@ def mid_pt(a: Pt, b: Pt) -> Pt:
     case Pt{ax, az}:
       match b:
         case Pt{bx, bz}:
-          Pt{U32.div(U32.add(ax, bx), 2), U32.div(U32.add(az, bz), 2)}
+          Pt{U32.shrn(U32.add(ax, bx), 1n), U32.shrn(U32.add(az, bz), 1n)}
 
 # A point pushed `reach` centimetres into the block from the side it is on.
 def push_in(p: Pt, +f: Frame, +side: U32, +reach: U32) -> Pt:
@@ -1461,8 +1467,8 @@ def mag_of(+x: U32) -> U32:
 # nothing in particular would divide by zero, so the cross is floored at a
 # thousandth of a radian's worth.
 def corner_cot_milli(+i: U32, +j: U32, +c: U32, +seed: U32) -> U32:
-  +back = U32.mod(U32.add(c, 3), 4)
-  +ahead = U32.mod(U32.add(c, 1), 4)
+  +back = U32.and(U32.add(c, 3), 3)
+  +ahead = U32.and(U32.add(c, 1), 3)
   +o = site(corner_i(i, c), corner_j(j, c), seed)
   +a = site(corner_i(i, back), corner_j(j, back), seed)
   +b = site(corner_i(i, ahead), corner_j(j, ahead), seed)
@@ -1489,7 +1495,7 @@ def near_cut_cm(+i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
 
 def far_cut_cm(+i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
   U32.max(mouth_cm(far_i(i, side), far_j(j, side), opposite(side_dir(side)), seed),
-          mitre_cut_cm(i, j, side, U32.mod(U32.add(side, 1), 4), ring, seed))
+          mitre_cut_cm(i, j, side, U32.and(U32.add(side, 1), 3), ring, seed))
 
 # Where the row starts and ends: those two cuts, laid on the ground.
 #
@@ -1510,7 +1516,7 @@ def cut_step(fuel: Nat, +c: Curve, +o: Pt, +far: Bool, +cm: U32, +lo: U32, +hi: 
     case 0n:
       lo
     case 1n+p:
-      +mid = U32.div(U32.add(lo, hi), 2)
+      +mid = U32.shrn(U32.add(lo, hi), 1n)
       +t = Bool.pick(U32, far, U32.sub(1024, mid), mid)
       +q = at(c, t)
       +dx = U32.sub(pt_x(q), pt_x(o))
@@ -1539,7 +1545,7 @@ def span_t(+i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
 
 # The frontage a block can build on, in centimetres.
 def frontage_cm(+i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
-  U32.div(U32.mul(span_t(i, j, side, ring, seed), side_len(i, j, side, seed)), 1024)
+  U32.shrn(U32.mul(span_t(i, j, side, ring, seed), side_len(i, j, side, seed)), 10n)
 
 # A frontage lot is a shop-house six metres across; the rings behind take
 # kampung plots eleven metres across, which is what a yard and a terrace need.
@@ -1553,8 +1559,7 @@ def pitch_of(ring: U32) -> U32:
 def lots_where(on: Bool, +i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
   match on:
     case True{}:
-      U32.min(U32.div(frontage_cm(i, j, side, ring, seed),
-                      U32.add(pitch_of(ring), lot_gap_cm())), 24)
+      U32.min(U32.div(frontage_cm(i, j, side, ring, seed), U32.add(pitch_of(ring), lot_gap_cm())), 24)
     case False{}:
       0
 
@@ -1570,8 +1575,7 @@ def lot_width(+i: U32, +j: U32, +side: U32, +ring: U32, +seed: U32) -> U32:
 # The fraction of the street where lot t of a frontage starts.
 def lot_edge_t(+i: U32, +j: U32, +side: U32, +ring: U32, +t: U32, +seed: U32) -> U32:
   U32.add(near_t(i, j, side, ring, seed),
-          U32.div(U32.mul(t, span_t(i, j, side, ring, seed)),
-                  U32.max(lots_on(i, j, side, ring, seed), 1)))
+          U32.div(U32.mul(t, span_t(i, j, side, ring, seed)), U32.max(lots_on(i, j, side, ring, seed), 1)))
 
 type LotKind is Data:
   Ruko{}
@@ -1677,7 +1681,7 @@ type Lot is Data:
 # An even ring faces the street it stands on; an odd ring faces the gang behind
 # the ring in front of it.
 def outward(ring: U32) -> Bool:
-  U32.is_eq(U32.mod(ring, 2), 0)
+  U32.is_eq(U32.and(ring, 1), 0)
 
 def lot_face(f: Frame, +ring: U32) -> Vec:
   match f:
@@ -1701,7 +1705,7 @@ def lot_at(+i: U32, +j: U32, +side: U32, +ring: U32, +t: U32, +seed: U32) -> Lot
   +depth = kind_depth_cm(kind)
   +t0 = lot_edge_t(i, j, side, ring, t, seed)
   +t1 = lot_edge_t(i, j, side, ring, U32.add(t, 1), seed)
-  +mid = U32.div(U32.add(t0, t1), 2)
+  +mid = U32.shrn(U32.add(t0, t1), 1n)
   +c = curve_of(side_i(i, side), side_j(j, side), side_dir(side), seed)
   +f = frame_on(c, side, mid)
   +near = back_cm(ring)
@@ -1736,7 +1740,7 @@ def kerb_widest(+i: U32, +j: U32) -> U32:
 # difference the wave can make, so a sixth of the swing bounds every street in
 # the town without sampling one.
 def bulge_cm() -> U32:
-  U32.div(swing_cm(), 8)
+  U32.shrn(swing_cm(), 3n)
 
 # How far the core stands from the block's edge.
 def core_margin_cm(+i: U32, +j: U32, +seed: U32) -> U32:
@@ -1829,8 +1833,8 @@ def core_edge(+k: U32, +i: U32, +j: U32, +seed: U32, +across: Bool, +n: U32) -> 
 # houses along two of its edges.
 def core_mid(+i: U32, +j: U32, +k: U32, +across: Bool, +seed: U32) -> Bool:
   +n = Bool.pick(U32, across, core_lots_w(i, j, seed), core_lots_d(i, j, seed))
-  +mid = U32.div(U32.add(core_edge(k, i, j, seed, across, n),
-                         core_edge(U32.add(k, 1), i, j, seed, across, n)), 2)
+  +mid = U32.shrn(U32.add(core_edge(k, i, j, seed, across, n),
+                         core_edge(U32.add(k, 1), i, j, seed, across, n)), 1n)
   +apart = Bool.pick(U32, U32.is_le(512, mid), U32.sub(mid, 512), U32.sub(512, mid))
   U32.is_lt(apart, 160)
 
@@ -1870,7 +1874,7 @@ def core_face(+i: U32, +j: U32, +b: U32, +seed: U32) -> Vec:
   +deep = block_depth(i, j, seed)
   +ux = unit(pt_x(p), pt_x(q), deep)
   +uz = unit(pt_z(p), pt_z(q), deep)
-  Bool.pick(Vec, U32.is_eq(U32.mod(b, 2), 0), Vec{ux, uz}, Vec{negate(ux), negate(uz)})
+  Bool.pick(Vec, U32.is_eq(U32.and(b, 1), 0), Vec{ux, uz}, Vec{negate(ux), negate(uz)})
 
 # What stands in a core cell: the kampung mix, drawn from the cell's own roll
 # and narrowed to the kinds that fit the ground the cell actually got. A cell
@@ -1921,15 +1925,15 @@ def core_lot_at(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> Lot:
   +v0 = core_edge(b, i, j, seed, False{}, nd)
   +v1 = core_edge(U32.add(b, 1), i, j, seed, False{}, nd)
   +lu0 = U32.min(U32.div(U32.mul(core_lane_cm(i, j, a, True{}, seed), 512), wide),
-                 U32.div(U32.sub(u1, u0), 2))
+                 U32.shrn(U32.sub(u1, u0), 1n))
   +lu1 = U32.min(U32.div(U32.mul(core_lane_cm(i, j, U32.add(a, 1), True{}, seed), 512), wide),
-                 U32.div(U32.sub(u1, u0), 2))
+                 U32.shrn(U32.sub(u1, u0), 1n))
   +lv0 = U32.min(U32.div(U32.mul(core_lane_cm(i, j, b, False{}, seed), 512), deep),
-                 U32.div(U32.sub(v1, v0), 2))
+                 U32.shrn(U32.sub(v1, v0), 1n))
   +lv1 = U32.min(U32.div(U32.mul(core_lane_cm(i, j, U32.add(b, 1), False{}, seed), 512), deep),
-                 U32.div(U32.sub(v1, v0), 2))
-  +w = U32.div(U32.mul(wide, U32.sub(U32.sub(u1, u0), U32.add(lu0, lu1))), 1024)
-  +d = U32.div(U32.mul(deep, U32.sub(U32.sub(v1, v0), U32.add(lv0, lv1))), 1024)
+                 U32.shrn(U32.sub(v1, v0), 1n))
+  +w = U32.shrn(U32.mul(wide, U32.sub(U32.sub(u1, u0), U32.add(lu0, lu1))), 10n)
+  +d = U32.shrn(U32.mul(deep, U32.sub(U32.sub(v1, v0), U32.add(lv0, lv1))), 10n)
   +c0 = core_at(i, j, U32.add(u0, lu0), U32.add(v0, lv0), seed)
   +c1 = core_at(i, j, U32.sub(u1, lu1), U32.add(v0, lv0), seed)
   +c2 = core_at(i, j, U32.sub(u1, lu1), U32.sub(v1, lv1), seed)
@@ -2032,8 +2036,8 @@ def every_corner(fuel: Nat, +c: U32, +i: U32, +j: U32, +seed: U32) -> Bool:
     case 0n:
       True{}
     case 1n+p:
-      +back = U32.mod(U32.add(c, 3), 4)
-      +ahead = U32.mod(U32.add(c, 1), 4)
+      +back = U32.and(U32.add(c, 3), 3)
+      +ahead = U32.and(U32.add(c, 1), 3)
       +ok = corner_square(site(corner_i(i, c), corner_j(j, c), seed),
                           site(corner_i(i, back), corner_j(j, back), seed),
                           site(corner_i(i, ahead), corner_j(j, ahead), seed))
@@ -2106,7 +2110,7 @@ def prop_off_cm(+i: U32, +j: U32, +side: U32) -> U32:
 # already stands a kerb return and half the crossing street away from it.
 def prop_low(+i: U32, +j: U32, +side: U32, +t: U32, +seed: U32) -> Bool:
   +w = lot_width(i, j, side, 0, seed)
-  +at = U32.add(U32.mul(t, w), U32.div(w, 2))
+  +at = U32.add(U32.mul(t, w), U32.shrn(w, 1n))
   +near = mouth_cm(side_i(i, side), side_j(j, side), side_dir(side), seed)
   +far = mouth_cm(far_i(i, side), far_j(j, side), opposite(side_dir(side)), seed)
   Bool.or(U32.is_lt(U32.add(near, at), 2200),
@@ -2140,8 +2144,8 @@ def push_out(p: Pt, +f: Frame, +side: U32, +reach: U32) -> Pt:
 # The prop in front of lot t of a frontage: the lot's centre line, moved back
 # out to the planting line.
 def prop_at(+i: U32, +j: U32, +side: U32, +t: U32, +seed: U32) -> Prop:
-  +mid = U32.div(U32.add(lot_edge_t(i, j, side, 0, t, seed),
-                        lot_edge_t(i, j, side, 0, U32.add(t, 1), seed)), 2)
+  +mid = U32.shrn(U32.add(lot_edge_t(i, j, side, 0, t, seed),
+                        lot_edge_t(i, j, side, 0, U32.add(t, 1), seed)), 1n)
   +kind = prop_kind(i, j, side, t, seed)
   +c = curve_of(side_i(i, side), side_j(j, side), side_dir(side), seed)
   +here = advance(at(c, mid), frame_on(c, side, mid), prop_off_cm(i, j, side))
@@ -2165,10 +2169,10 @@ def core_tree_kind(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> PropKind:
 def core_tree(+i: U32, +j: U32, +a: U32, +b: U32, +seed: U32) -> Prop:
   +nw = core_lots_w(i, j, seed)
   +nd = core_lots_d(i, j, seed)
-  +u = U32.div(U32.add(core_edge(a, i, j, seed, True{}, nw),
-                       core_edge(U32.add(a, 1), i, j, seed, True{}, nw)), 2)
-  +v = U32.div(U32.add(core_edge(b, i, j, seed, False{}, nd),
-                       core_edge(U32.add(b, 1), i, j, seed, False{}, nd)), 2)
+  +u = U32.shrn(U32.add(core_edge(a, i, j, seed, True{}, nw),
+                       core_edge(U32.add(a, 1), i, j, seed, True{}, nw)), 1n)
+  +v = U32.shrn(U32.add(core_edge(b, i, j, seed, False{}, nd),
+                       core_edge(U32.add(b, 1), i, j, seed, False{}, nd)), 1n)
   +kind = core_tree_kind(i, j, a, b, seed)
   +p = core_at(i, j, u, v, seed)
   Prop{pt_x(p), pt_z(p), crown_cm(kind), kind}
@@ -2231,3 +2235,448 @@ def corner_between(+i: U32, +j: U32, +a: Dir, +b: Dir, +seed: U32) -> Pt:
 
 def corner_pt(+i: U32, +j: U32, +d: Dir, +seed: U32) -> Pt:
   corner_between(i, j, d, left_of(d), seed)
+
+# ===========================================================================
+# The split: streets inside a block
+#
+# The lattice above is the coarse tier, and left alone it is a grid: every
+# junction is a four-way and no street ever ends. Barthelemy and Boeing's
+# hundred-city sample puts the median street network at 18% four-way junctions
+# and 14% dead ends, and Indonesia is the most dispersed of the large countries
+# (Barrington-Leigh and Millard-Ball). So each block is cut again, the way
+# Vanegas et al. subdivide a block into parcels, but with streets.
+#
+# A cut runs across the block's longer side, from a point on one side to a point
+# on the opposite side, and halves it into two quads. A node of the cut tree is
+# a path: 1 is the block, and the children of p are 2p and 2p+1. A cut lands on
+# the sides of the block, so it makes a T at each end and never a four-way.
+# Three kinds of cut, and one that does not cut:
+#
+#   Through  a lokal street, side to side
+#   Gang     a gang, side to side, so it links
+#   Stub     a gang that stops inside the block, a dead end; its block is not
+#            cut again, so the dead end serves the block it stands in
+#   Whole    the block is small enough, or dense enough, to stay as it is
+#
+# Whether a quad is cut again comes from a smooth density field in the plane:
+# where it is high the blocks are small and the grain fine, where it is low they
+# stay large. The column the river runs through is never cut: water is not a
+# block. The field is read at the quad's centre, so the same place is the
+# same density whichever block it falls in.
+# ===========================================================================
+
+type Quad is Data:
+  Quad{a: Pt, b: Pt, c: Pt, d: Pt}
+
+type SplitKind is Data:
+  Whole{}
+  Through{}
+  Gang{}
+  Stub{}
+
+# The deepest a block is cut: three cuts down, so at most eight quads.
+def split_depth() -> U32:
+  3
+
+def split_roll(+i: U32, +j: U32, +p: U32, +seed: U32, +k: U32) -> U32:
+  U32.mod(U32.shrn(mix(U32.add(U32.mul(U32.add(U32.mul(i, 8), j), 64), p),
+                       U32.add(seed, U32.mul(k, 7919))), 12n), 1000)
+
+# ---------------------------------------------------------------------------
+# The density field: value noise on a 200 m grid, eased between its corners.
+# ---------------------------------------------------------------------------
+
+def field_cell_cm() -> U32:
+  20000
+
+def field_corner(+gx: U32, +gz: U32, +seed: U32) -> U32:
+  U32.mod(mix(U32.add(U32.mul(gx, 97), gz), U32.add(seed, 31)), 1000)
+
+def field_blend(+a: U32, +b: U32, +f: U32) -> U32:
+  U32.div(U32.add(U32.mul(a, U32.sub(1000, f)), U32.mul(b, f)), 1000)
+
+def field_at(+x: U32, +z: U32, +seed: U32) -> U32:
+  +gx = U32.div(x, field_cell_cm())
+  +gz = U32.div(z, field_cell_cm())
+  +fx = ease(U32.div(U32.mod(x, field_cell_cm()), 20))
+  +fz = ease(U32.div(U32.mod(z, field_cell_cm()), 20))
+  +top = field_blend(field_corner(gx, gz, seed), field_corner(U32.add(gx, 1), gz, seed), fx)
+  +bot = field_blend(field_corner(gx, U32.add(gz, 1), seed),
+                     field_corner(U32.add(gx, 1), U32.add(gz, 1), seed), fx)
+  field_blend(top, bot, fz)
+
+# ---------------------------------------------------------------------------
+# A quad and its two halves
+# ---------------------------------------------------------------------------
+
+def block_quad(+i: U32, +j: U32, +seed: U32) -> Quad:
+  Quad{site(i, j, seed), site(U32.add(i, 1), j, seed),
+       site(U32.add(i, 1), U32.add(j, 1), seed), site(i, U32.add(j, 1), seed)}
+
+# A side's squared length. The splits only compare sizes, so they compare the
+# squares and never take a root: a square root costs twenty Newton steps, and a
+# town's worth of them is what made the proofs slow. Wrapped differences square
+# to the same number as the true ones.
+def sq_length(a: Pt, b: Pt) -> U32:
+  match a:
+    case Pt{ax, az}:
+      match b:
+        case Pt{bx, bz}:
+          +dx = U32.sub(bx, ax)
+          +dz = U32.sub(bz, az)
+          U32.add(U32.mul(dx, dx), U32.mul(dz, dz))
+
+# The squared width and height of a quad: the mean of its two opposite sides.
+def quad_wide(+q: Quad) -> U32:
+  match q:
+    case Quad{a, b, c, d}:
+      U32.shrn(U32.add(sq_length(a, b), sq_length(d, c)), 1n)
+
+def quad_tall(+q: Quad) -> U32:
+  match q:
+    case Quad{a, b, c, d}:
+      U32.shrn(U32.add(sq_length(b, c), sq_length(a, d)), 1n)
+
+def quad_centre(+q: Quad) -> Pt:
+  match q:
+    case Quad{a, b, c, d}:
+      mix_pt(a, c, 512)
+
+def cuts_wide(+q: Quad) -> Bool:
+  U32.is_le(quad_tall(q), quad_wide(q))
+
+# Where along the side the cut starts, and where it lands on the far side: a
+# third to two thirds of the way, and the far end within eighty parts of a
+# thousand and twenty-four of the near one, so the cut leans a little and is
+# never square to a block that is not.
+def cut_t(+i: U32, +j: U32, +p: U32, +seed: U32) -> U32:
+  U32.add(370, U32.div(U32.mul(split_roll(i, j, p, seed, 1), 290), 1000))
+
+def cut_t2(+i: U32, +j: U32, +p: U32, +seed: U32) -> U32:
+  U32.sub(U32.add(cut_t(i, j, p, seed), U32.div(U32.mul(split_roll(i, j, p, seed, 2), 160), 1000)), 80)
+
+def cross_from(q: Quad, +wide: Bool, +t: U32) -> Pt:
+  match q:
+    case Quad{a, b, c, d}:
+      match wide:
+        case True{}:
+          mix_pt(a, b, t)
+        case False{}:
+          mix_pt(a, d, t)
+
+def cross_to(q: Quad, +wide: Bool, +t: U32) -> Pt:
+  match q:
+    case Quad{a, b, c, d}:
+      match wide:
+        case True{}:
+          mix_pt(d, c, t)
+        case False{}:
+          mix_pt(b, c, t)
+
+def half_first(q: Quad, +wide: Bool, e: Pt, f: Pt) -> Quad:
+  match q:
+    case Quad{a, b, c, d}:
+      match wide:
+        case True{}:
+          Quad{a, e, f, d}
+        case False{}:
+          Quad{a, b, f, e}
+
+def half_second(q: Quad, +wide: Bool, e: Pt, f: Pt) -> Quad:
+  match q:
+    case Quad{a, b, c, d}:
+      match wide:
+        case True{}:
+          Quad{e, b, c, f}
+        case False{}:
+          Quad{e, f, c, d}
+
+def pick_half(first: Bool, +q: Quad, +wide: Bool, e: Pt, g: Pt) -> Quad:
+  match first:
+    case True{}:
+      half_first(q, wide, e, g)
+    case False{}:
+      half_second(q, wide, e, g)
+
+# The path's own two powers: the node below `node` on the way to `p`.
+def depth_of(+p: U32) -> U32:
+  Bool.pick(U32, U32.is_lt(p, 2), 0,
+  Bool.pick(U32, U32.is_lt(p, 4), 1,
+  Bool.pick(U32, U32.is_lt(p, 8), 2, 3)))
+
+def pow2_of(+n: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(n, 0), 1, Bool.pick(U32, U32.is_eq(n, 1), 2, 4))
+
+def node_next(+p: U32, +node: U32) -> U32:
+  U32.div(p, pow2_of(U32.sub(U32.sub(depth_of(p), depth_of(node)), 1)))
+
+# One step down the path: the quad of `node`'s child that lies on the way to p.
+def quad_step(+q: Quad, +i: U32, +j: U32, +node: U32, +next: U32, +seed: U32) -> Quad:
+  +wide = cuts_wide(q)
+  pick_half(U32.is_eq(U32.and(next, 1), 0), q, wide,
+            cross_from(q, wide, cut_t(i, j, node, seed)),
+            cross_to(q, wide, cut_t2(i, j, node, seed)))
+
+# Exactly as many steps as the path is deep, and no more.
+def quad_walk(fuel: Nat, +q: Quad, +i: U32, +j: U32, +p: U32, +node: U32, +seed: U32) -> Quad:
+  match fuel:
+    case 0n:
+      q
+    case 1n+f:
+      +next = node_next(p, node)
+      quad_walk(f, quad_step(q, i, j, node, next, seed), i, j, p, next, seed)
+
+def quad_of(+i: U32, +j: U32, +p: U32, +seed: U32) -> Quad:
+  quad_walk(U32.to_nat(depth_of(p)), block_quad(i, j, seed), i, j, p, 1, seed)
+
+# Both halves of a quad, made once: a walk down the whole tree needs each cut's
+# two quads, and finding them from the block again for every node is what made
+# the proofs slow.
+type Halves is Data:
+  Halves{lo: Quad, hi: Quad}
+
+def halves_with(+q: Quad, +wide: Bool, +e: Pt, +g: Pt) -> Halves:
+  Halves{half_first(q, wide, e, g), half_second(q, wide, e, g)}
+
+def halves_of(+q: Quad, +i: U32, +j: U32, +node: U32, +seed: U32) -> Halves:
+  +wide = cuts_wide(q)
+  halves_with(q, wide, cross_from(q, wide, cut_t(i, j, node, seed)),
+              cross_to(q, wide, cut_t2(i, j, node, seed)))
+
+def lo_of(h: Halves) -> Quad:
+  match h:
+    case Halves{lo, hi}:
+      lo
+
+def hi_of(h: Halves) -> Quad:
+  match h:
+    case Halves{lo, hi}:
+      hi
+
+# ---------------------------------------------------------------------------
+# What a quad does: cut, or stay
+# ---------------------------------------------------------------------------
+
+# The side a quad is cut across, in centimetres: coarser where the field is low.
+# A hundred and sixty-five metres at the sparse end, sixty at the dense end,
+# and each quad is its own factor of 0.8 to 1.3 of that, so the grain is not a
+# measure.
+def cut_target_cm(+d: U32, +r: U32) -> U32:
+  +base = U32.sub(15000, U32.div(U32.mul(d, 95), 10))
+  U32.div(U32.mul(base, U32.add(800, U32.shrn(r, 1n))), 1000)
+
+# The narrowest side a quad may be cut across.
+def cut_floor_cm() -> U32:
+  3000
+
+# The density is the field at the block's centre, read once for the whole tree
+# of cuts that block makes: a block is smaller than the field's own grid, so
+# the field barely moves across it, and reading it at every node cost more than
+# the cut itself.
+def block_density(+i: U32, +j: U32, +seed: U32) -> U32:
+  +c = quad_centre(block_quad(i, j, seed))
+  field_at(pt_x(c), pt_z(c), seed)
+
+def wants_cut_in(+q: Quad, +d: U32, +i: U32, +j: U32, +p: U32, +seed: U32) -> Bool:
+  +w = quad_wide(q)
+  +t = quad_tall(q)
+  +target = cut_target_cm(d, split_roll(i, j, p, seed, 4))
+  Bool.and(Bool.not(U32.is_eq(i, river_gap())),
+  Bool.and(U32.is_lt(depth_of(p), split_depth()),
+  Bool.and(U32.is_le(U32.mul(target, target), U32.max(w, t)),
+           U32.is_le(U32.mul(cut_floor_cm(), cut_floor_cm()), U32.min(w, t)))))
+
+def wants_cut(+i: U32, +j: U32, +p: U32, +seed: U32) -> Bool:
+  wants_cut_in(quad_of(i, j, p, seed), block_density(i, j, seed), i, j, p, seed)
+
+def cutkind_past(gang: Bool) -> SplitKind:
+  match gang:
+    case True{}:
+      Gang{}
+    case False{}:
+      Through{}
+
+def cutkind_pick(stub: Bool, gang: Bool) -> SplitKind:
+  match stub:
+    case True{}:
+      Stub{}
+    case False{}:
+      cutkind_past(gang)
+
+def cutkind_roll(+r: U32) -> SplitKind:
+  cutkind_pick(U32.is_lt(r, 300), U32.is_lt(r, 520))
+
+def cutkind_code(k: SplitKind) -> U32:
+  match k:
+    case Whole{}:
+      0
+    case Through{}:
+      1
+    case Gang{}:
+      2
+    case Stub{}:
+      3
+
+def cutkind_whole(whole: Bool, k: SplitKind) -> SplitKind:
+  match whole:
+    case True{}:
+      Whole{}
+    case False{}:
+      k
+
+def cutkind_of(+c: U32) -> SplitKind:
+  cutkind_whole(U32.is_eq(c, 0), cutkind_pick(U32.is_eq(c, 3), U32.is_eq(c, 2)))
+
+# A quad exists only below cuts that went through: a stub leaves its block in
+# one piece. So the kind at a path is found from the block down, and the walk
+# stops, as Whole, at the first node that does not carry on.
+def split_if(live: Bool, +i: U32, +j: U32, +p: U32, +seed: U32) -> SplitKind:
+  match live:
+    case True{}:
+      cutkind_roll(split_roll(i, j, p, seed, 3))
+    case False{}:
+      Whole{}
+
+def code_in(+q: Quad, +d: U32, +i: U32, +j: U32, +node: U32, +seed: U32) -> U32:
+  cutkind_code(split_if(wants_cut_in(q, d, i, j, node, seed), i, j, node, seed))
+
+def code_here(+i: U32, +j: U32, +node: U32, +seed: U32) -> U32:
+  cutkind_code(split_if(wants_cut(i, j, node, seed), i, j, node, seed))
+
+def code_choose(done: Bool, carries: Bool, +here: U32, +deeper: U32) -> U32:
+  match done:
+    case True{}:
+      here
+    case False{}:
+      Bool.pick(U32, carries, deeper, 0)
+
+def code_walk(fuel: Nat, +i: U32, +j: U32, +p: U32, +node: U32, +seed: U32) -> U32:
+  match fuel:
+    case 0n:
+      0
+    case 1n+f:
+      +here = code_here(i, j, node, seed)
+      code_choose(U32.is_eq(node, p), Bool.or(U32.is_eq(here, 1), U32.is_eq(here, 2)), here,
+                  code_walk(f, i, j, p, node_next(p, node), seed))
+
+def split_code(+i: U32, +j: U32, +p: U32, +seed: U32) -> U32:
+  code_walk(4n, i, j, p, 1, seed)
+
+def split_of(+i: U32, +j: U32, +p: U32, +seed: U32) -> SplitKind:
+  cutkind_of(split_code(i, j, p, seed))
+
+# Where the cut starts and where it ends: a stub stops between 45% and 76% of
+# the way across.
+def split_start(+i: U32, +j: U32, +p: U32, +seed: U32) -> Pt:
+  +q = quad_of(i, j, p, seed)
+  cross_from(q, cuts_wide(q), cut_t(i, j, p, seed))
+
+def split_far(+i: U32, +j: U32, +p: U32, +seed: U32) -> Pt:
+  +q = quad_of(i, j, p, seed)
+  cross_to(q, cuts_wide(q), cut_t2(i, j, p, seed))
+
+def split_end(+i: U32, +j: U32, +p: U32, +seed: U32) -> Pt:
+  +stub = U32.is_eq(split_code(i, j, p, seed), 3)
+  +reach = Bool.pick(U32, stub, U32.add(460, U32.div(U32.mul(split_roll(i, j, p, seed, 5), 320), 1000)), 1024)
+  mix_pt(split_start(i, j, p, seed), split_far(i, j, p, seed), reach)
+
+# Half the carriageway, in centimetres: a lokal street, and a gang.
+def split_half_cm(k: SplitKind) -> U32:
+  match k:
+    case Whole{}:
+      0
+    case Through{}:
+      300
+    case Gang{}:
+      150
+    case Stub{}:
+      150
+
+# ---------------------------------------------------------------------------
+# The town's tally
+#
+# One walk down each block's cut tree, each node visited once with its quad in
+# hand. A node counts only while every cut above it went through, which is the
+# `live` flag, 1 or 0. Everything the laws ask is counted in the one walk and
+# kept in one number, a byte each: the cuts that are streets, gangs and stubs,
+# and the cuts that leave a half narrower than the floor. The checker pays for
+# every multiplication and division, so each law that walked the town again
+# paid the whole town again.
+# ---------------------------------------------------------------------------
+
+def carries(+code: U32) -> U32:
+  Bool.pick(U32, Bool.or(U32.is_eq(code, 1), U32.is_eq(code, 2)), 1, 0)
+
+def weight_of(+code: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(code, 1), 1,
+  Bool.pick(U32, U32.is_eq(code, 2), 256,
+  Bool.pick(U32, U32.is_eq(code, 3), 65536, 0)))
+
+# Both halves of a cut keep at least this much width, so no cut leaves a sliver.
+def half_floor_cm() -> U32:
+  900
+
+def narrow(+q: Quad) -> U32:
+  Bool.pick(U32, U32.is_lt(U32.min(quad_wide(q), quad_tall(q)), U32.mul(half_floor_cm(), half_floor_cm())), 1, 0)
+
+# A block has at most seven cuts, so no byte of the tally can overflow.
+def tally_node(fuel: Nat, +q: Quad, +d: U32, +i: U32, +j: U32, +node: U32, +seed: U32, +live: U32) -> U32:
+  match fuel:
+    case 0n:
+      0
+    case 1n+(+f):
+      +code = code_in(q, d, i, j, node, seed)
+      +h = halves_of(q, i, j, node, seed)
+      +below = U32.mul(live, carries(code))
+      U32.add(U32.add(U32.mul(live, weight_of(code)),
+                      U32.mul(U32.shln(1, 24n), U32.mul(below, U32.max(narrow(lo_of(h)), narrow(hi_of(h)))))),
+      U32.add(tally_node(f, lo_of(h), d, i, j, U32.mul(node, 2), seed, below),
+              tally_node(f, hi_of(h), d, i, j, U32.add(U32.mul(node, 2), 1), seed, below)))
+
+def block_live(+i: U32, +j: U32) -> U32:
+  Bool.pick(U32, block_exists(i, j), 1, 0)
+
+# Blocks are the cells between nodes: cols - 1 across.
+def tally_blocks(fuel: Nat, +n: U32, +seed: U32) -> U32:
+  match fuel:
+    case 0n:
+      0
+    case 1n+f:
+      +i = U32.mod(n, U32.sub(cols(), 1))
+      +j = U32.div(n, U32.sub(cols(), 1))
+      U32.add(tally_node(3n, block_quad(i, j, seed), block_density(i, j, seed), i, j, 1, seed,
+                         block_live(i, j)),
+              tally_blocks(f, U32.add(n, 1), seed))
+
+def town_cuts(+seed: U32) -> U32:
+  tally_blocks(U32.to_nat(U32.mul(U32.sub(cols(), 1), U32.sub(rows(), 1))), 0, seed)
+
+def cuts_through(+t: U32) -> U32:
+  U32.and(t, 255)
+
+def cuts_gang(+t: U32) -> U32:
+  U32.and(U32.shrn(t, 8n), 255)
+
+def cuts_stub(+t: U32) -> U32:
+  U32.and(U32.shrn(t, 16n), 255)
+
+def cuts_slivers(+t: U32) -> U32:
+  U32.shrn(t, 24n)
+
+# The lattice's own nodes, and two more for each cut: a T at each end of a
+# side-to-side cut, a T and a dead end for a stub. Every node of degree one
+# counts as a junction in the sense of the hundred-city sample.
+def junctions_of(+t: U32) -> U32:
+  U32.add(U32.mul(cols(), rows()),
+          U32.shln(U32.add(U32.add(cuts_through(t), cuts_gang(t)), cuts_stub(t)), 1n))
+
+def every_kind_cut(+t: U32) -> Bool:
+  Bool.and(U32.is_lt(0, cuts_through(t)),
+  Bool.and(U32.is_lt(0, cuts_gang(t)), U32.is_lt(0, cuts_stub(t))))
+
+def dead_ends_in_range(+t: U32) -> Bool:
+  Bool.and(U32.is_le(U32.mul(5, junctions_of(t)), U32.mul(100, cuts_stub(t))),
+           U32.is_le(U32.mul(100, cuts_stub(t)), U32.mul(25, junctions_of(t))))
+
+def split_holds(+t: U32) -> Bool:
+  Bool.and(every_kind_cut(t), Bool.and(dead_ends_in_range(t), U32.is_eq(cuts_slivers(t), 0)))

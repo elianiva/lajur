@@ -194,7 +194,7 @@ export interface TownView {
   bounds: THREE.Box3;
 }
 
-export function townView(options: { buildings?: boolean } = {}): TownView {
+export function townView(options: { buildings?: boolean; splits?: boolean } = {}): TownView {
   const group = new THREE.Group();
   const asphalt = new Batch();
   const paint = new Batch();
@@ -666,6 +666,31 @@ export function townView(options: { buildings?: boolean } = {}): TownView {
         (p.z + nz * wide * s + (dz / span) * back) * CM,
       ];
       river.quad(at(a, -1, -grow), at(a, 1, -grow), at(b, 1, grow), at(b, -1, grow));
+    }
+  }
+
+  // The streets cut inside each block. Drawn over the lots for now: the lots
+  // still follow the coarse block, so this shows the street layer on its own.
+  if (options.splits) {
+    for (let i = 0; i + 1 < T.COLS; i += 1) {
+      for (let j = 0; j + 1 < T.ROWS; j += 1) {
+        if (!T.blockExists(i, j)) continue;
+        for (const p of T.SPLIT_PATHS) {
+          const cut = T.splitAt(i, j, p);
+          if (!cut) continue;
+          const dx = cut.b.x - cut.a.x;
+          const dz = cut.b.z - cut.a.z;
+          const length = Math.hypot(dx, dz) || 1;
+          const nx = (-dz / length) * cut.half;
+          const nz = (dx / length) * cut.half;
+          const at = (q: T.Pt, side: number): V3 => [
+            (q.x + nx * side) * CM,
+            0.06,
+            (q.z + nz * side) * CM,
+          ];
+          asphalt.quad(at(cut.a, -1), at(cut.a, 1), at(cut.b, 1), at(cut.b, -1));
+        }
+      }
     }
   }
 

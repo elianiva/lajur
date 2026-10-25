@@ -291,3 +291,28 @@ export function coreLotAt(i: number, j: number, a: number, b: number): Lot {
     dz: l.dz as number,
   };
 }
+
+/** A street cut inside a block: a lokal street, a gang that links, or a stub that ends. */
+export interface Split {
+  kind: "Through" | "Gang" | "Stub";
+  a: Pt;
+  b: Pt;
+  /** Half the carriageway, in centimetres. */
+  half: number;
+}
+
+const SPLIT_KINDS = [undefined, "Through", "Gang", "Stub"] as const;
+const SPLIT_HALF = [0, 300, 150, 150];
+
+/** The paths a block can be cut along; node 1 is the block itself. */
+export const SPLIT_PATHS = [1, 2, 3, 4, 5, 6, 7];
+
+/** What the block's cut at a path is, if it makes one. */
+export function splitAt(i: number, j: number, p: number): Split | undefined {
+  const code = g.split_code(i, j, p, SEED) as number;
+  const kind = SPLIT_KINDS[code];
+  if (!kind) return undefined;
+  const a = g.split_start(i, j, p, SEED) as Pt;
+  const b = g.split_end(i, j, p, SEED) as Pt;
+  return { kind, a: { x: a.x, z: a.z }, b: { x: b.x, z: b.z }, half: SPLIT_HALF[code]! };
+}

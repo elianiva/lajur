@@ -87,6 +87,9 @@ declare const town: {
   core_open(i: number, j: number, a: number, b: number, seed: number): boolean;
   core_lot_at(i: number, j: number, a: number, b: number, seed: number): LotRecord;
   prop_at(i: number, j: number, side: number, k: number, seed: number): PropRecord;
+  split_code(i: number, j: number, p: number, seed: number): number;
+  split_start(i: number, j: number, p: number, seed: number): Point;
+  split_end(i: number, j: number, p: number, seed: number): Point;
 };
 
 export default town;
