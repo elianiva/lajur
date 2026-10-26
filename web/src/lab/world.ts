@@ -209,8 +209,8 @@ export function worldView(roll: number): View {
       for (const north of blocks)
         if (
           south.b.u0 === north.b.u0 &&
-          !south.b.edges.N.road &&
-          !north.b.edges.S.road &&
+          !south.b.roads.N &&
+          !north.b.roads.S &&
           south.b.v1 < north.b.v0
         )
           ground.area(

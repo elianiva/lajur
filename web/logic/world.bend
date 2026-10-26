@@ -1707,3 +1707,243 @@ def every_cross_gap_holds_lots() -> Bool:
 # apart: never nearer than the lokal floor.
 def every_branch_gap_keeps_floor() -> Bool:
   levels_from(~(l => U32.is_ge(U32.div(U32.mul(level_branch(l), 4), 5), lok_floor_cm())), 256n, 0)
+
+# ===========================================================================
+# A whole cell: its roads, its blocks and the streets in them, on the ground
+#
+# The cell owns its south and west lattice roads, so every road of the world
+# belongs to exactly one cell. Points are world centimetres; a block's
+# corners are in 65536ths of the frame.
+# ===========================================================================
+
+# 0 the lattice road east from the corner, 9 the one south, 1 a collector
+# across u, 2 one across v, 3 the river, 4 a tree street, 5 one ending in a
+# turning circle, 6 a ring lane, 7 a mouth, 8 a cross street.
+type Line is Data:
+  Line{kind: U32, tag: U32, pts: List<&2, Pt>}
+
+type Blk is Data:
+  Blk{u0: U32, u1: U32, v0: U32, v1: U32, d: U32, s_road: Bool, n_road: Bool, w_road: Bool, e_road: Bool, fill: Fill}
+
+type Cell is Data:
+  Cell{f: Frame, lines: List<&2, Line>, blocks: List<&2, Blk>}
+
+# n + 1 points along a curve, or along a line of the frame at a fixed u (or v).
+def curve_pts(fuel: Nat, +k: Curve, +n: U32, +s: U32, acc: List<&2, Pt>) -> List<&2, Pt>:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      curve_pts(p, k, n, U32.sub(s, 1), curve_at(k, U32.div(U32.mul(s, 65536), n)) <> acc)
+
+def road_pts(+seed: U32, +i: U32, +j: U32, +east: Bool) -> List<&2, Pt>:
+  curve_pts(65n, curve_of(seed, i, j, east), 64, 64, Nil{})
+
+def frame_pts(fuel: Nat, +f: Frame, +fixed_u: Bool, +at: U32, +s: U32, acc: List<&2, Pt>) -> List<&2, Pt>:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      +t = U32.mul(s, 1024)
+      frame_pts(p, f, fixed_u, at, U32.sub(s, 1), frame_at(f, Bool.pick(U32, fixed_u, at, t), Bool.pick(U32, fixed_u, t, at)) <> acc)
+
+def river_pts(fuel: Nat, +seed: U32, +i: U32, +j: U32, +f: Frame, +s: U32, acc: List<&2, Pt>) -> List<&2, Pt>:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      +u = U32.div(U32.mul(s, 65536), 24)
+      river_pts(p, seed, i, j, f, U32.sub(s, 1), frame_at(f, u, river_v(seed, i, j, u)) <> acc)
+
+# x / m in 65536ths, exactly, for x below 2^23.
+def frac16(+x: U32, +m: U32) -> U32:
+  +mm = U32.max(m, 1)
+  +hi = U32.div(U32.mul(x, 256), mm)
+  +r = U32.sub(U32.mul(x, 256), U32.mul(hi, mm))
+  U32.add(U32.mul(hi, 256), U32.div(U32.mul(r, 256), mm))
+
+# A street of the block's metric frame, on the ground: each straight run of
+# it drawn every 10 m or so through the frame, so it bends with the frame.
+def run_pts(fuel: Nat, +f: Frame, +a: Pt, +b: Pt, +n: U32, +k: U32, acc: List<&2, Pt>) -> List<&2, Pt>:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      +q = pt_lerp(a, b, U32.div(U32.mul(k, 65536), n))
+      run_pts(p, f, a, b, n, U32.add(k, 1), frame_at(f, frac16(pt_x(q), frame_mu(f)), frac16(pt_z(q), frame_mv(f))) <> acc)
+
+def street_go(ps: List<&2, Pt>, +f: Frame, +prev: Pt, acc: List<&2, Pt>) -> List<&2, Pt>:
+  match ps:
+    case Nil{}:
+      acc
+    case Con{+q, r}:
+      +n = U32.max(1, U32.div(U32.add(dist(prev, q), 995), 1000))
+      street_go(r, f, q, run_pts(U32.to_nat(n), f, prev, q, n, 1, acc))
+
+def street_world(ps: List<&2, Pt>, +f: Frame) -> List<&2, Pt>:
+  match ps:
+    case Nil{}:
+      Nil{}
+    case Con{+q, r}:
+      List.reverse(&2, Pt, street_go(r, f, q, [frame_at(f, frac16(pt_x(q), frame_mu(f)), frac16(pt_z(q), frame_mv(f)))]))
+
+def street_tag(+s: Street) -> U32:
+  match s:
+    case Street{tag, bulb, pts}:
+      Bool.pick(U32, U32.is_eq(tag, 0), Bool.pick(U32, bulb, 5, 4), U32.add(tag, 5))
+
+def street_lines(ss: List<&2, Street>, +f: Frame, acc: List<&2, Line>) -> List<&2, Line>:
+  match ss:
+    case Nil{}:
+      acc
+    case Con{+s, r}:
+      match s:
+        case Street{tag, bulb, pts}:
+          street_lines(r, f, Line{3, street_tag(s), street_world(pts, f)} <> acc)
+
+def fill_streets(+x: Fill) -> List<&2, Street>:
+  match x:
+    case Fill{land, court, ring, streets, mouths, linked, bulb, thru}:
+      streets
+
+def blk_lines(bs: List<&2, Blk>, +f: Frame, acc: List<&2, Line>) -> List<&2, Line>:
+  match bs:
+    case Nil{}:
+      acc
+    case Con{+b, r}:
+      match b:
+        case Blk{u0, u1, v0, v1, d, sr, nr, wr, er, fill}:
+          blk_lines(r, f, street_lines(fill_streets(fill), f, acc))
+
+# The road along a lattice side of the cell, with the collectors' mouths on
+# it from either side.
+def side_edge(+seed: U32, +i: U32, +j: U32, +east: Bool) -> Edge:
+  Edge{has_road(seed, i, j, east), i, j, Bool.pick(U32, east, 0, 1), road_length(seed, i, j, east),
+    side_mouth(seed, i, j, east, 0), side_mouth(seed, i, j, east, 1), 0, 65536}
+
+def far() -> U32:
+  4294967295
+
+def no_edge() -> Edge:
+  Edge{False{}, 0, 0, 0, 0, far(), far(), 0, 0}
+
+def edge_span(+e: Edge, +t0: U32, +t1: U32) -> Edge:
+  match e:
+    case Edge{road, k0, k1, k2, len, a0, a1, a, b}:
+      Edge{road, k0, k1, k2, len, a0, a1, t0, t1}
+
+def make_blk(+seed: U32, +i: U32, +j: U32, +f: Frame, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge) -> Blk:
+  +mid = frame_at(f, U32.shrn(U32.add(u0, u1), 1n), U32.shrn(U32.add(v0, v1), 1n))
+  Blk{u0, u1, v0, v1, density(seed, pt_x(mid), pt_z(mid)), edge_road(es), edge_road(en), edge_road(ew), edge_road(ee),
+    block_fill(seed, i, j, u0, u1, v0, v1, es, en, ew, ee)}
+
+# The water's v-range over u0..u1, from 17 samples.
+def water_lo(fuel: Nat, +seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +k: U32, +lo: U32) -> U32:
+  match fuel:
+    case 0n:
+      lo
+    case 1n+p:
+      water_lo(p, seed, i, j, u0, u1, U32.add(k, 1), U32.min(lo, river_v(seed, i, j, lerp(u0, u1, U32.mul(k, 4096)))))
+
+def water_hi(fuel: Nat, +seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +k: U32, +hi: U32) -> U32:
+  match fuel:
+    case 0n:
+      hi
+    case 1n+p:
+      water_hi(p, seed, i, j, u0, u1, U32.add(k, 1), U32.max(hi, river_v(seed, i, j, lerp(u0, u1, U32.mul(k, 4096)))))
+
+# A river cell is split by the water, which leaves a green bank of 15 m each
+# side of it.
+def blocks_of(river: Bool, +seed: U32, +i: U32, +j: U32, +f: Frame, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +es: Edge, +en: Edge, +ew: Edge, +ee: Edge) -> List<&2, Blk>:
+  match river:
+    case False{}:
+      [make_blk(seed, i, j, f, u0, u1, v0, v1, es, en, ew, ee)]
+    case True{}:
+      +bank = frac16(U32.add(river_half_cm(), 1500), frame_mv(f))
+      +lo = U32.sub(water_lo(17n, seed, i, j, u0, u1, 0, 65536), bank)
+      +hi = U32.add(water_hi(17n, seed, i, j, u0, u1, 0, 0), bank)
+      [make_blk(seed, i, j, f, u0, u1, v0, lo, es, no_edge(), ew, ee), make_blk(seed, i, j, f, u0, u1, hi, v1, no_edge(), en, ew, ee)]
+
+# The cuts at 0 and 65536 and a collector between, if there is one.
+def cuts_list(+c: U32) -> List<&2, U32>:
+  Bool.pick(List<&2, U32>, U32.is_eq(c, 0), [0, 65536], [0, c, 65536])
+
+def blocks_v(vs: List<&2, U32>, +seed: U32, +i: U32, +j: U32, +f: Frame, +u0: U32, +u1: U32, +sides: List<&2, Edge>, +cu: Edge, +cv: Edge, acc: List<&2, Blk>) -> List<&2, Blk>:
+  match vs:
+    case Nil{}:
+      acc
+    case Con{+v0, r}:
+      match r:
+        case Nil{}:
+          acc
+        case Con{+v1, r2}:
+          +ss = Maybe.default(&2, Edge, List.get(&2, Edge, sides, 0n), no_edge())
+          +sn = Maybe.default(&2, Edge, List.get(&2, Edge, sides, 1n), no_edge())
+          +sw = Maybe.default(&2, Edge, List.get(&2, Edge, sides, 2n), no_edge())
+          +se = Maybe.default(&2, Edge, List.get(&2, Edge, sides, 3n), no_edge())
+          +es = edge_span(Bool.pick(Edge, U32.is_eq(v0, 0), ss, cv), u0, u1)
+          +en = edge_span(Bool.pick(Edge, U32.is_eq(v1, 65536), sn, cv), u0, u1)
+          +ew = edge_span(Bool.pick(Edge, U32.is_eq(u0, 0), sw, cu), v0, v1)
+          +ee = edge_span(Bool.pick(Edge, U32.is_eq(u1, 65536), se, cu), v0, v1)
+          blocks_v(r, seed, i, j, f, u0, u1, sides, cu, cv,
+            List.append(&2, Blk, acc, blocks_of(river_row(j), seed, i, j, f, u0, u1, v0, v1, es, en, ew, ee)))
+
+def blocks_u(us: List<&2, U32>, +vs: List<&2, U32>, +seed: U32, +i: U32, +j: U32, +f: Frame, +sides: List<&2, Edge>, +cu: Edge, +cv: Edge, acc: List<&2, Blk>) -> List<&2, Blk>:
+  match us:
+    case Nil{}:
+      acc
+    case Con{+u0, r}:
+      match r:
+        case Nil{}:
+          acc
+        case Con{+u1, r2}:
+          blocks_u(r, vs, seed, i, j, f, sides, cu, cv, blocks_v(vs, seed, i, j, f, u0, u1, sides, cu, cv, acc))
+
+def own_road(here: Bool, +seed: U32, +i: U32, +j: U32, +east: Bool, acc: List<&2, Line>) -> List<&2, Line>:
+  match here:
+    case False{}:
+      acc
+    case True{}:
+      Line{road_code(i, j, east), Bool.pick(U32, east, 0, 9), road_pts(seed, i, j, east)} <> acc
+
+def cut_line(here: Bool, +f: Frame, +fixed_u: Bool, +at: U32, acc: List<&2, Line>) -> List<&2, Line>:
+  match here:
+    case False{}:
+      acc
+    case True{}:
+      Line{2, Bool.pick(U32, fixed_u, 1, 2), frame_pts(65n, f, fixed_u, at, 64, Nil{})} <> acc
+
+def river_line(here: Bool, +seed: U32, +i: U32, +j: U32, +f: Frame, acc: List<&2, Line>) -> List<&2, Line>:
+  match here:
+    case False{}:
+      acc
+    case True{}:
+      Line{0, 3, river_pts(25n, seed, i, j, f, 24, Nil{})} <> acc
+
+def cell_sides(+seed: U32, +i: U32, +j: U32) -> List<&2, Edge>:
+  [side_edge(seed, i, j, True{}), side_edge(seed, i, U32.add(j, 1), True{}),
+   side_edge(seed, i, j, False{}), side_edge(seed, U32.add(i, 1), j, False{})]
+
+# The collector across u (fixed_u) or across v, as the edge of a block.
+def cut_edge(+f: Frame, +i: U32, +j: U32, +fixed_u: Bool, +at: U32, +other: U32) -> Edge:
+  Edge{True{}, i, j, Bool.pick(U32, fixed_u, 3, 2), Bool.pick(U32, U32.is_eq(at, 0), 0, frame_line_length(f, fixed_u, at)),
+    Bool.pick(U32, U32.is_eq(other, 0), far(), other), far(), 0, 0}
+
+def cell_roads(+seed: U32, +i: U32, +j: U32, +f: Frame, +uc: U32, +vc: U32) -> List<&2, Line>:
+  +own = own_road(has_road(seed, i, j, False{}), seed, i, j, False{}, own_road(has_road(seed, i, j, True{}), seed, i, j, True{}, Nil{}))
+  +cuts = cut_line(U32.is_ne(vc, 0), f, False{}, vc, cut_line(U32.is_ne(uc, 0), f, True{}, uc, own))
+  river_line(river_row(j), seed, i, j, f, cuts)
+
+def cell_from(+f: Frame, +roads: List<&2, Line>, +blocks: List<&2, Blk>) -> Cell:
+  Cell{f, List.reverse(&2, Line, blk_lines(blocks, f, roads)), blocks}
+
+def cell_cut(+seed: U32, +i: U32, +j: U32, +f: Frame, +uc: U32, +vc: U32) -> Cell:
+  +blocks = blocks_u(cuts_list(uc), cuts_list(vc), seed, i, j, f, cell_sides(seed, i, j),
+              cut_edge(f, i, j, True{}, uc, vc), cut_edge(f, i, j, False{}, vc, uc), Nil{})
+  cell_from(f, cell_roads(seed, i, j, f, uc, vc), blocks)
+
+# The cell (i, j): its own roads, its collectors, its river, and its blocks
+# with the streets inside them.
+def cell_of(+seed: U32, +i: U32, +j: U32) -> Cell:
+  +c = cell_cuts(seed, i, j)
+  cell_cut(seed, i, j, frame_of(seed, i, j), cuts_u(c), cuts_v(c))

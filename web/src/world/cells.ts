@@ -18,7 +18,7 @@
  * All three layers are `logic/world.bend`, with their laws in
  * `logic/PROOF_WORLD.bend`. This file reads the model in metres and frames.
  */
-import W, { type Edge as BendEdge, type List } from "../world.mjs";
+import W, { type List } from "../world.mjs";
 
 export interface Pt {
   x: number;
@@ -29,8 +29,6 @@ export interface Pt {
 export type Dir = "E" | "S";
 /** A side of a cell or block, in the frame: v = 0 is south, u = 0 is west. */
 export type Side = "S" | "N" | "W" | "E";
-
-export const RIVER_HALF = 14;
 
 /** Road classes. A line of kind 0 is a river. */
 export const ART = 1;
@@ -57,19 +55,6 @@ export interface Frame {
   /** Metres per unit of u, and of v. */
   mu: number;
   mv: number;
-  /** The length of the line across the frame at a fixed u (or v), metres. */
-  line(axis: "u" | "v", at: number): number;
-}
-
-/** A road along one edge of a block, and the stretch of it the block owns. */
-export interface Edge {
-  road: boolean;
-  key: number[];
-  len: number;
-  /** Junctions already on it, as parameters along it. */
-  avoid: number[];
-  t0: number;
-  t1: number;
 }
 
 export type BlockType = "sawah" | "kebun" | "tree" | "comb" | "grid" | "ring" | "shops";
@@ -80,7 +65,8 @@ export interface Block {
   u1: number;
   v0: number;
   v1: number;
-  edges: Record<Side, Edge>;
+  /** Whether a road runs along each side. */
+  roads: Record<Side, boolean>;
   type: BlockType;
   /** The density at the block's middle. */
   d: number;
@@ -90,19 +76,11 @@ export interface Block {
   tips?: { linked: number; bulb: number; through: number };
 }
 
-export interface Mouth {
-  side: Side;
-  key: string;
-  t: number;
-  at: Pt;
-}
-
 export interface Cell {
   i: number;
   j: number;
   lines: Line[];
   blocks: Block[];
-  mouths: Mouth[];
   frame: Frame;
 }
 
@@ -158,23 +136,6 @@ export function segCurve(seed: number, i: number, j: number, dir: Dir): (t: numb
 export const along = (f: (t: number) => Pt, n: number): Pt[] =>
   Array.from({ length: n + 1 }, (_, k) => f(k / n));
 
-export const riverRow = (j: number) => W.river_row(u32(j));
-export const riverV = (seed: number, i: number, j: number, u: number): number =>
-  W.river_v(seed, u32(i), u32(j), q16(u)) / 65536;
-
-// Where a collector meets a lattice road. Side 0 is the cell south (or west)
-// of it, side 1 north (or east).
-const sideMouth = (seed: number, i: number, j: number, dir: Dir, side: 0 | 1): number =>
-  W.side_mouth(seed, u32(i), u32(j), east(dir), side) / 65536;
-
-export function cellCuts(seed: number, i: number, j: number) {
-  const c = W.cell_cuts(seed, u32(i), u32(j));
-  return { uc: c.uc ? c.uc / 65536 : null, vc: c.vc ? c.vc / 65536 : null };
-}
-
-export const segLength = (seed: number, i: number, j: number, dir: Dir) =>
-  W.road_length(seed, u32(i), u32(j), east(dir)) / 100;
-
 // ---- The cell's frame ---------------------------------------------------------
 
 export function frame(seed: number, i: number, j: number): Frame {
@@ -183,146 +144,17 @@ export function frame(seed: number, i: number, j: number): Frame {
     at: (u, v) => toPt(W.frame_at(f, q16(u), q16(v))),
     mu: f.mu / 100,
     mv: f.mv / 100,
-    line: (axis, at) => W.frame_line_length(f, axis === "u", q16(at)) / 100,
   };
 }
-
-const NONE: Edge = { road: false, key: [], len: 0, avoid: [], t0: 0, t1: 0 };
 
 // ---- One cell ---------------------------------------------------------------
-
-type AddLine = (kind: number, pts: Pt[], extra?: Partial<Line>) => void;
-
-/** Everything returned is in world metres. */
-export function cell(seed: number, i: number, j: number): Cell {
-  const F = frame(seed, i, j);
-  const lines: Line[] = [];
-  const blocks: Block[] = [];
-  const mouths: Mouth[] = [];
-  const line: AddLine = (kind, pts, extra = {}) => {
-    lines.push({ kind, pts, ...extra });
-  };
-  const { uc, vc } = cellCuts(seed, i, j);
-  const river = riverRow(j);
-
-  // The cell's own roads: its south and west segments, so every segment of the
-  // world belongs to exactly one cell.
-  for (const dir of ["E", "S"] as const) {
-    if (!segExists(seed, i, j, dir)) continue;
-    line(segKind(i, j, dir), along(segCurve(seed, i, j, dir), 64), { seg: `${i},${j},${dir}` });
-  }
-  if (uc !== null)
-    line(
-      COL,
-      along((v) => F.at(uc, v), 64),
-      { cut: "u" },
-    );
-  if (vc !== null)
-    line(
-      COL,
-      along((u) => F.at(u, vc), 64),
-      { cut: "v" },
-    );
-  if (river)
-    line(
-      0,
-      along((u) => F.at(u, riverV(seed, i, j, u)), 24),
-      { river: true },
-    );
-
-  // What lies on each of the four sides, and the junctions already on it: the
-  // collectors' mouths, from either side. A lattice side's length is the
-  // road's own arc length, which both cells beside it measure alike; their
-  // frames differ.
-  const seg = (si: number, sj: number, dir: Dir): Edge => ({
-    road: segExists(seed, si, sj, dir),
-    key: [si, sj, dir === "E" ? 0 : 1],
-    len: segLength(seed, si, sj, dir),
-    avoid: [sideMouth(seed, si, sj, dir, 0), sideMouth(seed, si, sj, dir, 1)],
-    t0: 0,
-    t1: 1,
-  });
-  const sides: Record<Side, Edge> = {
-    S: seg(i, j, "E"),
-    N: seg(i, j + 1, "E"),
-    W: seg(i, j, "S"),
-    E: seg(i + 1, j, "S"),
-  };
-
-  // Blocks: the cell cut by uc and vc, in the frame. River cells are split by
-  // the water instead, which leaves a green bank on each side of it.
-  const lenU = uc === null ? 0 : F.line("u", uc);
-  const lenV = vc === null ? 0 : F.line("v", vc);
-  const us = uc === null ? [0, 1] : [0, uc, 1];
-  const vs = vc === null ? [0, 1] : [0, vc, 1];
-  for (let a = 0; a + 1 < us.length; a++)
-    for (let b = 0; b + 1 < vs.length; b++) {
-      const r = { u0: us[a]!, u1: us[a + 1]!, v0: vs[b]!, v1: vs[b + 1]! };
-      // Each edge of the block: the road on it, or nothing.
-      const cutU: Edge = {
-        road: true,
-        key: [i, j, 3],
-        len: lenU,
-        avoid: [vc ?? -1],
-        t0: r.v0,
-        t1: r.v1,
-      };
-      const cutV: Edge = {
-        road: true,
-        key: [i, j, 2],
-        len: lenV,
-        avoid: [uc ?? -1],
-        t0: r.u0,
-        t1: r.u1,
-      };
-      const edges: Record<Side, Edge> = {
-        S: r.v0 === 0 ? { ...sides.S, t0: r.u0, t1: r.u1 } : cutV,
-        N: r.v1 === 1 ? { ...sides.N, t0: r.u0, t1: r.u1 } : cutV,
-        W: r.u0 === 0 ? { ...sides.W, t0: r.v0, t1: r.v1 } : cutU,
-        E: r.u1 === 1 ? { ...sides.E, t0: r.v0, t1: r.v1 } : cutU,
-      };
-      const block = (
-        u0: number,
-        u1: number,
-        v0: number,
-        v1: number,
-        e: Record<Side, Edge>,
-      ): Block => ({
-        u0,
-        u1,
-        v0,
-        v1,
-        edges: e,
-        type: "sawah",
-        d: 0,
-      });
-      if (river) {
-        // The water's v-range over this block, and a bank of 15 m each side.
-        let lo = 1;
-        let hi = 0;
-        for (let k = 0; k <= 16; k++) {
-          const v = riverV(seed, i, j, lerp(r.u0, r.u1, k / 16));
-          lo = Math.min(lo, v);
-          hi = Math.max(hi, v);
-        }
-        const bank = (RIVER_HALF + 15) / F.mv;
-        blocks.push(block(r.u0, r.u1, r.v0, lo - bank, { ...edges, N: NONE }));
-        blocks.push(block(r.u0, r.u1, hi + bank, r.v1, { ...edges, S: NONE }));
-      } else blocks.push(block(r.u0, r.u1, r.v0, r.v1, edges));
-    }
-
-  for (const blk of blocks) fill(seed, i, j, F, blk, line, mouths);
-  return { i, j, lines, blocks, mouths, frame: F };
-}
+// The model's cell, in world metres. A line's tag says what it is: 0 the
+// lattice road east from the corner and 9 the one south, 1 and 2 a collector
+// across u and across v, 3 the river, 4 and 5 a tree street, the second ending
+// in a turning circle, 6 a ring lane, 7 a mouth, 8 a cross street.
 
 const LANDS: BlockType[] = ["sawah", "kebun", "tree", "comb", "grid", "ring", "shops"];
 const COURTS: Court[] = ["alun", "pasar", "sekolah", "gudang"];
-const SIDES: Side[] = ["S", "N", "W", "E"];
-
-// ---- Layer 3: fill a block ----------------------------------------------------
-// The model answers in the block's metric frame, centimetres from the frame's
-// first corner along u and v. A point maps back through the frame, and a
-// straight run in the frame is drawn every 10 m or so, so it bends with it.
 
 const list = <T>(l: List<T>): T[] => {
   const out: T[] = [];
@@ -330,86 +162,59 @@ const list = <T>(l: List<T>): T[] => {
   return out;
 };
 
-const far = 0xffffffff;
-const toEdge = (e: Edge): BendEdge => ({
-  $: "Edge",
-  road: e.road,
-  k0: u32(e.key[0] ?? 0),
-  k1: u32(e.key[1] ?? 0),
-  k2: u32(e.key[2] ?? 0),
-  len: cm(e.len),
-  a0: e.avoid[0] === undefined || e.avoid[0] < 0 ? far : q16(e.avoid[0]),
-  a1: e.avoid[1] === undefined || e.avoid[1] < 0 ? far : q16(e.avoid[1]),
-  t0: q16(e.t0),
-  t1: q16(e.t1),
-});
+function lineOf(kind: number, tag: number, pts: Pt[], i: number, j: number): Line {
+  switch (tag) {
+    case 0:
+      return { kind, pts, seg: `${i},${j},E` };
+    case 9:
+      return { kind, pts, seg: `${i},${j},S` };
+    case 1:
+      return { kind, pts, cut: "u" };
+    case 2:
+      return { kind, pts, cut: "v" };
+    case 3:
+      return { kind: 0, pts, river: true };
+    case 4:
+      return { kind, pts, tree: true };
+    case 5:
+      return { kind, pts, tree: true, bulb: pts[pts.length - 1]! };
+    case 6:
+      return { kind, pts, ring: true };
+    case 7:
+      return { kind, pts, mouth: true };
+    default:
+      return { kind, pts, cross: true };
+  }
+}
 
-function fill(
-  seed: number,
-  i: number,
-  j: number,
-  F: Frame,
-  blk: Block,
-  line: AddLine,
-  mouths: Mouth[],
-) {
-  const c = F.at((blk.u0 + blk.u1) / 2, (blk.v0 + blk.v1) / 2);
-  blk.d = density(seed, c.x, c.z);
-  const e = blk.edges;
-  const r = W.block_fill(
-    seed,
-    u32(i),
-    u32(j),
-    q16(blk.u0),
-    q16(blk.u1),
-    q16(blk.v0),
-    q16(blk.v1),
-    toEdge(e.S),
-    toEdge(e.N),
-    toEdge(e.W),
-    toEdge(e.E),
-  );
-  blk.type = LANDS[r.land]!;
-  const fu = (x: number) => metres(x) / F.mu;
-  const fv = (z: number) => metres(z) / F.mv;
-  if (r.court < 4) {
-    blk.court = COURTS[r.court]!;
-    blk.inner = { ru0: fu(r.ring.x0), ru1: fu(r.ring.x1), rv0: fv(r.ring.z0), rv1: fv(r.ring.z1) };
-  }
-  if (blk.type === "tree" || blk.type === "ring")
-    blk.tips = { linked: r.linked, bulb: r.bulb, through: r.thru };
-  for (const st of list(r.streets)) {
-    const uv = list(st.pts).map((p) => [fu(p.x), fv(p.z)] as const);
-    const pts: Pt[] = [F.at(uv[0]![0], uv[0]![1])];
-    for (let k = 1; k < uv.length; k++) {
-      const [u0, v0] = uv[k - 1]!;
-      const [u1, v1] = uv[k]!;
-      const n = Math.max(1, Math.ceil(Math.hypot((u1 - u0) * F.mu, (v1 - v0) * F.mv) / 10));
-      for (let s = 1; s <= n; s++) pts.push(F.at(lerp(u0, u1, s / n), lerp(v0, v1, s / n)));
+/** Everything returned is in world metres. */
+export function cell(seed: number, i: number, j: number): Cell {
+  const F = frame(seed, i, j);
+  const c = W.cell_of(seed, u32(i), u32(j));
+  const lines = list(c.lines).map((l) => lineOf(l.kind, l.tag, list(l.pts).map(toPt), i, j));
+  const blocks = list(c.blocks).map((b): Block => {
+    const r = b.fill;
+    const blk: Block = {
+      u0: b.u0 / 65536,
+      u1: b.u1 / 65536,
+      v0: b.v0 / 65536,
+      v1: b.v1 / 65536,
+      roads: { S: b.s_road, N: b.n_road, W: b.w_road, E: b.e_road },
+      type: LANDS[r.land]!,
+      d: b.d / 1024,
+    };
+    if (r.court < 4) {
+      blk.court = COURTS[r.court]!;
+      blk.inner = {
+        ru0: metres(r.ring.x0) / F.mu,
+        ru1: metres(r.ring.x1) / F.mu,
+        rv0: metres(r.ring.z0) / F.mv,
+        rv1: metres(r.ring.z1) / F.mv,
+      };
     }
-    line(
-      LOK,
-      pts,
-      st.tag === 0
-        ? { tree: true, ...(st.bulb ? { bulb: pts[pts.length - 1]! } : {}) }
-        : st.tag === 1
-          ? { ring: true }
-          : st.tag === 2
-            ? { mouth: true }
-            : { cross: true },
-    );
-  }
-  for (const m of list(r.mouths)) {
-    const side = SIDES[m.side]!;
-    const t = m.t / 65536;
-    const at =
-      side === "S"
-        ? F.at(t, blk.v0)
-        : side === "N"
-          ? F.at(t, blk.v1)
-          : side === "W"
-            ? F.at(blk.u0, t)
-            : F.at(blk.u1, t);
-    mouths.push({ side, key: e[side].key.join(","), t, at });
-  }
+    if (blk.type === "tree" || blk.type === "ring")
+      blk.tips = { linked: r.linked, bulb: r.bulb, through: r.thru };
+    return blk;
+  });
+  return { i, j, lines, blocks, frame: F };
 }
