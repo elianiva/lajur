@@ -14,7 +14,14 @@ export type Signal = Constructor<"Off" | "ToLeft" | "ToRight">;
 export type Body = Constructor<"Sedan" | "Hatch" | "Taxi" | "Van" | "Bus" | "Truck">;
 export type Status = Constructor<"Driving" | "Crashed">;
 /** One road of the world's lattice, from crossing (i, j) toward `dir`: 0 north, 1 east, 2 south, 3 west. */
-export type Leg = { $: "Leg"; i: number; j: number; dir: number; length: number };
+export type Leg =
+  | { $: "Leg"; i: number; j: number; dir: number; length: number }
+  /** A collector inside cell (ci, cj), from parameter t0 toward `dir`. */
+  | { $: "Cut"; ci: number; cj: number; dir: number; t0: number; length: number };
+/** A place to turn off a road; the renderer only carries it. */
+export type Door = Constructor<"Door" | "Gate">;
+/** One way of a lokal street network; the renderer only carries it. */
+export type Way = Constructor<"Way">;
 
 export type Pt = { $: "Pt"; x: number; z: number };
 
@@ -99,6 +106,18 @@ export interface Game {
   rule_name(id: number): string;
   header_of(id: number): string;
   fine_of(id: number): number;
+  seed_of(world: World): number;
+  leg_id(leg: Leg): number;
+  leg_key(world: World): number;
+  legs_ahead(world: World): BendList<Leg>;
+  leg_doors(seed: number, leg: Leg): BendList<Door>;
+  needs_doors(world: World): boolean;
+  with_doors(world: World, leg: Leg, doors: BendList<Door>): World;
+  armed(world: World): Door;
+  door_key(door: Door): number;
+  door_net(seed: number, door: Door): BendList<Way>;
+  wants_net(world: World): boolean;
+  with_net(world: World, door: Door, net: BendList<Way>): World;
 }
 
 declare const game: Game;

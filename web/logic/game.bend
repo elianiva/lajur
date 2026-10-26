@@ -780,8 +780,10 @@ def turn_after(+near: Bool, +held: Controls, +input: Controls, +turn: U32) -> U3
 # onto a main road the car turns out, left unless it signalled right.
 # ===========================================================================
 
+# On the main road, the network of the armed door's block once it is made,
+# under the door's key.
 type Lok is Data:
-  Main{}
+  Main{key: U32, net: List<&2, L.Way>}
   Side{net: List<&2, L.Way>, way: U32, fwd: Bool, length: U32}
 
 # Whether the leg's doors are made yet, the doors, the door armed (or none)
@@ -798,14 +800,14 @@ def no_door() -> U32:
   4294967295
 
 def fresh_place() -> Place:
-  Place{False{}, Nil{}, no_door(), False{}, Main{}}
+  Place{False{}, Nil{}, no_door(), False{}, Main{no_door(), Nil{}}}
 
 def door_reach_cm() -> U32:
   6000
 
 def lok_side(l: Lok) -> Bool:
   match l:
-    case Main{}:
+    case Main{key, net}:
       False{}
     case Side{net, way, fwd, length}:
       True{}
@@ -847,7 +849,8 @@ def gates_of(+seed: U32, +ki: U32, +kj: U32, +east: Bool, +length: U32, +fwd: Bo
   gate_if(U32.is_ne(bt, 0), gate_cm(k, bt, length, fwd), own, ki, kj, Bool.pick(U32, east, 2, 1),
     gate_if(U32.is_ne(at, 0), gate_cm(k, at, length, fwd), Bool.not(own), oi, oj, Bool.pick(U32, east, 0, 3), acc))
 
-# The doors of a leg are made once, on its first tick.
+# A leg's doors are made when a tap first needs them, unless the worker
+# brought them first (`with_doors`).
 def doors_if(known: Bool, +seed: U32, l: Leg, ds: List<&2, L.Door>) -> List<&2, L.Door>:
   match known:
     case True{}:
@@ -875,38 +878,67 @@ def door_ahead(ds: List<&2, L.Door>, +left: Bool, +along: U32, +best: U32) -> U3
             Bool.and(U32.is_le(U32.sub(at, along), door_reach_cm()), U32.is_lt(at, best)))
       door_ahead(r, left, along, Bool.pick(U32, ok, at, best))
 
+def doors_tap(tap: Bool, +seed: U32, l: Leg) -> List<&2, L.Door>:
+  match tap:
+    case True{}:
+      doors_if(False{}, seed, l, Nil{})
+    case False{}:
+      Nil{}
+
+def doors_when(known: Bool, +tap: Bool, +seed: U32, l: Leg, ds: List<&2, L.Door>) -> List<&2, L.Door>:
+  match known:
+    case True{}:
+      ds
+    case False{}:
+      doors_tap(tap, seed, l)
+
 def no_door_rec() -> L.Door:
   L.Door{0, False{}, 0, 0, 0, W.Pt{0, 0}}
+
+# The key a block's network is kept under; a gate has no network.
+def door_key(d: L.Door) -> U32:
+  match d:
+    case L.Door{at, dl, ci, cj, blk, p}:
+      W.hash4(3, ci, cj, blk, 13)
+    case L.Gate{at, dl, ci, cj, dir}:
+      no_door()
+
+def net_for(cached: Bool, net: List<&2, L.Way>, +seed: U32, +ci: U32, +cj: U32, +blk: U32) -> List<&2, L.Way>:
+  match cached:
+    case True{}:
+      net
+    case False{}:
+      L.net_at(seed, ci, cj, blk)
 
 # Turning in at a door: the block's network is made now, and the car starts
 # on the way in from the mouth's kerb. At a gate the car starts on the
 # collector, at its mouth.
-def enter_door(d: L.Door, +seed: U32, +over: U32, +leg: Leg) -> Pos:
+def enter_door(d: L.Door, +seed: U32, +over: U32, +leg: Leg, +key: U32, +made: List<&2, L.Way>) -> Pos:
   match d:
     case L.Door{at, dl, +ci, +cj, +blk, +p}:
-      +net = L.net_at(seed, ci, cj, blk)
+      +net = net_for(U32.is_eq(key, W.hash4(3, ci, cj, blk, 13)), made, seed, ci, cj, blk)
       +k = L.way_from(net, p, 0, L.none())
       Pos{leg, over, 1, Place{True{}, Nil{}, no_door(), False{}, Side{net, k, True{}, L.length_at(net, k)}}, False{}}
     case L.Gate{at, dl, +ci, +cj, +dir}:
       Pos{cut_from(seed, ci, cj, dir, Bool.pick(U32, plus(dir), 0, 65536)), over, 1, fresh_place(), True{}}
 
-def walk_main(pair: Leg & U32, +was: U32, ds: List<&2, L.Door>, +door: U32, +left: Bool, +turn: U32) -> Pos:
+def walk_main(pair: Leg & U32, +was: U32, +known: Bool, ds: List<&2, L.Door>, +door: U32, +left: Bool, +turn: U32, +key: U32, +net: List<&2, L.Way>) -> Pos:
   match pair:
     case (+leg, +along):
       +passed = U32.is_lt(along, was)
       Pos{leg, along, Bool.pick(U32, passed, 1, turn),
-          Bool.pick(Place, passed, fresh_place(), Place{True{}, ds, door, left, Main{}}), passed}
+          Bool.pick(Place, passed, fresh_place(), Place{known, ds, door, left, Main{key, net}}), passed}
 
-def main_go(enter: Bool, +leg: Leg, +along: U32, +to: U32, +seed: U32, +turn: U32, +ds: List<&2, L.Door>, +door: U32, +left: Bool) -> Pos:
+def main_go(enter: Bool, +leg: Leg, +along: U32, +to: U32, +seed: U32, +turn: U32, +known: Bool, +ds: List<&2, L.Door>, +door: U32, +left: Bool, +key: U32, +net: List<&2, L.Way>) -> Pos:
   match enter:
     case True{}:
-      enter_door(L.door_at(ds, door, left, no_door_rec()), seed, U32.sub(to, door), leg)
+      enter_door(L.door_at(ds, door, left, no_door_rec()), seed, U32.sub(to, door), leg, key, net)
     case False{}:
-      walk_main(walked(leg, to, seed, turn), along, ds, door, left, turn)
+      walk_main(walked(leg, to, seed, turn), along, known, ds, door, left, turn, key, net)
 
-def main_move(+leg: Leg, +along: U32, +dist: U32, +seed: U32, +turn: U32, +ds: List<&2, L.Door>, +door: U32, +left: Bool) -> Pos:
+def main_move(+leg: Leg, +along: U32, +dist: U32, +seed: U32, +turn: U32, +known: Bool, +ds: List<&2, L.Door>, +door: U32, +left: Bool, +key: U32, +net: List<&2, L.Way>) -> Pos:
   +to = U32.add(along, dist)
-  main_go(Bool.and(U32.is_lt(along, door), U32.is_le(door, to)), leg, along, to, seed, turn, ds, door, left)
+  main_go(Bool.and(U32.is_lt(along, door), U32.is_le(door, to)), leg, along, to, seed, turn, known, ds, door, left, key, net)
 
 # Coming out of a mouth onto a main road. The road's own direction at the
 # kerb is a right turn when it turns clockwise from the heading out of the
@@ -978,13 +1010,14 @@ def side_move(+net: List<&2, L.Way>, +way: U32, +fwd: Bool, +length: U32, +along
 def move_lok(l: Lok, +known: Bool, +doors: List<&2, L.Door>, +door: U32, +left: Bool, +leg: Leg, +along: U32,
              +dist: U32, +seed: U32, +turn: U32, +tl: Bool, +tr: Bool) -> Pos:
   match l:
-    case Main{}:
-      +ds = doors_if(known, seed, leg, doors)
+    case Main{+key, +net}:
       +near = near_crossing(leg, along)
+      +tap = Bool.and(Bool.or(tl, tr), Bool.not(near))
+      +ds = doors_when(known, tap, seed, leg, doors)
       +found = door_ahead(ds, tl, along, no_door())
-      +arm = Bool.and(Bool.and(Bool.or(tl, tr), Bool.not(near)), U32.is_ne(found, no_door()))
-      main_move(leg, along, dist, seed, turn_by(near, tl, tr, turn), ds,
-                Bool.pick(U32, arm, found, door), Bool.pick(Bool, arm, tl, left))
+      +arm = Bool.and(tap, U32.is_ne(found, no_door()))
+      main_move(leg, along, dist, seed, turn_by(near, tl, tr, turn), Bool.or(known, tap), ds,
+                Bool.pick(U32, arm, found, door), Bool.pick(Bool, arm, tl, left), key, net)
     case Side{+net, +way, +fwd, +length}:
       side_move(net, way, fwd, length, along, dist, seed,
                 Bool.pick(U32, tl, 0, Bool.pick(U32, tr, 2, turn)), leg)
@@ -1330,7 +1363,7 @@ def way_piece(w: L.Way, +fwd: Bool) -> Piece:
 
 def lok_piece(l: Lok, +seed: U32, +leg: Leg, +from: U32, +to: U32) -> Piece:
   match l:
-    case Main{}:
+    case Main{key, net}:
       leg_piece(seed, leg, from, to)
     case Side{net, +way, +fwd, length}:
       way_piece(L.nth_way(net, way), fwd)
@@ -1347,23 +1380,41 @@ def next_piece(pair: Leg & U32, +seed: U32) -> Piece:
     case (+l, +s):
       leg_piece(seed, l, s, leg_length(l))
 
-def next_main(armed: Bool, +p: Place, +seed: U32, +leg: Leg, +turn: U32) -> Piece:
+# A door whose network is not made yet plans no piece past it: the plan
+# changes when the network comes, and the car makes it itself if it gets
+# to the door first.
+def door_ready(+d: L.Door, +key: U32) -> Bool:
+  match d:
+    case L.Door{at, dl, ci, cj, blk, p}:
+      U32.is_eq(key, door_key(d))
+    case L.Gate{at, dl, ci, cj, dir}:
+      True{}
+
+def past_door(ready: Bool, +d: L.Door, +seed: U32, +leg: Leg, +key: U32, +net: List<&2, L.Way>) -> List<&2, Piece>:
+  match ready:
+    case True{}:
+      [pos_piece(enter_door(d, seed, 0, leg, key, net), seed)]
+    case False{}:
+      Nil{}
+
+def next_main(armed: Bool, +p: Place, +seed: U32, +leg: Leg, +turn: U32, +key: U32, +net: List<&2, L.Way>) -> List<&2, Piece>:
   match armed:
     case True{}:
       match p:
         case Place{known, +doors, +door, +left, lok}:
-          pos_piece(enter_door(L.door_at(doors, door, left, no_door_rec()), seed, 0, leg), seed)
+          +d = L.door_at(doors, door, left, no_door_rec())
+          past_door(door_ready(d, key), d, seed, leg, key, net)
     case False{}:
-      next_piece(leg_after(leg, seed, turn), seed)
+      [next_piece(leg_after(leg, seed, turn), seed)]
 
 def ahead_of(l: Lok, +p: Place, +seed: U32, +leg: Leg, +along: U32, +turn: U32) -> List<&2, Piece>:
   match l:
-    case Main{}:
+    case Main{+key, +net}:
       match p:
         case Place{known, doors, +door, left, lok}:
           +armed = U32.is_ne(door, no_door())
-          [leg_piece(seed, leg, 0, Bool.pick(U32, armed, door, leg_length(leg))),
-           next_main(armed, p, seed, leg, turn)]
+          leg_piece(seed, leg, 0, Bool.pick(U32, armed, door, leg_length(leg))) <>
+            next_main(armed, p, seed, leg, turn, key, net)
     case Side{+net, +way, +fwd, +length}:
       [way_piece(L.nth_way(net, way), fwd),
        pos_piece(from_arrival(L.arrive(net, way, fwd), net, way, fwd, 0, seed, turn, leg), seed)]
@@ -1378,8 +1429,8 @@ def plan(w: World) -> List<&2, Piece>:
 
 def lok_key(l: Lok) -> U32:
   match l:
-    case Main{}:
-      0
+    case Main{key, net}:
+      key
     case Side{net, way, fwd, length}:
       W.hash2(U32.add(way, 1), Bool.to_u32(fwd), 3)
 
@@ -1391,3 +1442,103 @@ def plan_key(w: World) -> U32:
       match place:
         case Place{known, doors, door, left, lok}:
           W.hash5(leg_id(leg), turn, door, Bool.to_u32(left), lok_key(lok), 9)
+
+# ===========================================================================
+# Made ahead
+#
+# A leg's doors and a block's network take milliseconds to make. A worker
+# makes them ahead with the functions below, the ones the model itself
+# calls, and the model takes each only where it is the value it would make:
+# the doors of the leg the car is on, not yet made; the network of the door
+# armed. Without them the model makes its own, as before.
+# ===========================================================================
+
+def leg_doors(+seed: U32, l: Leg) -> List<&2, L.Door>:
+  doors_if(False{}, seed, l, Nil{})
+
+def door_net(+seed: U32, d: L.Door) -> List<&2, L.Way>:
+  match d:
+    case L.Door{at, dl, +ci, +cj, +blk, p}:
+      L.net_at(seed, ci, cj, blk)
+    case L.Gate{at, dl, ci, cj, dir}:
+      Nil{}
+
+def first_of(pair: Leg & U32) -> Leg:
+  match pair:
+    case (l, s):
+      l
+
+# The leg the car is on and the legs each turn would take it onto next.
+def legs_ahead(w: World) -> List<&2, Leg>:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, +leg, along, turn, place, +seed}:
+      [leg, first_of(leg_after(leg, seed, 0)), first_of(leg_after(leg, seed, 1)), first_of(leg_after(leg, seed, 2))]
+
+def leg_key(w: World) -> U32:
+  leg_id(leg_of(w))
+
+def place_known(p: Place) -> Bool:
+  match p:
+    case Place{known, doors, door, left, lok}:
+      known
+
+def needs_doors(w: World) -> Bool:
+  Bool.not(place_known(place_of(w)))
+
+def with_doors(w: World, l: Leg, ds: List<&2, L.Door>) -> World:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, +leg, along, turn, place, seed}:
+      match place:
+        case Place{+known, doors, door, left, lok}:
+          +fits = Bool.and(Bool.not(known), U32.is_eq(leg_id(l), leg_id(leg)))
+          World{tick, player, traffic, oncoming, distance, zone, charges, status,
+                held, residual, leg, along, turn,
+                Place{Bool.or(known, fits), Bool.pick(List<&2, L.Door>, fits, ds, doors), door, left, lok}, seed}
+
+# The door armed, or a gate when none is.
+def armed_in(p: Place) -> L.Door:
+  match p:
+    case Place{known, +doors, +door, +left, lok}:
+      Bool.pick(L.Door, U32.is_eq(door, no_door()), L.Gate{0, False{}, 0, 0, 0},
+                L.door_at(doors, door, left, no_door_rec()))
+
+def armed(w: World) -> L.Door:
+  armed_in(place_of(w))
+
+def lok_wants(l: Lok, +want: U32) -> Bool:
+  match l:
+    case Main{key, net}:
+      Bool.and(U32.is_ne(want, no_door()), U32.is_ne(key, want))
+    case Side{net, way, fwd, length}:
+      False{}
+
+# Whether the armed door's network is still to make.
+def place_wants(+p: Place) -> Bool:
+  match p:
+    case Place{known, doors, door, left, lok}:
+      lok_wants(lok, door_key(armed_in(p)))
+
+def wants_net(w: World) -> Bool:
+  place_wants(place_of(w))
+
+def lok_with(l: Lok, +want: U32, net: List<&2, L.Way>) -> Lok:
+  match l:
+    case Main{+key, n0}:
+      +fits = Bool.and(U32.is_ne(want, no_door()), U32.is_ne(key, want))
+      Main{Bool.pick(U32, fits, want, key), Bool.pick(List<&2, L.Way>, fits, net, n0)}
+    case Side{net0, way, fwd, length}:
+      Side{net0, way, fwd, length}
+
+def with_net(w: World, d: L.Door, net: List<&2, L.Way>) -> World:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, place, seed}:
+      match place:
+        case Place{known, +doors, +door, +left, lok}:
+          +want = door_key(L.door_at(doors, door, left, no_door_rec()))
+          +given = door_key(d)
+          World{tick, player, traffic, oncoming, distance, zone, charges, status,
+                held, residual, leg, along, turn,
+                Place{known, doors, door, left, lok_with(lok, Bool.pick(U32, U32.is_eq(want, given), want, no_door()), net)}, seed}

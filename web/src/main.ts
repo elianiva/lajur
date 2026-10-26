@@ -6,6 +6,7 @@ import { buildCar, PLAYER_COLOUR } from "./assets/cars.ts";
 import { Around } from "./render/around.ts";
 import { Route } from "./render/route.ts";
 import { Traffic } from "./render/traffic.ts";
+import { Ahead } from "./ahead.ts";
 import { advance, bodyLength, plan, planKey, restart, snapshot, start } from "./bend.ts";
 import { Ink, light, lookByKey, restyle } from "./render/look.ts";
 
@@ -70,6 +71,8 @@ light(scene, hemi, sun, look);
 let world = start();
 let state = snapshot(world);
 
+const ahead = new Ahead();
+ahead.prefetch(world);
 const route = new Route();
 let planned = planKey(world);
 route.sync(plan(world));
@@ -107,12 +110,13 @@ function follow(dt: number): void {
 }
 
 function step(ms: number): void {
-  world = advance(world, ms, keyboard.controls());
+  world = ahead.fill(advance(world, ms, keyboard.controls()));
   state = snapshot(world);
   const key = planKey(world);
   if (key !== planned) {
     planned = key;
     route.sync(plan(world));
+    ahead.prefetch(world);
   }
 
   traffic.update(state, ms / 1000);
