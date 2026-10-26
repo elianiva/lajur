@@ -59,6 +59,8 @@ export type World = {
   residual: number;
   leg: Leg;
   along: number;
+  /** The turn chosen at the crossing ahead: 0 left, 1 straight on, 2 right. */
+  turn: number;
   seed: number;
 };
 
@@ -78,7 +80,7 @@ export interface Game {
   lane_target(world: World): Lane;
   lane_change_ticks(): number;
   lamp_ticks(): number;
-  leg_after(leg: Leg, seed: number): Leg;
+  leg_after(leg: Leg, seed: number, turn: number): Leg;
   rule_name(id: number): string;
   header_of(id: number): string;
   fine_of(id: number): number;

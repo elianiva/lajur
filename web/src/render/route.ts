@@ -59,14 +59,19 @@ function lay(seed: number, leg: Leg, s0: number): Laid {
 export class Route {
   private legs: Laid[] = [];
   private current = 0;
+  /** The turn the leg after the current one was laid for. */
+  private turn = 1;
   private seed: number;
 
   constructor(seed: number) {
     this.seed = seed;
   }
 
-  /** Follows the model onto its leg, and keeps the legs either side laid. */
-  sync(leg: Leg): void {
+  /**
+   * Follows the model onto its leg, and keeps the legs either side laid: the
+   * next for the turn the driver chose, the ones after it straight on.
+   */
+  sync(leg: Leg, turn: number): void {
     const key = keyOf(leg);
     const at = this.legs.findIndex((l) => l.key === key);
     if (at < 0) {
@@ -77,9 +82,14 @@ export class Route {
       this.legs.splice(0, this.current - BEHIND);
       this.current = BEHIND;
     }
+    if (turn !== this.turn) {
+      this.legs.length = this.current + 1;
+      this.turn = turn;
+    }
     while (this.legs.length - 1 - this.current < AHEAD) {
       const last = this.legs[this.legs.length - 1]!;
-      this.legs.push(lay(this.seed, legAfter(last.leg, this.seed), last.s0 + last.length));
+      const next = legAfter(last.leg, this.seed, last === this.legs[this.current] ? turn : 1);
+      this.legs.push(lay(this.seed, next, last.s0 + last.length));
     }
   }
 

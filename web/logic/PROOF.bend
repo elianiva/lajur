@@ -18,8 +18,8 @@ import ../../bend/rules.bend as R
 # ===========================================================================
 
 # At a crossing the route takes a road that is there, stays on the arterials
-# while one goes on, and takes the turn asked for whenever that turn is an
-# arterial; it turns back only when no other road leaves. The law walks every
+# while one goes on, and takes the turn the driver signalled whenever that
+# turn is an arterial; it turns back only when no other road leaves. The law walks every
 # exit a crossing can offer, open or closed, arterial or not, for every turn.
 law the_route_takes_only_roads_that_are_there:
   { G.every_exit_holds() == True{} : Bool }
@@ -36,9 +36,24 @@ def a_tick_cannot_pass_two_crossings():
   {==}
 
 law a_leg_holds_until_its_end:
-  { G.walked(G.Leg{1, 0, 1, 50000}, 40000, 20261024) == (G.Leg{1, 0, 1, 50000}, 40000) : G.Leg & U32 }
+  { G.walked(G.Leg{1, 0, 1, 50000}, 40000, 20261024, 1) == (G.Leg{1, 0, 1, 50000}, 40000) : G.Leg & U32 }
 
 def a_leg_holds_until_its_end():
+  {==}
+
+# A tap of the indicator chooses the turn only in the last hundred metres
+# before a crossing; further back it is a lane change, and the car keeps to
+# its road.
+law only_the_last_hundred_metres_choose_a_turn:
+  { Bool.and(
+      U32.is_eq(G.turn_after(G.near_crossing(G.Leg{1, 0, 1, 50000}, 39000),
+                             G.Controls{False{}, False{}, False{}, False{}},
+                             G.Controls{True{}, False{}, False{}, False{}}, 1), 1),
+      U32.is_eq(G.turn_after(G.near_crossing(G.Leg{1, 0, 1, 50000}, 41000),
+                             G.Controls{False{}, False{}, False{}, False{}},
+                             G.Controls{True{}, False{}, False{}, False{}}, 1), 0)) == True{} : Bool }
+
+def only_the_last_hundred_metres_choose_a_turn():
   {==}
 
 # The first road of every drive is there, and it is an arterial.

@@ -22,6 +22,8 @@ export interface Snapshot {
   /** The road the car is on, and centimetres into it. */
   leg: Leg;
   along: number;
+  /** The turn chosen at the crossing ahead. */
+  turn: number;
   seed: number;
   speed: number;
   limit: number;
@@ -73,9 +75,9 @@ export function laneChangeTicks(): number {
   return game.lane_change_ticks();
 }
 
-/** The road the route takes at the far crossing of `leg`. */
-export function legAfter(leg: Leg, seed: number): Leg {
-  return game.leg_after(leg, seed);
+/** The road the route takes at the far crossing of `leg`, for a turn: 0 left, 1 straight on, 2 right. */
+export function legAfter(leg: Leg, seed: number, turn: number): Leg {
+  return game.leg_after(leg, seed, turn);
 }
 
 /** The model's collision envelope, in metres, so meshes match it. */
@@ -130,6 +132,7 @@ export function snapshot(world: World): Snapshot {
     lane: world.player.lane.$,
     target: target.$,
     leg: world.leg,
+    turn: world.turn,
     along: world.along,
     seed: world.seed,
     speed: game.speed_kmh(world),

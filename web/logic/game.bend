@@ -128,29 +128,25 @@ def exit_at(+seed: U32, +i: U32, +j: U32, +dir: U32, +want: U32) -> U32:
                          open_road(seed, i, j, dir), arterial(i, j, dir),
                          open_road(seed, i, j, r), arterial(i, j, r)))
 
-# The turn a crossing rolls for itself: straight on half the time.
-def rolled_turn(+seed: U32, +i: U32, +j: U32) -> U32:
-  +r = W.roll(W.hash3(seed, 40, i, j))
-  Bool.pick(U32, U32.is_lt(r, 512), 1, Bool.pick(U32, U32.is_lt(r, 768), 0, 2))
-
-def leg_after(l: Leg, +seed: U32) -> Leg:
+# The road the route takes at the far crossing, for the turn the driver chose.
+def leg_after(l: Leg, +seed: U32, +turn: U32) -> Leg:
   match l:
     case Leg{+i, +j, +dir, length}:
       +ni = next_i(i, dir)
       +nj = next_j(j, dir)
-      leg_from(seed, ni, nj, exit_at(seed, ni, nj, dir, rolled_turn(seed, ni, nj)))
+      leg_from(seed, ni, nj, exit_at(seed, ni, nj, dir, turn))
 
 # Walking the route: `along` is centimetres into the leg. A tick covers under a
 # metre and a leg is hundreds, so one crossing is all a tick can pass.
-def crossed(over: Bool, +l: Leg, +along: U32, +seed: U32) -> Leg & U32:
+def crossed(over: Bool, +l: Leg, +along: U32, +seed: U32, +turn: U32) -> Leg & U32:
   match over:
     case True{}:
-      (leg_after(l, seed), U32.sub(along, leg_length(l)))
+      (leg_after(l, seed, turn), U32.sub(along, leg_length(l)))
     case False{}:
       (l, along)
 
-def walked(+l: Leg, +along: U32, +seed: U32) -> Leg & U32:
-  crossed(U32.is_le(leg_length(l), along), l, along, seed)
+def walked(+l: Leg, +along: U32, +seed: U32, +turn: U32) -> Leg & U32:
+  crossed(U32.is_le(leg_length(l), along), l, along, seed, turn)
 
 # The laws walk every exit a crossing can offer, for every turn asked.
 def bit(+k: U32, +b: U32) -> Bool:
@@ -619,7 +615,8 @@ def status_after(hit: Bool) -> Status:
 type World is Data:
   World{tick: U32, player: Player, traffic: List<&2, Car>, oncoming: List<&2, Car>,
         distance: U32, zone: M.Zone, charges: List<&2, U32>, status: Status,
-        held: Controls, residual: U32, leg: Leg, along: U32, seed: U32}
+        held: Controls, residual: U32, leg: Leg, along: U32, turn: U32,
+        seed: U32}
 
 def is_crashed(s: Status) -> Bool:
   match s:
@@ -631,7 +628,7 @@ def is_crashed(s: Status) -> Bool:
 def player_of(w: World) -> Player:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       player
 
 def start_seed() -> U32:
@@ -655,49 +652,73 @@ def start() -> World:
         , Car{13, Inner{}, 13000, 1000, Truck{}, 2}
         ],
         0, zone_on(start_leg()), Nil{}, Driving{},
-        Controls{False{}, False{}, False{}, False{}}, 0, start_leg(), 20000, start_seed()}
+        Controls{False{}, False{}, False{}, False{}}, 0, start_leg(), 20000, 1,
+        start_seed()}
+
+# A driver chooses the turn at a crossing by signalling in the last hundred
+# metres before it, and the lamp stays lit until the crossing. A tap further
+# back is a lane change and chooses nothing, so overtaking never turns the car
+# off its road. With no turn chosen the car goes straight on.
+def approach_cm() -> U32:
+  10000
+
+def near_crossing(+leg: Leg, +along: U32) -> Bool:
+  U32.is_le(leg_length(leg), U32.add(along, approach_cm()))
+
+def turn_by(near: Bool, +left: Bool, +right: Bool, +turn: U32) -> U32:
+  match near:
+    case True{}:
+      Bool.pick(U32, left, 0, Bool.pick(U32, right, 2, turn))
+    case False{}:
+      turn
+
+def turn_after(+near: Bool, +held: Controls, +input: Controls, +turn: U32) -> U32:
+  turn_by(near, pressed(held_left(input), held_left(held)),
+          pressed(held_right(input), held_right(held)), turn)
 
 # The player advances along the route; `walked` takes the next leg at a
 # crossing and answers the new (leg, along).
-def moved(+leg: Leg, along: U32, +dist: U32, +seed: U32) -> Leg & U32:
-  walked(leg, U32.add(along, dist), seed)
+def moved(+leg: Leg, along: U32, +dist: U32, +seed: U32, +turn: U32) -> Leg & U32:
+  walked(leg, U32.add(along, dist), seed, turn)
 
 # The zone is the class of the road the car is on, so the ceiling changes
-# where the road does.
+# where the road does. A crossing passed (the car is nearer the start of its
+# leg than it was) spends the turn.
 def assemble(pos: Leg & U32, tick: U32, player: Player, traffic: List<&2, Car>,
              oncoming: List<&2, Car>, distance: U32,
              charges: List<&2, U32>, status: Status, held: Controls,
-             residual: U32, seed: U32) -> World:
+             residual: U32, +was: U32, +turn: U32, seed: U32) -> World:
   match pos:
-    case (+leg, along):
+    case (+leg, +along):
       World{tick, player, traffic, oncoming, distance, zone_on(leg), charges, status,
-            held, residual, leg, along, seed}
+            held, residual, leg, along, Bool.pick(U32, U32.is_lt(along, was), 1, turn), seed}
 
 def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
          oncoming: List<&2, Car>, distance: U32, +zone: M.Zone,
-         charges: List<&2, U32>, held: Controls, residual: U32,
-         leg: Leg, along: U32, +seed: U32, +input: Controls) -> World:
+         charges: List<&2, U32>, +held: Controls, residual: U32,
+         +leg: Leg, +along: U32, turn: U32, +seed: U32, +input: Controls) -> World:
   match frozen:
     case True{}:
       World{tick, player, traffic, oncoming, distance, zone, charges, Crashed{},
-            held, residual, leg, along, seed}
+            held, residual, leg, along, turn, seed}
     case False{}:
       +player2 = player_next(player, held, input)
       +dist = roll(speed_of(player2))
       +traffic2 = drift(traffic, dist, U32.add(tick, 1))
       +oncoming2 = drift_oncoming(oncoming, dist, U32.add(tick, 1))
       +hit = blocked(traffic2, lane_of(player2))
-      assemble(moved(leg, along, dist, seed), U32.add(tick, 1), player2, traffic2,
+      +turn2 = turn_after(near_crossing(leg, along), held, input, turn)
+      assemble(moved(leg, along, dist, seed, turn2), U32.add(tick, 1), player2, traffic2,
                oncoming2, U32.add(distance, dist),
                spread(R.charges(scenario_among(player2, traffic2, zone, hit))), status_after(hit),
-               input, residual, seed)
+               input, residual, along, turn2, seed)
 
 def tick(w: World, input: Controls) -> World:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       step(is_crashed(status), tick, player, traffic, oncoming, distance, zone,
-           charges, held, residual, leg, along, seed, input)
+           charges, held, residual, leg, along, turn, seed, input)
 
 # A Nat fuel counts the ticks down; the shrinking argument comes first.
 def run(fuel: Nat, w: World, +input: Controls) -> World:
@@ -712,13 +733,13 @@ def run(fuel: Nat, w: World, +input: Controls) -> World:
 def advance(w: World, ms: U32, input: Controls) -> World:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       +total = U32.add(residual, U32.min(ms, 250))
       +count = U32.min(U32.div(U32.mul(total, 60), 1000), 5)
       +left = U32.sub(total, U32.div(U32.mul(count, 1000), 60))
       +spent = run(U32.to_nat(count), World{tick, player, traffic, oncoming, distance,
                                         zone, charges, status, held, left, leg,
-                                        along, seed}, input)
+                                        along, turn, seed}, input)
       spent
 
 def restart(w: World) -> World:
@@ -734,29 +755,39 @@ def speed_kmh(w: World) -> U32:
 def zone_of(w: World) -> M.Zone:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       zone
 
 def limit_kmh(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       kmh(limit_of(zone))
 
 def metres(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       U32.div(distance, 100)
 
 def crashed(w: World) -> Bool:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       is_crashed(status)
 
-def signal_state(w: World) -> Signal:
-  signal_of(player_of(w))
+# The lamp shows the turn chosen at the crossing ahead, or else the lane change.
+def turn_signal(+turn: U32, s: Signal) -> Signal:
+  Bool.pick(Signal, U32.is_eq(turn, 0), ToLeft{}, Bool.pick(Signal, U32.is_eq(turn, 2), ToRight{}, s))
+
+def turn_of(w: World) -> U32:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, seed}:
+      turn
+
+def signal_state(+w: World) -> Signal:
+  turn_signal(turn_of(w), signal_of(player_of(w)))
 
 def lane_move(w: World) -> U32:
   moving_of(player_of(w))
@@ -770,25 +801,25 @@ def lane_centre(w: World) -> U32:
 def traffic_of(w: World) -> List<&2, Car>:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       traffic
 
 def leg_of(w: World) -> Leg:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       leg
 
 def along_of(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       along
 
 def seed_of(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, seed}:
+               held, residual, leg, along, turn, seed}:
       seed
 
 # ===========================================================================
