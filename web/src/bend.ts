@@ -1,9 +1,9 @@
 import graph from "./game.mjs";
-import type { Body, Car, Controls, Game, Lane, Signal, World } from "./game.mjs";
+import type { Body, Car, Controls, Game, Lane, Leg, Signal, World } from "./game.mjs";
 
 const game = graph as Game;
 
-export type { Body, Controls, Signal, World };
+export type { Body, Controls, Leg, Signal, World };
 
 /** One car as the renderer needs it: metres, not the model's centimetres. */
 export interface CarView {
@@ -19,7 +19,8 @@ export interface CarView {
 /** The world flattened for drawing. The model stays the only source of truth. */
 export interface Snapshot {
   x: number;
-  index: number;
+  /** The road the car is on, and centimetres into it. */
+  leg: Leg;
   along: number;
   seed: number;
   speed: number;
@@ -72,13 +73,9 @@ export function laneChangeTicks(): number {
   return game.lane_change_ticks();
 }
 
-export function chunkMetres(): number {
-  return game.chunk_cm() / 100;
-}
-
-export function curveAt(cm: number, seed: number): { rate: number; left: boolean } {
-  const curve = game.curve_at(cm, seed);
-  return { rate: game.curve_rate_of(curve), left: game.curve_left_of(curve) };
+/** The road the route takes at the far crossing of `leg`. */
+export function legAfter(leg: Leg, seed: number): Leg {
+  return game.leg_after(leg, seed);
 }
 
 /** The model's collision envelope, in metres, so meshes match it. */
@@ -132,7 +129,7 @@ export function snapshot(world: World): Snapshot {
     moving,
     lane: world.player.lane.$,
     target: target.$,
-    index: world.index,
+    leg: world.leg,
     along: world.along,
     seed: world.seed,
     speed: game.speed_kmh(world),

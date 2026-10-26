@@ -3,10 +3,10 @@
 # The street, the traffic, the speed ceiling and the verdict are all decided
 # here; PROOF.bend proves the claims that matter. TypeScript draws the result.
 #
-# The map follows the pattern used by endless driving games: the road is a pure
-# function of arc length, its curvature (and direction) sampled from 1-D value
-# noise with a smoothstep ease, then integrated. Any stretch can be asked for by
-# index alone, so the renderer streams it and never owns a copy.
+# The road is the world's (world.bend): the car drives a route along the
+# lattice of main roads, one leg per road, and the zone, so the ceiling, is
+# the class of the road it is on. Any leg can be asked for by its crossing
+# alone, so the renderer streams the town around it and never owns a copy.
 #
 # Units are integers so the proofs have something to hold:
 #   distance  centimetres       speed  centimetres per second
@@ -15,6 +15,7 @@
 import Base
 import ../../bend/model.bend as M
 import ../../bend/rules.bend as R
+import ./world.bend as W
 
 # ===========================================================================
 # The road
@@ -31,72 +32,156 @@ type Dir is Data:
   Left{}
   Right{}
 
-type Curve is Data:
-  Curve{rate: U32, left: Bool}
-
-# A stretch is streamed as one unit. Fifty metres is short enough to build in a
-# frame and long enough that crossings are rare.
-def chunk_cm() -> U32:
-  5000
-
-# Curvature lattice: one control value every 30 m, eased between them.
-def lattice_cm() -> U32:
-  3000
-
 # A cheap integer hash. Everything random in the model is a function of an index
 # and the seed, so nothing has to be carried or reproduced.
 def mix(id: U32, tick: U32) -> U32:
   U32.add(U32.mul(U32.add(id, 1), 2654435761), U32.mul(tick, 40503))
 
-# One lattice value, 0..999.
-def noise(cell: U32, seed: U32) -> U32:
-  U32.mod(mix(cell, seed), 1000)
+# ===========================================================================
+# The route
+#
+# The road the player drives is the world's own. A leg is one road of the
+# lattice, from the crossing at (i, j) toward a compass direction: 0 north,
+# 1 east, 2 south, 3 west, clockwise as the map is drawn. At the far crossing
+# the route takes the next leg, so the town drawn around the car is the town
+# the lab shows.
+# ===========================================================================
 
-# The ease curve that makes value noise look like a road instead of a zigzag.
-def ease(+frac: U32) -> U32:
-  +square = U32.div(U32.mul(frac, frac), 1000)
-  +cube = U32.div(U32.mul(square, frac), 1000)
-  U32.sub(U32.mul(3, square), U32.mul(2, cube))
+type Leg is Data:
+  Leg{i: U32, j: U32, dir: U32, length: U32}
 
-def blend(up: Bool, +a: U32, +b: U32, +s: U32) -> U32:
-  match up:
-    case True{}:
-      U32.add(a, U32.div(U32.mul(U32.sub(b, a), s), 1000))
-    case False{}:
-      U32.sub(a, U32.div(U32.mul(U32.sub(a, b), s), 1000))
+# The lattice names a road by its west or north crossing.
+def key_i(+i: U32, +dir: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(dir, 3), U32.sub(i, 1), i)
 
-# The noise value at a distance along the road, 0..999. Values above 500 bend to
-# the right, below to the left, so the road crosses straight on the way past.
-def curve_value(+cm: U32, +seed: U32) -> U32:
-  +cell = U32.div(cm, lattice_cm())
-  +frac = U32.div(U32.mul(U32.mod(cm, lattice_cm()), 1000), lattice_cm())
-  +a = noise(cell, seed)
-  +b = noise(U32.add(cell, 1), seed)
-  blend(U32.is_le(a, b), a, b, ease(frac))
+def key_j(+j: U32, +dir: U32) -> U32:
+  Bool.pick(U32, U32.is_eq(dir, 0), U32.sub(j, 1), j)
 
-def rate_of(over: Bool, v: U32) -> U32:
+def eastward(+dir: U32) -> Bool:
+  Bool.not(U32.is_even(dir))
+
+# The crossing a leg leads to.
+def next_i(+i: U32, +dir: U32) -> U32:
+  U32.sub(U32.add(i, Bool.to_u32(U32.is_eq(dir, 1))), Bool.to_u32(U32.is_eq(dir, 3)))
+
+def next_j(+j: U32, +dir: U32) -> U32:
+  U32.sub(U32.add(j, Bool.to_u32(U32.is_eq(dir, 2))), Bool.to_u32(U32.is_eq(dir, 0)))
+
+def open_road(+seed: U32, +i: U32, +j: U32, +dir: U32) -> Bool:
+  W.has_road(seed, key_i(i, dir), key_j(j, dir), eastward(dir))
+
+def class_toward(+i: U32, +j: U32, +dir: U32) -> W.Class:
+  W.road_class(key_i(i, dir), key_j(j, dir), eastward(dir))
+
+def arterial(+i: U32, +j: U32, +dir: U32) -> Bool:
+  U32.is_eq(W.road_code(key_i(i, dir), key_j(j, dir), eastward(dir)), 1)
+
+def leg_from(+seed: U32, +i: U32, +j: U32, +dir: U32) -> Leg:
+  Leg{i, j, dir, W.road_length(seed, key_i(i, dir), key_j(j, dir), eastward(dir))}
+
+def leg_length(l: Leg) -> U32:
+  match l:
+    case Leg{i, j, dir, length}:
+      length
+
+def zone_on(l: Leg) -> M.Zone:
+  match l:
+    case Leg{i, j, dir, length}:
+      W.zone_of(class_toward(i, j, dir))
+
+# The lattice keeps its crossings at least this far apart.
+def shortest_leg() -> U32:
+  U32.sub(W.pitch_cm(), U32.mul(W.jitter_cm(), 2))
+
+# A turn: 0 left, 1 straight on, 2 right, 3 back the way the car came.
+def turn_to(+dir: U32, +turn: U32) -> U32:
+  U32.mod(U32.add(dir, U32.add(turn, 3)), 4)
+
+# Whether an exit will do: its road is there, and it is an arterial unless
+# `any` road will do.
+def exit_fits(+any: Bool, +turn: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool,
+              +ro: Bool, +ra: Bool) -> Bool:
+  Bool.pick(Bool, U32.is_eq(turn, 0), Bool.and(lo, Bool.or(any, la)),
+  Bool.pick(Bool, U32.is_eq(turn, 1), Bool.and(so, Bool.or(any, sa)),
+  Bool.pick(Bool, U32.is_eq(turn, 2), Bool.and(ro, Bool.or(any, ra)), False{})))
+
+def first_exit(+any: Bool, +want: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool,
+               +ro: Bool, +ra: Bool) -> U32:
+  Bool.pick(U32, exit_fits(any, want, lo, la, so, sa, ro, ra), want,
+  Bool.pick(U32, exit_fits(any, 1, lo, la, so, sa, ro, ra), 1,
+  Bool.pick(U32, exit_fits(any, 0, lo, la, so, sa, ro, ra), 0,
+  Bool.pick(U32, exit_fits(any, 2, lo, la, so, sa, ro, ra), 2, 3))))
+
+# Which way to leave a crossing. Each exit says whether its road is there and
+# whether it is an arterial. The turn asked for wins if it is an arterial,
+# then straight on, left and right along arterials; then the same order along
+# any road; back the way the car came only when nothing else is open.
+def pick_exit(+want: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool, +ro: Bool,
+              +ra: Bool) -> U32:
+  +main = first_exit(False{}, want, lo, la, so, sa, ro, ra)
+  Bool.pick(U32, U32.is_lt(main, 3), main, first_exit(True{}, want, lo, la, so, sa, ro, ra))
+
+def exit_at(+seed: U32, +i: U32, +j: U32, +dir: U32, +want: U32) -> U32:
+  +l = turn_to(dir, 0)
+  +r = turn_to(dir, 2)
+  turn_to(dir, pick_exit(want, open_road(seed, i, j, l), arterial(i, j, l),
+                         open_road(seed, i, j, dir), arterial(i, j, dir),
+                         open_road(seed, i, j, r), arterial(i, j, r)))
+
+# The turn a crossing rolls for itself: straight on half the time.
+def rolled_turn(+seed: U32, +i: U32, +j: U32) -> U32:
+  +r = W.roll(W.hash3(seed, 40, i, j))
+  Bool.pick(U32, U32.is_lt(r, 512), 1, Bool.pick(U32, U32.is_lt(r, 768), 0, 2))
+
+def leg_after(l: Leg, +seed: U32) -> Leg:
+  match l:
+    case Leg{+i, +j, +dir, length}:
+      +ni = next_i(i, dir)
+      +nj = next_j(j, dir)
+      leg_from(seed, ni, nj, exit_at(seed, ni, nj, dir, rolled_turn(seed, ni, nj)))
+
+# Walking the route: `along` is centimetres into the leg. A tick covers under a
+# metre and a leg is hundreds, so one crossing is all a tick can pass.
+def crossed(over: Bool, +l: Leg, +along: U32, +seed: U32) -> Leg & U32:
   match over:
     case True{}:
-      U32.div(U32.mul(U32.sub(v, 500), 120), 500)
+      (leg_after(l, seed), U32.sub(along, leg_length(l)))
     case False{}:
-      U32.div(U32.mul(U32.sub(500, v), 120), 500)
+      (l, along)
 
-def curve_at(+cm: U32, +seed: U32) -> Curve:
-  +v = curve_value(cm, seed)
-  Curve{rate_of(U32.is_le(500, v), v), U32.is_lt(v, 500)}
+def walked(+l: Leg, +along: U32, +seed: U32) -> Leg & U32:
+  crossed(U32.is_le(leg_length(l), along), l, along, seed)
 
-# Walking the road: `index` names the stretched metre-mark, `along` the
-# centimetres into it. A tick covers under a metre, so one boundary is all it
-# can cross.
-def crossed(over: Bool, index: U32, along: U32) -> U32 & U32:
-  match over:
-    case True{}:
-      (U32.add(index, 1), U32.sub(along, chunk_cm()))
-    case False{}:
-      (index, along)
+# The laws walk every exit a crossing can offer, for every turn asked.
+def bit(+k: U32, +b: U32) -> Bool:
+  U32.is_eq(U32.mod(U32.div(k, b), 2), 1)
 
-def walked(+index: U32, +along: U32) -> U32 & U32:
-  crossed(U32.is_le(chunk_cm(), along), index, along)
+def implies(a: Bool, b: Bool) -> Bool:
+  Bool.or(Bool.not(a), b)
+
+def exit_holds(+want: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool, +ro: Bool,
+               +ra: Bool) -> Bool:
+  +r = pick_exit(want, lo, la, so, sa, ro, ra)
+  +taken_open = exit_fits(True{}, r, lo, la, so, sa, ro, ra)
+  +taken_main = exit_fits(False{}, r, lo, la, so, sa, ro, ra)
+  +any_open = Bool.or(lo, Bool.or(so, ro))
+  +any_main = Bool.or(Bool.and(lo, la), Bool.or(Bool.and(so, sa), Bool.and(ro, ra)))
+  Bool.and(Bool.or(taken_open, Bool.not(any_open)),
+  Bool.and(implies(any_main, taken_main),
+           implies(exit_fits(False{}, want, lo, la, so, sa, ro, ra), U32.is_eq(r, want))))
+
+def exit_holds_at(+k: U32) -> Bool:
+  exit_holds(U32.div(k, 64), bit(k, 1), bit(k, 2), bit(k, 4), bit(k, 8), bit(k, 16), bit(k, 32))
+
+def exits_hold(fuel: Nat, +k: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(exit_holds_at(k), exits_hold(p, U32.add(k, 1)))
+
+def every_exit_holds() -> Bool:
+  exits_hold(256n, 0)
 
 # ===========================================================================
 # Lanes and speed
@@ -534,7 +619,7 @@ def status_after(hit: Bool) -> Status:
 type World is Data:
   World{tick: U32, player: Player, traffic: List<&2, Car>, oncoming: List<&2, Car>,
         distance: U32, zone: M.Zone, charges: List<&2, U32>, status: Status,
-        held: Controls, residual: U32, index: U32, along: U32, seed: U32}
+        held: Controls, residual: U32, leg: Leg, along: U32, seed: U32}
 
 def is_crashed(s: Status) -> Bool:
   match s:
@@ -546,8 +631,15 @@ def is_crashed(s: Status) -> Bool:
 def player_of(w: World) -> Player:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       player
+
+def start_seed() -> U32:
+  20261024
+
+# The arterial east from crossing (1, 0), the first road of every drive.
+def start_leg() -> Leg:
+  leg_from(start_seed(), 1, 0, 1)
 
 def start() -> World:
   World{0,
@@ -562,48 +654,50 @@ def start() -> World:
         , Car{12, Outer{}, 8000, 1200, Sedan{}, 4}
         , Car{13, Inner{}, 13000, 1000, Truck{}, 2}
         ],
-        0, M.Urban{}, Nil{}, Driving{},
-        Controls{False{}, False{}, False{}, False{}}, 0, 24, 0, 20261024}
+        0, zone_on(start_leg()), Nil{}, Driving{},
+        Controls{False{}, False{}, False{}, False{}}, 0, start_leg(), 20000, start_seed()}
 
-# The player advances along the road; `walked` rolls over chunk boundaries and
-# answers the new (index, along).
-def moved(index: U32, along: U32, +dist: U32) -> U32 & U32:
-  walked(index, U32.add(along, dist))
+# The player advances along the route; `walked` takes the next leg at a
+# crossing and answers the new (leg, along).
+def moved(+leg: Leg, along: U32, +dist: U32, +seed: U32) -> Leg & U32:
+  walked(leg, U32.add(along, dist), seed)
 
-def assemble(pos: U32 & U32, tick: U32, player: Player, traffic: List<&2, Car>,
-             oncoming: List<&2, Car>, distance: U32, +zone: M.Zone,
+# The zone is the class of the road the car is on, so the ceiling changes
+# where the road does.
+def assemble(pos: Leg & U32, tick: U32, player: Player, traffic: List<&2, Car>,
+             oncoming: List<&2, Car>, distance: U32,
              charges: List<&2, U32>, status: Status, held: Controls,
              residual: U32, seed: U32) -> World:
   match pos:
-    case (index, along):
-      World{tick, player, traffic, oncoming, distance, zone, charges, status,
-            held, residual, index, along, seed}
+    case (+leg, along):
+      World{tick, player, traffic, oncoming, distance, zone_on(leg), charges, status,
+            held, residual, leg, along, seed}
 
 def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
          oncoming: List<&2, Car>, distance: U32, +zone: M.Zone,
          charges: List<&2, U32>, held: Controls, residual: U32,
-         index: U32, along: U32, +seed: U32, +input: Controls) -> World:
+         leg: Leg, along: U32, +seed: U32, +input: Controls) -> World:
   match frozen:
     case True{}:
       World{tick, player, traffic, oncoming, distance, zone, charges, Crashed{},
-            held, residual, index, along, seed}
+            held, residual, leg, along, seed}
     case False{}:
       +player2 = player_next(player, held, input)
       +dist = roll(speed_of(player2))
       +traffic2 = drift(traffic, dist, U32.add(tick, 1))
       +oncoming2 = drift_oncoming(oncoming, dist, U32.add(tick, 1))
       +hit = blocked(traffic2, lane_of(player2))
-      assemble(moved(index, along, dist), U32.add(tick, 1), player2, traffic2,
-               oncoming2, U32.add(distance, dist), zone,
+      assemble(moved(leg, along, dist, seed), U32.add(tick, 1), player2, traffic2,
+               oncoming2, U32.add(distance, dist),
                spread(R.charges(scenario_among(player2, traffic2, zone, hit))), status_after(hit),
                input, residual, seed)
 
 def tick(w: World, input: Controls) -> World:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       step(is_crashed(status), tick, player, traffic, oncoming, distance, zone,
-           charges, held, residual, index, along, seed, input)
+           charges, held, residual, leg, along, seed, input)
 
 # A Nat fuel counts the ticks down; the shrinking argument comes first.
 def run(fuel: Nat, w: World, +input: Controls) -> World:
@@ -618,12 +712,12 @@ def run(fuel: Nat, w: World, +input: Controls) -> World:
 def advance(w: World, ms: U32, input: Controls) -> World:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       +total = U32.add(residual, U32.min(ms, 250))
       +count = U32.min(U32.div(U32.mul(total, 60), 1000), 5)
       +left = U32.sub(total, U32.div(U32.mul(count, 1000), 60))
       +spent = run(U32.to_nat(count), World{tick, player, traffic, oncoming, distance,
-                                        zone, charges, status, held, left, index,
+                                        zone, charges, status, held, left, leg,
                                         along, seed}, input)
       spent
 
@@ -640,25 +734,25 @@ def speed_kmh(w: World) -> U32:
 def zone_of(w: World) -> M.Zone:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       zone
 
 def limit_kmh(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       kmh(limit_of(zone))
 
 def metres(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       U32.div(distance, 100)
 
 def crashed(w: World) -> Bool:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       is_crashed(status)
 
 def signal_state(w: World) -> Signal:
@@ -676,48 +770,26 @@ def lane_centre(w: World) -> U32:
 def traffic_of(w: World) -> List<&2, Car>:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       traffic
 
-def index_of(w: World) -> U32:
+def leg_of(w: World) -> Leg:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
-      index
+               held, residual, leg, along, seed}:
+      leg
 
 def along_of(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       along
 
 def seed_of(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
+               held, residual, leg, along, seed}:
       seed
-
-def curve_rate_of(c: Curve) -> U32:
-  match c:
-    case Curve{rate, left}:
-      rate
-
-def curve_left_of(c: Curve) -> Bool:
-  match c:
-    case Curve{rate, left}:
-      left
-
-def curve_rate(+cm: U32, +seed: U32) -> U32:
-  curve_rate_of(curve_at(cm, seed))
-
-def curve_left(+cm: U32, +seed: U32) -> Bool:
-  curve_left_of(curve_at(cm, seed))
-
-def curve_of(w: World) -> Curve:
-  match w:
-    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, index, along, seed}:
-      curve_at(U32.add(U32.mul(index, chunk_cm()), along), seed)
 
 # ===========================================================================
 # Citations

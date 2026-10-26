@@ -86,15 +86,14 @@ guarantees.
 
 ## The drive
 
-`web/` is where the model is felt. `index.html` is an endless Indonesian
-arterial: undivided, two lanes each way, a shoulder and a narrow pavement, with
-warungs, ruko, parked motorbikes, carts, palms and power lines packed to the
-kerb.
+`web/` is where the model is felt. `index.html` drives through the generated
+world: an endless lattice of arterials and collectors, cut into cells of
+kampung, ruko rows, sawah and civic courts. The car follows the arterials,
+undivided with two lanes each way, and takes a road at every crossing.
 
-The road is a pure function of distance along it. Curvature comes from 1-D value
-noise, eased, then integrated into a centreline, so any 50 m stretch can be
-asked for by index alone. The renderer streams chunks, bakes each into one mesh
-per material, and drops what falls behind.
+Every cell is a function of (seed, i, j), so a worker makes the cells near the
+car and the crossing ahead before the car gets there. The renderer bakes each
+into a few meshes and drops the cells left behind.
 
 Speed, lanes, lane changes, the gap to the car ahead and the verdict belong to
 `logic/game.bend`. The town's lattice is `logic/town.bend`. `logic/PROOF.bend`

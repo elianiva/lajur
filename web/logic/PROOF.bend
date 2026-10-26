@@ -14,79 +14,38 @@ import ../../bend/model.bend as M
 import ../../bend/rules.bend as R
 
 # ===========================================================================
-# The generated road: value noise, eased, integrated
+# The route: the world's own roads, one leg at a time
 # ===========================================================================
 
-law the_ease_curve_holds_both_ends:
-  { Bool.and(U32.is_eq(G.ease(0), 0), U32.is_eq(G.ease(1000), 1000)) == True{} : Bool }
+# At a crossing the route takes a road that is there, stays on the arterials
+# while one goes on, and takes the turn asked for whenever that turn is an
+# arterial; it turns back only when no other road leaves. The law walks every
+# exit a crossing can offer, open or closed, arterial or not, for every turn.
+law the_route_takes_only_roads_that_are_there:
+  { G.every_exit_holds() == True{} : Bool }
 
-def the_ease_curve_holds_both_ends():
+def the_route_takes_only_roads_that_are_there():
   {==}
 
-law a_blend_holds_its_start:
-  { G.blend(True{}, 200, 800, 0) == 200 : U32 }
+# The lattice keeps its crossings at least 230 m apart and a tick at the fastest
+# limit covers under a metre, so one tick passes one crossing at most.
+law a_tick_cannot_pass_two_crossings:
+  { U32.is_lt(G.roll(G.fastest()), G.shortest_leg()) == True{} : Bool }
 
-def a_blend_holds_its_start():
+def a_tick_cannot_pass_two_crossings():
   {==}
 
-law a_blend_holds_its_end:
-  { G.blend(True{}, 200, 800, 1000) == 800 : U32 }
+law a_leg_holds_until_its_end:
+  { G.walked(G.Leg{1, 0, 1, 50000}, 40000, 20261024) == (G.Leg{1, 0, 1, 50000}, 40000) : G.Leg & U32 }
 
-def a_blend_holds_its_end():
+def a_leg_holds_until_its_end():
   {==}
 
-law a_falling_blend_holds_its_end:
-  { G.blend(False{}, 800, 200, 1000) == 200 : U32 }
+# The first road of every drive is there, and it is an arterial.
+law the_drive_starts_on_an_arterial_that_is_there:
+  { Bool.and(G.open_road(G.start_seed(), 1, 0, 1), G.arterial(1, 0, 1)) == True{} : Bool }
 
-def a_falling_blend_holds_its_end():
-  {==}
-
-law a_straight_section_has_no_curvature:
-  { U32.is_eq(G.rate_of(True{}, 500), 0) == True{} : Bool }
-
-def a_straight_section_has_no_curvature():
-  {==}
-
-law the_sharpest_bend_is_one_point_two_degrees_a_metre:
-  { U32.is_eq(G.rate_of(True{}, 1000), 120) == True{} : Bool }
-
-def the_sharpest_bend_is_one_point_two_degrees_a_metre():
-  {==}
-
-law a_bend_to_the_left_is_measured_the_same_way:
-  { U32.is_eq(G.rate_of(False{}, 0), 120) == True{} : Bool }
-
-def a_bend_to_the_left_is_measured_the_same_way():
-  {==}
-
-law the_road_bends_no_harder_than_its_ceiling:
-  { U32.is_le(G.curve_rate(1234, 20261024), 120) == True{} : Bool }
-
-def the_road_bends_no_harder_than_its_ceiling():
-  {==}
-
-law a_bend_is_either_left_or_right_at_every_sample:
-  { Bool.or(G.curve_left(0, 20261024), Bool.not(G.curve_left(0, 20261024))) == True{} : Bool }
-
-def a_bend_is_either_left_or_right_at_every_sample():
-  {==}
-
-law a_tick_cannot_cross_two_chunks:
-  { U32.is_lt(G.roll(G.fastest()), G.chunk_cm()) == True{} : Bool }
-
-def a_tick_cannot_cross_two_chunks():
-  {==}
-
-law a_chunk_holds_until_its_end:
-  { G.walked(24, 4000) == (24, 4000) : U32 & U32 }
-
-def a_chunk_holds_until_its_end():
-  {==}
-
-law a_chunk_rolls_over_once_it_is_spent:
-  { G.walked(24, 5100) == (25, 100) : U32 & U32 }
-
-def a_chunk_rolls_over_once_it_is_spent():
+def the_drive_starts_on_an_arterial_that_is_there():
   {==}
 
 # ===========================================================================

@@ -25,9 +25,8 @@ installs.
 
 `web/` is the driving game. The road, the traffic, the speed ceiling and the
 verdicts are Bend: `web/logic/game.bend`, proved by `web/logic/PROOF.bend`. The
-map is 1-D value-noise curvature integrated along arc length; the renderer
-streams 50 m chunks, bakes each into one mesh per material, and drops them
-behind the player.
+road is the generated world's (`web/logic/world.bend`): the car drives a route
+of lattice legs, and a worker makes the cells around it ahead of the car.
 TypeScript draws the result and decides nothing, so a rule that ships is a rule
 that checks.
 

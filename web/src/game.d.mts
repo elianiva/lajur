@@ -13,7 +13,8 @@ export type Lane = Constructor<"Inner" | "Middle" | "Outer">;
 export type Signal = Constructor<"Off" | "ToLeft" | "ToRight">;
 export type Body = Constructor<"Sedan" | "Hatch" | "Taxi" | "Van" | "Bus" | "Truck">;
 export type Status = Constructor<"Driving" | "Crashed">;
-export type Curve = { $: "Curve"; rate: number; left: boolean };
+/** One road of the world's lattice, from crossing (i, j) toward `dir`: 0 north, 1 east, 2 south, 3 west. */
+export type Leg = { $: "Leg"; i: number; j: number; dir: number; length: number };
 
 export type BendList<T> = Constructor<"Nil"> | { $: "Con"; head: T; tail: BendList<T> };
 
@@ -51,12 +52,12 @@ export type World = {
   traffic: BendList<Car>;
   oncoming: BendList<Car>;
   distance: number;
-  limit: number;
+  zone: Constructor<string>;
   charges: BendList<number>;
   status: Status;
   held: Controls;
   residual: number;
-  index: number;
+  leg: Leg;
   along: number;
   seed: number;
 };
@@ -77,10 +78,7 @@ export interface Game {
   lane_target(world: World): Lane;
   lane_change_ticks(): number;
   lamp_ticks(): number;
-  chunk_cm(): number;
-  curve_at(cm: number, seed: number): Curve;
-  curve_rate_of(curve: Curve): number;
-  curve_left_of(curve: Curve): boolean;
+  leg_after(leg: Leg, seed: number): Leg;
   rule_name(id: number): string;
   header_of(id: number): string;
   fine_of(id: number): number;

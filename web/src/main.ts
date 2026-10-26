@@ -3,8 +3,8 @@ import "./style.css";
 import { Hud } from "./hud.ts";
 import { Keyboard } from "./input.ts";
 import { buildCar, PLAYER_COLOUR } from "./assets/cars.ts";
-import { RoadPath } from "./render/path.ts";
-import { RoadView } from "./render/road.ts";
+import { Around } from "./render/around.ts";
+import { Route } from "./render/route.ts";
 import { Traffic } from "./render/traffic.ts";
 import { advance, bodyLength, restart, snapshot, start } from "./bend.ts";
 import { Ink, light, lookByKey, restyle } from "./render/look.ts";
@@ -70,12 +70,12 @@ light(scene, hemi, sun, look);
 let world = start();
 let state = snapshot(world);
 
-const path = new RoadPath(state.seed);
-const road = new RoadView(path);
-scene.add(road.group);
+const route = new Route(state.seed);
+const town = new Around(state.seed);
+scene.add(town.group);
 
 const player = buildCar("Sedan", PLAYER_COLOUR, bodyLength("Sedan"));
-const traffic = new Traffic(path, player);
+const traffic = new Traffic(route, player);
 scene.add(traffic.group);
 
 const hud = new Hud();
@@ -109,8 +109,8 @@ function step(ms: number): void {
   state = snapshot(world);
 
   traffic.update(state, ms / 1000);
-  road.update(state.index);
   follow(ms / 1000);
+  town.update(traffic.position, route.next(), camera);
   hud.update(state);
 }
 
