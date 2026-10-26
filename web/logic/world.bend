@@ -1947,3 +1947,11 @@ def cell_cut(+seed: U32, +i: U32, +j: U32, +f: Frame, +uc: U32, +vc: U32) -> Cel
 def cell_of(+seed: U32, +i: U32, +j: U32) -> Cell:
   +c = cell_cuts(seed, i, j)
   cell_cut(seed, i, j, frame_of(seed, i, j), cuts_u(c), cuts_v(c))
+
+# The blocks of cell (i, j) with their streets, without the lines drawn for
+# them: what the game needs to drive a lokal street, at a fraction of a cell.
+def cell_blocks(+seed: U32, +i: U32, +j: U32) -> List<&2, Blk>:
+  +c = cell_cuts(seed, i, j)
+  +f = frame_of(seed, i, j)
+  blocks_u(cuts_list(cuts_u(c)), cuts_list(cuts_v(c)), seed, i, j, f, cell_sides(seed, i, j),
+    cut_edge(f, i, j, True{}, cuts_u(c), cuts_v(c)), cut_edge(f, i, j, False{}, cuts_v(c), cuts_u(c)), Nil{})
