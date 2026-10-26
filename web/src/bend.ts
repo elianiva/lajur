@@ -1,9 +1,9 @@
 import graph from "./game.mjs";
-import type { Body, Car, Controls, Game, Lane, Leg, Signal, World } from "./game.mjs";
+import type { BendList, Body, Car, Controls, Game, Lane, Signal, World } from "./game.mjs";
 
 const game = graph as Game;
 
-export type { Body, Controls, Leg, Signal, World };
+export type { Body, Controls, Signal, World };
 
 /** One car as the renderer needs it: metres, not the model's centimetres. */
 export interface CarView {
@@ -19,11 +19,8 @@ export interface CarView {
 /** The world flattened for drawing. The model stays the only source of truth. */
 export interface Snapshot {
   x: number;
-  /** The road the car is on, and centimetres into it. */
-  leg: Leg;
+  /** Centimetres into the stretch the car is on. */
   along: number;
-  /** The turn chosen at the crossing ahead. */
-  turn: number;
   seed: number;
   speed: number;
   limit: number;
@@ -65,10 +62,10 @@ export function fine(id: number): number {
 }
 
 // The model measures lanes from the centre line; the player keeps the left
-// half of the road, so their lanes sit at negative x. A collector has one lane
-// each way, so its lane centre differs from an arterial's.
-export function laneX(lane: Lane, wide = true): number {
-  return -game.lane_offset_on(wide, lane) / 100;
+// half of the road, so their lanes sit at negative x. The centre depends on
+// the class of road: 1 arterial, 2 collector, 3 lokal street.
+export function laneX(lane: Lane, code = 1): number {
+  return -game.lane_offset_on(code, lane) / 100;
 }
 
 /** One tick of the lane change, in the model's own count. */
@@ -76,9 +73,35 @@ export function laneChangeTicks(): number {
   return game.lane_change_ticks();
 }
 
-/** The road the route takes at the far crossing of `leg`, for a turn: 0 left, 1 straight on, 2 right. */
-export function legAfter(leg: Leg, seed: number, turn: number): Leg {
-  return game.leg_after(leg, seed, turn);
+/** A stretch of the route in metres, with the part driven in the model's centimetres. */
+export interface Piece {
+  id: number;
+  pts: { x: number; z: number }[];
+  length: number;
+  from: number;
+  to: number;
+}
+
+function items<T>(l: BendList<T>): T[] {
+  const out: T[] = [];
+  for (let node = l; node.$ === "Con"; node = node.tail) out.push(node.head);
+  return out;
+}
+
+/** The stretch the car is on and the one it takes next. */
+export function plan(world: World): Piece[] {
+  return items(game.plan(world)).map((p) => ({
+    id: p.id,
+    pts: items(p.pts).map((q) => ({ x: (q.x | 0) / 100, z: (q.z | 0) / 100 })),
+    length: p.length / 100,
+    from: p.from,
+    to: p.to,
+  }));
+}
+
+/** Changes whenever `plan` would. */
+export function planKey(world: World): number {
+  return game.plan_key(world);
 }
 
 /** The model's collision envelope, in metres, so meshes match it. */
@@ -87,14 +110,14 @@ export function bodyLength(body: Body["$"]): number {
 }
 
 // Oncoming cars keep the other half of the road, in the same Lane enum.
-function cars(list: World["traffic"], wide: boolean, oncoming = false): CarView[] {
+function cars(list: World["traffic"], code: number, oncoming = false): CarView[] {
   const out: CarView[] = [];
   let node = list;
   while (node.$ === "Con") {
     const car: Car = node.head;
     out.push({
       id: car.id,
-      lateral: oncoming ? -laneX(car.lane, wide) : laneX(car.lane, wide),
+      lateral: oncoming ? -laneX(car.lane, code) : laneX(car.lane, code),
       z: car.gap / 100,
       speed: car.speed,
       body: car.body.$,
@@ -121,17 +144,15 @@ export function snapshot(world: World): Snapshot {
   // the lane it left and the one it is taking, by the model's own arithmetic.
   const moving = game.lane_move(world);
   const target = game.lane_target(world);
-  const wide = game.wide(world);
-  const from = laneX(world.player.lane, wide);
-  const to = laneX(target, wide);
+  const code = game.road_code_of(world);
+  const from = laneX(world.player.lane, code);
+  const to = laneX(target, code);
   const done = 1 - Math.min(moving, game.lane_change_ticks()) / game.lane_change_ticks();
   return {
     x: from + (to - from) * done,
     moving,
     lane: world.player.lane.$,
     target: target.$,
-    leg: world.leg,
-    turn: world.turn,
     along: world.along,
     seed: world.seed,
     speed: game.speed_kmh(world),
@@ -140,7 +161,8 @@ export function snapshot(world: World): Snapshot {
     crashed: game.crashed(world),
     signal: game.signal_state(world).$,
     charges: ids(world.charges),
-    traffic: cars(world.traffic, wide),
-    oncoming: cars(world.oncoming, wide, true),
+    // On a lokal street the main road's traffic is out of sight.
+    traffic: code === 3 ? [] : cars(world.traffic, code),
+    oncoming: code === 3 ? [] : cars(world.oncoming, code, true),
   };
 }

@@ -91,7 +91,11 @@ world: an endless lattice of arterials and collectors, cut into cells of
 kampung, ruko rows, sawah and civic courts. The car drives the main roads:
 arterials, undivided with two lanes each way, and collectors with one lane
 each way. In the last hundred metres before a crossing, the indicator chooses
-the road: left, right, or straight on with no signal.
+the road: left, right, or straight on with no signal. Away from a crossing, a
+tap up to sixty metres before a lokal street's mouth turns the car into the
+kampung, at 30 km/h: the indicator picks each junction, a dead end is a
+turning circle, and a mouth onto a main road turns out, left unless signalled
+right.
 
 Every cell is a function of (seed, i, j), so a worker makes the cells near the
 car and the crossing ahead before the car gets there. The renderer bakes each

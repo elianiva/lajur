@@ -16,6 +16,7 @@ import Base
 import ../../bend/model.bend as M
 import ../../bend/rules.bend as R
 import ./world.bend as W
+import ./lokal.bend as L
 
 # ===========================================================================
 # The road
@@ -182,14 +183,17 @@ def lane_offset(l: Lane) -> U32:
     case Outer{}:
       480
 
-# A collector or a lokal street has one lane each way: the car keeps to the
-# kerb lane, whose centre is half the way to the kerb of a 4.5 m half road.
-def lane_offset_on(wide: Bool, l: Lane) -> U32:
-  match wide:
-    case True{}:
+# The lane centre on each class of road. A collector has one lane each way:
+# the car keeps half the way to the kerb of its 4.5 m half. A lokal street
+# is 4 m wide and shared: the car keeps a metre left of its middle.
+def lane_offset_on(code: U32, l: Lane) -> U32:
+  match code:
+    case 1:
       lane_offset(l)
-    case False{}:
+    case 2:
       225
+    case _:
+      100
 
 def lane_at(i: U32) -> Lane:
   match i:
@@ -644,6 +648,209 @@ def status_after(hit: Bool) -> Status:
     case False{}:
       Driving{}
 
+# A driver chooses the turn at a crossing by signalling in the last hundred
+# metres before it, and the lamp stays lit until the crossing. A tap further
+# back is a lane change and chooses nothing, so overtaking never turns the car
+# off its road. With no turn chosen the car goes straight on.
+def approach_cm() -> U32:
+  10000
+
+def near_crossing(+leg: Leg, +along: U32) -> Bool:
+  U32.is_le(leg_length(leg), U32.add(along, approach_cm()))
+
+def turn_by(near: Bool, +left: Bool, +right: Bool, +turn: U32) -> U32:
+  match near:
+    case True{}:
+      Bool.pick(U32, left, 0, Bool.pick(U32, right, 2, turn))
+    case False{}:
+      turn
+
+def turn_after(+near: Bool, +held: Controls, +input: Controls, +turn: U32) -> U32:
+  turn_by(near, pressed(held_left(input), held_left(held)),
+          pressed(held_right(input), held_right(held)), turn)
+
+# ===========================================================================
+# Lokal streets
+#
+# A tree block's streets are a network of ways (lokal.bend). On a main road
+# the doors are the mouths of the blocks either side of it: a tap of the
+# indicator up to sixty metres before a door, away from a crossing, turns the
+# car in there. On a lokal street a tap chooses the next junction's turn, by
+# the same rule as at a crossing; a dead end is a turning circle; at a mouth
+# onto a main road the car turns out, left unless it signalled right.
+# ===========================================================================
+
+type Lok is Data:
+  Main{}
+  Side{net: List<&2, L.Way>, way: U32, fwd: Bool, length: U32}
+
+# Whether the leg's doors are made yet, the doors, the door armed (or none)
+# and its side, and whether the car is on the main road or a lokal street.
+type Place is Data:
+  Place{known: Bool, doors: List<&2, L.Door>, door: U32, left: Bool, lok: Lok}
+
+# Where a tick leaves the car, and whether it passed a crossing or came out
+# onto a main road: either way the traffic is the new road's.
+type Pos is Data:
+  Pos{leg: Leg, along: U32, turn: U32, place: Place, passed: Bool}
+
+def no_door() -> U32:
+  4294967295
+
+def fresh_place() -> Place:
+  Place{False{}, Nil{}, no_door(), False{}, Main{}}
+
+def door_reach_cm() -> U32:
+  6000
+
+def lok_side(l: Lok) -> Bool:
+  match l:
+    case Main{}:
+      False{}
+    case Side{net, way, fwd, length}:
+      True{}
+
+def on_side(+p: Place) -> Bool:
+  match p:
+    case Place{known, doors, door, left, lok}:
+      lok_side(lok)
+
+# A lokal street is a residential road: 30 km/h.
+def zone_at(side: Bool, +leg: Leg) -> M.Zone:
+  match side:
+    case True{}:
+      M.Residential{}
+    case False{}:
+      zone_on(leg)
+
+# The doors of a leg are made once, on its first tick.
+def doors_if(known: Bool, +seed: U32, l: Leg, ds: List<&2, L.Door>) -> List<&2, L.Door>:
+  match known:
+    case True{}:
+      ds
+    case False{}:
+      match l:
+        case Leg{+i, +j, +dir, +length}:
+          L.doors_of(seed, key_i(i, dir), key_j(j, dir), eastward(dir), length,
+                     Bool.or(U32.is_eq(dir, 1), U32.is_eq(dir, 2)))
+
+# The nearest door on the chosen side, ahead and within reach.
+def door_ahead(ds: List<&2, L.Door>, +left: Bool, +along: U32, +best: U32) -> U32:
+  match ds:
+    case Nil{}:
+      best
+    case Con{d, r}:
+      match d:
+        case L.Door{+at, +dl, ci, cj, blk, p}:
+          +ok = Bool.and(Bool.and(Bool.not(Bool.xor(dl, left)), U32.is_lt(along, at)),
+                Bool.and(U32.is_le(U32.sub(at, along), door_reach_cm()), U32.is_lt(at, best)))
+          door_ahead(r, left, along, Bool.pick(U32, ok, at, best))
+
+def no_door_rec() -> L.Door:
+  L.Door{0, False{}, 0, 0, 0, W.Pt{0, 0}}
+
+# Turning in at a door: the block's network is made now, and the car starts
+# on the way in from the mouth's kerb.
+def enter_door(d: L.Door, +seed: U32, +over: U32, +leg: Leg) -> Pos:
+  match d:
+    case L.Door{at, dl, +ci, +cj, +blk, +p}:
+      +net = L.net_at(seed, ci, cj, blk)
+      +k = L.way_from(net, p, 0, L.none())
+      Pos{leg, over, 1, Place{True{}, Nil{}, no_door(), False{}, Side{net, k, True{}, L.length_at(net, k)}}, False{}}
+
+def walk_main(pair: Leg & U32, +was: U32, ds: List<&2, L.Door>, +door: U32, +left: Bool, +turn: U32) -> Pos:
+  match pair:
+    case (+leg, +along):
+      +passed = U32.is_lt(along, was)
+      Pos{leg, along, Bool.pick(U32, passed, 1, turn),
+          Bool.pick(Place, passed, fresh_place(), Place{True{}, ds, door, left, Main{}}), passed}
+
+def main_go(enter: Bool, +leg: Leg, +along: U32, +to: U32, +seed: U32, +turn: U32, +ds: List<&2, L.Door>, +door: U32, +left: Bool) -> Pos:
+  match enter:
+    case True{}:
+      enter_door(L.door_at(ds, door, left, no_door_rec()), seed, U32.sub(to, door), leg)
+    case False{}:
+      walk_main(walked(leg, to, seed, turn), along, ds, door, left, turn)
+
+def main_move(+leg: Leg, +along: U32, +dist: U32, +seed: U32, +turn: U32, +ds: List<&2, L.Door>, +door: U32, +left: Bool) -> Pos:
+  +to = U32.add(along, dist)
+  main_go(Bool.and(U32.is_lt(along, door), U32.is_le(door, to)), leg, along, to, seed, turn, ds, door, left)
+
+# Coming out of a mouth onto a main road. The road's own direction at the
+# kerb is a right turn when it turns clockwise from the heading out of the
+# block. No signal turns left, the turn across no traffic.
+def turn_out(k: L.Kerb, +arr: U32, +over: U32, +seed: U32, +turn: U32, +leg: Leg) -> Pos:
+  match k:
+    case L.Inside{}:
+      Pos{leg, over, 1, fresh_place(), True{}}
+    case L.Kerb{+ki, +kj, +east, +t, +at}:
+      +c = W.curve_of(seed, ki, kj, east)
+      +hk = L.heading(W.curve_at(c, U32.sub(t, U32.min(t, 512))), W.curve_at(c, U32.min(U32.add(t, 512), 65536)))
+      +right_key = W.slt(0, W.turn_from(hk, arr))
+      +key = Bool.not(Bool.xor(U32.is_eq(pick_exit(turn, True{}, False{}, True{}), 2), right_key))
+      +si = Bool.pick(U32, Bool.and(east, Bool.not(key)), U32.add(ki, 1), ki)
+      +sj = Bool.pick(U32, Bool.and(Bool.not(east), Bool.not(key)), U32.add(kj, 1), kj)
+      +dir = Bool.pick(U32, east, Bool.pick(U32, key, 1, 3), Bool.pick(U32, key, 2, 0))
+      +l2 = leg_from(seed, si, sj, dir)
+      +len = leg_length(l2)
+      Pos{l2, U32.add(Bool.pick(U32, key, at, U32.sub(len, U32.min(at, len))), over), 1, fresh_place(), True{}}
+
+# At a junction: the turn chosen if its way is there, else straight on, left,
+# right, and back round the turning circle only at a dead end.
+def onto(c: L.Choice, +net: List<&2, L.Way>, +way: U32, +fwd: Bool, +over: U32, +turn: U32, +leg: Leg) -> Pos:
+  match c:
+    case L.Choice{+lo, +li, +lf, +so, +si, +sf, +ro, +ri, +rf}:
+      +e = pick_exit(turn, lo, so, ro)
+      +k = Bool.pick(U32, U32.is_eq(e, 0), li, Bool.pick(U32, U32.is_eq(e, 1), si, Bool.pick(U32, U32.is_eq(e, 2), ri, way)))
+      +f = Bool.pick(Bool, U32.is_eq(e, 0), lf, Bool.pick(Bool, U32.is_eq(e, 1), sf, Bool.pick(Bool, U32.is_eq(e, 2), rf, Bool.not(fwd))))
+      Pos{leg, over, 1, Place{True{}, Nil{}, no_door(), False{}, Side{net, k, f, L.length_at(net, k)}}, False{}}
+
+def out_or_on(out: Bool, +kerb: L.Kerb, +arr: U32, +c: L.Choice, +net: List<&2, L.Way>, +way: U32, +fwd: Bool, +over: U32, +seed: U32, +turn: U32, +leg: Leg) -> Pos:
+  match out:
+    case True{}:
+      turn_out(kerb, arr, over, seed, turn, leg)
+    case False{}:
+      onto(c, net, way, fwd, over, turn, leg)
+
+def from_arrival(x: L.Arrival, +net: List<&2, L.Way>, +way: U32, +fwd: Bool, +over: U32, +seed: U32, +turn: U32, +leg: Leg) -> Pos:
+  match x:
+    case L.Arrival{+out, +arr, +c}:
+      out_or_on(L.is_kerb(out), out, arr, c, net, way, fwd, over, seed, turn, leg)
+
+def side_go(over: Bool, +net: List<&2, L.Way>, +way: U32, +fwd: Bool, +length: U32, +to: U32, +seed: U32, +turn: U32, +leg: Leg) -> Pos:
+  match over:
+    case False{}:
+      Pos{leg, to, turn, Place{True{}, Nil{}, no_door(), False{}, Side{net, way, fwd, length}}, False{}}
+    case True{}:
+      from_arrival(L.arrive(net, way, fwd), net, way, fwd, U32.sub(to, length), seed, turn, leg)
+
+def side_move(+net: List<&2, L.Way>, +way: U32, +fwd: Bool, +length: U32, +along: U32, +dist: U32, +seed: U32, +turn: U32, +leg: Leg) -> Pos:
+  +to = U32.add(along, dist)
+  side_go(U32.is_le(length, to), net, way, fwd, length, to, seed, turn, leg)
+
+# One tick's move. On the main road a tap near a crossing chooses the turn
+# there and one away from it arms the nearest door on its side, if any; on a
+# lokal street a tap chooses the next junction's turn.
+def move_lok(l: Lok, +known: Bool, +doors: List<&2, L.Door>, +door: U32, +left: Bool, +leg: Leg, +along: U32,
+             +dist: U32, +seed: U32, +turn: U32, +tl: Bool, +tr: Bool) -> Pos:
+  match l:
+    case Main{}:
+      +ds = doors_if(known, seed, leg, doors)
+      +near = near_crossing(leg, along)
+      +found = door_ahead(ds, tl, along, no_door())
+      +arm = Bool.and(Bool.and(Bool.or(tl, tr), Bool.not(near)), U32.is_ne(found, no_door()))
+      main_move(leg, along, dist, seed, turn_by(near, tl, tr, turn), ds,
+                Bool.pick(U32, arm, found, door), Bool.pick(Bool, arm, tl, left))
+    case Side{+net, +way, +fwd, +length}:
+      side_move(net, way, fwd, length, along, dist, seed,
+                Bool.pick(U32, tl, 0, Bool.pick(U32, tr, 2, turn)), leg)
+
+def move(p: Place, +leg: Leg, +along: U32, +dist: U32, +seed: U32, +turn: U32, +tl: Bool, +tr: Bool) -> Pos:
+  match p:
+    case Place{+known, +doors, +door, +left, lok}:
+      move_lok(lok, known, doors, door, left, leg, along, dist, seed, turn, tl, tr)
+
+
 # ===========================================================================
 # The world
 # ===========================================================================
@@ -652,7 +859,7 @@ type World is Data:
   World{tick: U32, player: Player, traffic: List<&2, Car>, oncoming: List<&2, Car>,
         distance: U32, zone: M.Zone, charges: List<&2, U32>, status: Status,
         held: Controls, residual: U32, leg: Leg, along: U32, turn: U32,
-        seed: U32}
+        place: Place, seed: U32}
 
 def is_crashed(s: Status) -> Bool:
   match s:
@@ -664,7 +871,7 @@ def is_crashed(s: Status) -> Bool:
 def player_of(w: World) -> Player:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       player
 
 def start_seed() -> U32:
@@ -689,75 +896,64 @@ def start() -> World:
         ],
         0, zone_on(start_leg()), Nil{}, Driving{},
         Controls{False{}, False{}, False{}, False{}}, 0, start_leg(), 20000, 1,
-        start_seed()}
+        fresh_place(), start_seed()}
 
-# A driver chooses the turn at a crossing by signalling in the last hundred
-# metres before it, and the lamp stays lit until the crossing. A tap further
-# back is a lane change and chooses nothing, so overtaking never turns the car
-# off its road. With no turn chosen the car goes straight on.
-def approach_cm() -> U32:
-  10000
-
-def near_crossing(+leg: Leg, +along: U32) -> Bool:
-  U32.is_le(leg_length(leg), U32.add(along, approach_cm()))
-
-def turn_by(near: Bool, +left: Bool, +right: Bool, +turn: U32) -> U32:
-  match near:
+def drift_if(go: Bool, cars: List<&2, Car>, +dist: U32, +tick: U32) -> List<&2, Car>:
+  match go:
     case True{}:
-      Bool.pick(U32, left, 0, Bool.pick(U32, right, 2, turn))
+      drift(cars, dist, tick)
     case False{}:
-      turn
+      cars
 
-def turn_after(+near: Bool, +held: Controls, +input: Controls, +turn: U32) -> U32:
-  turn_by(near, pressed(held_left(input), held_left(held)),
-          pressed(held_right(input), held_right(held)), turn)
-
-# The player advances along the route; `walked` takes the next leg at a
-# crossing and answers the new (leg, along).
-def moved(+leg: Leg, along: U32, +dist: U32, +seed: U32, +turn: U32) -> Leg & U32:
-  walked(leg, U32.add(along, dist), seed, turn)
+def drift_oncoming_if(go: Bool, cars: List<&2, Car>, +dist: U32, +tick: U32) -> List<&2, Car>:
+  match go:
+    case True{}:
+      drift_oncoming(cars, dist, tick)
+    case False{}:
+      cars
 
 # The car has moved to `pos`. The zone is the class of the road it is on, so
-# the ceiling changes where the road does. Past a crossing (the car is nearer
-# the start of its leg than it was) the traffic is the new road's and the turn
-# is spent. On a one-lane road every car keeps to the kerb lane.
-def settle(pos: Leg & U32, +tick: U32, player: Player, traffic: List<&2, Car>,
+# the ceiling changes where the road does. Past a crossing, or out of a lokal
+# street, the traffic is the new road's. On a one-lane road every car keeps to
+# the kerb lane; on a lokal street the main road's traffic waits, unseen.
+def settle(pos: Pos, +tick: U32, player: Player, traffic: List<&2, Car>,
            oncoming: List<&2, Car>, +dist: U32, distance: U32, +input: Controls,
-           residual: U32, +was: U32, +turn: U32, seed: U32) -> World:
+           residual: U32, seed: U32) -> World:
   match pos:
-    case (+leg, +along):
-      +passed = U32.is_lt(along, was)
-      +wide = wide_on(leg)
-      +zone = zone_on(leg)
+    case Pos{+leg, along, turn, +place, +passed}:
+      +side = on_side(place)
+      +wide = Bool.and(wide_on(leg), Bool.not(side))
+      +zone = zone_at(side, leg)
       +kept = keep_lane(wide, player)
-      +traffic2 = keep_left(wide, refresh(passed, drift(traffic, dist, tick), tick))
-      +oncoming2 = keep_left(wide, refresh(passed, drift_oncoming(oncoming, dist, tick), tick))
-      +hit = blocked(traffic2, lane_of(kept))
+      +traffic2 = keep_left(wide, refresh(passed, drift_if(Bool.not(side), traffic, dist, tick), tick))
+      +oncoming2 = keep_left(wide, refresh(passed, drift_oncoming_if(Bool.not(side), oncoming, dist, tick), tick))
+      +met = Bool.pick(List<&2, Car>, side, Nil{}, traffic2)
+      +hit = blocked(met, lane_of(kept))
       World{tick, kept, traffic2, oncoming2, U32.add(distance, dist), zone,
-            spread(R.charges(scenario_among(kept, traffic2, zone, hit))), status_after(hit),
-            input, residual, leg, along, Bool.pick(U32, passed, 1, turn), seed}
+            spread(R.charges(scenario_among(kept, met, zone, hit))), status_after(hit),
+            input, residual, leg, along, turn, place, seed}
 
 def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
          oncoming: List<&2, Car>, distance: U32, zone: M.Zone,
          charges: List<&2, U32>, +held: Controls, residual: U32,
-         +leg: Leg, +along: U32, turn: U32, +seed: U32, +input: Controls) -> World:
+         +leg: Leg, +along: U32, turn: U32, +place: Place, +seed: U32, +input: Controls) -> World:
   match frozen:
     case True{}:
       World{tick, player, traffic, oncoming, distance, zone, charges, Crashed{},
-            held, residual, leg, along, turn, seed}
+            held, residual, leg, along, turn, place, seed}
     case False{}:
-      +player2 = player_next(player, held, input, wide_on(leg))
+      +player2 = player_next(player, held, input, Bool.and(wide_on(leg), Bool.not(on_side(place))))
       +dist = roll(speed_of(player2))
-      +turn2 = turn_after(near_crossing(leg, along), held, input, turn)
-      settle(moved(leg, along, dist, seed, turn2), U32.add(tick, 1), player2, traffic,
-             oncoming, dist, distance, input, residual, along, turn2, seed)
+      settle(move(place, leg, along, dist, seed, turn, pressed(held_left(input), held_left(held)),
+                  pressed(held_right(input), held_right(held))),
+             U32.add(tick, 1), player2, traffic, oncoming, dist, distance, input, residual, seed)
 
 def tick(w: World, input: Controls) -> World:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       step(is_crashed(status), tick, player, traffic, oncoming, distance, zone,
-           charges, held, residual, leg, along, turn, seed, input)
+           charges, held, residual, leg, along, turn, place, seed, input)
 
 # A Nat fuel counts the ticks down; the shrinking argument comes first.
 def run(fuel: Nat, w: World, +input: Controls) -> World:
@@ -772,13 +968,13 @@ def run(fuel: Nat, w: World, +input: Controls) -> World:
 def advance(w: World, ms: U32, input: Controls) -> World:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       +total = U32.add(residual, U32.min(ms, 250))
       +count = U32.min(U32.div(U32.mul(total, 60), 1000), 5)
       +left = U32.sub(total, U32.div(U32.mul(count, 1000), 60))
       +spent = run(U32.to_nat(count), World{tick, player, traffic, oncoming, distance,
                                         zone, charges, status, held, left, leg,
-                                        along, turn, seed}, input)
+                                        along, turn, place, seed}, input)
       spent
 
 def restart(w: World) -> World:
@@ -788,31 +984,47 @@ def restart(w: World) -> World:
 # What the screen reads
 # ===========================================================================
 
+def place_of(w: World) -> Place:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, place, seed}:
+      place
+
+def leg_of(w: World) -> Leg:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, place, seed}:
+      leg
+
+# The class of road the car is on: 1 arterial, 2 collector, 3 lokal street.
+def road_code_of(+w: World) -> U32:
+  Bool.pick(U32, on_side(place_of(w)), 3, W.class_code(class_on(leg_of(w))))
+
 def speed_kmh(w: World) -> U32:
   kmh(speed_of(player_of(w)))
 
 def zone_of(w: World) -> M.Zone:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       zone
 
 def limit_kmh(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       kmh(limit_of(zone))
 
 def metres(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       U32.div(distance, 100)
 
 def crashed(w: World) -> Bool:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       is_crashed(status)
 
 # The lamp shows the turn chosen at the crossing ahead, or else the lane change.
@@ -822,11 +1034,17 @@ def turn_signal(+turn: U32, s: Signal) -> Signal:
 def turn_of(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       turn
 
+# An armed door lights the lamp on its side until the car turns in.
+def door_signal(+p: Place, s: Signal) -> Signal:
+  match p:
+    case Place{known, doors, +door, +left, lok}:
+      Bool.pick(Signal, U32.is_eq(door, no_door()), s, Bool.pick(Signal, left, ToLeft{}, ToRight{}))
+
 def signal_state(+w: World) -> Signal:
-  turn_signal(turn_of(w), signal_of(player_of(w)))
+  turn_signal(turn_of(w), door_signal(place_of(w), signal_of(player_of(w))))
 
 def lane_move(w: World) -> U32:
   moving_of(player_of(w))
@@ -834,37 +1052,25 @@ def lane_move(w: World) -> U32:
 def lane_target(w: World) -> Lane:
   target_of(player_of(w))
 
-def wide(w: World) -> Bool:
-  match w:
-    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
-      wide_on(leg)
-
 def lane_centre(+w: World) -> U32:
-  lane_offset_on(wide(w), lane_of(player_of(w)))
+  lane_offset_on(road_code_of(w), lane_of(player_of(w)))
 
 def traffic_of(w: World) -> List<&2, Car>:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       traffic
-
-def leg_of(w: World) -> Leg:
-  match w:
-    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
-      leg
 
 def along_of(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       along
 
 def seed_of(w: World) -> U32:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
-               held, residual, leg, along, turn, seed}:
+               held, residual, leg, along, turn, place, seed}:
       seed
 
 # ===========================================================================
@@ -932,3 +1138,94 @@ def fine_of(id: U32) -> U32:
 
 def header_of(+id: U32) -> String:
   "Pasal " ++ U32.show(article_of(id)) ++ " ayat (" ++ U32.show(ayat_of(id)) ++ ")"
+
+# ===========================================================================
+# The road ahead, for the renderer
+#
+# The stretch the car is on and the one it takes next, each as points on the
+# ground in driving order, its length, and the part of it driven: from `from`
+# to `to` centimetres. A main road joined from a lokal street is driven from
+# the mouth on; a leg with a door armed, up to the door.
+# ===========================================================================
+
+type Piece is Data:
+  Piece{id: U32, pts: List<&2, W.Pt>, length: U32, from: U32, to: U32}
+
+def leg_pts(+seed: U32, l: Leg) -> List<&2, W.Pt>:
+  match l:
+    case Leg{+i, +j, +dir, length}:
+      +ps = W.road_pts(seed, key_i(i, dir), key_j(j, dir), eastward(dir))
+      Bool.pick(List<&2, W.Pt>, Bool.or(U32.is_eq(dir, 0), U32.is_eq(dir, 3)), List.reverse(&2, W.Pt, ps), ps)
+
+def leg_id(l: Leg) -> U32:
+  match l:
+    case Leg{i, j, dir, length}:
+      W.hash4(1, i, j, dir, 7)
+
+def leg_piece(+seed: U32, +l: Leg, +from: U32, +to: U32) -> Piece:
+  Piece{leg_id(l), leg_pts(seed, l), leg_length(l), from, to}
+
+def way_piece(w: L.Way, +fwd: Bool) -> Piece:
+  match w:
+    case L.Way{+a, +b, +pts, +length, ha, hb, kerb}:
+      Piece{W.hash6(2, W.pt_x(a), W.pt_z(a), W.pt_x(b), W.pt_z(b), Bool.to_u32(fwd), 0),
+            Bool.pick(List<&2, W.Pt>, fwd, pts, List.reverse(&2, W.Pt, pts)), length, 0, length}
+
+def lok_piece(l: Lok, +seed: U32, +leg: Leg, +from: U32, +to: U32) -> Piece:
+  match l:
+    case Main{}:
+      leg_piece(seed, leg, from, to)
+    case Side{net, +way, +fwd, length}:
+      way_piece(L.nth_way(net, way), fwd)
+
+def pos_piece(x: Pos, +seed: U32) -> Piece:
+  match x:
+    case Pos{+leg, +along, turn, place, passed}:
+      match place:
+        case Place{known, doors, door, left, lok}:
+          lok_piece(lok, seed, leg, along, leg_length(leg))
+
+def next_main(armed: Bool, +p: Place, +seed: U32, +leg: Leg, +turn: U32) -> Piece:
+  match armed:
+    case True{}:
+      match p:
+        case Place{known, +doors, +door, +left, lok}:
+          pos_piece(enter_door(L.door_at(doors, door, left, no_door_rec()), seed, 0, leg), seed)
+    case False{}:
+      leg_piece(seed, leg_after(leg, seed, turn), 0, leg_length(leg_after(leg, seed, turn)))
+
+def ahead_of(l: Lok, +p: Place, +seed: U32, +leg: Leg, +along: U32, +turn: U32) -> List<&2, Piece>:
+  match l:
+    case Main{}:
+      match p:
+        case Place{known, doors, +door, left, lok}:
+          +armed = U32.is_ne(door, no_door())
+          [leg_piece(seed, leg, 0, Bool.pick(U32, armed, door, leg_length(leg))),
+           next_main(armed, p, seed, leg, turn)]
+    case Side{+net, +way, +fwd, +length}:
+      [way_piece(L.nth_way(net, way), fwd),
+       pos_piece(from_arrival(L.arrive(net, way, fwd), net, way, fwd, 0, seed, turn, leg), seed)]
+
+def plan(w: World) -> List<&2, Piece>:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, +leg, +along, +turn, +place, +seed}:
+      match place:
+        case Place{known, doors, door, left, lok}:
+          ahead_of(lok, place, seed, leg, along, turn)
+
+def lok_key(l: Lok) -> U32:
+  match l:
+    case Main{}:
+      0
+    case Side{net, way, fwd, length}:
+      W.hash2(U32.add(way, 1), Bool.to_u32(fwd), 3)
+
+# Changes whenever the plan does, so the renderer asks for it only then.
+def plan_key(w: World) -> U32:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, place, seed}:
+      match place:
+        case Place{known, doors, door, left, lok}:
+          W.hash5(leg_id(leg), turn, door, Bool.to_u32(left), lok_key(lok), 9)

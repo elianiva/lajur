@@ -19,6 +19,8 @@ import type { Drawn } from "../world/world.ts";
  */
 
 const TILE = 120;
+/** The radius of a turning circle, in metres. */
+const BULB = 5;
 /** Height of the painted lines above the ground. */
 const PAINT_Y = 0.15;
 
@@ -286,6 +288,17 @@ class Piece {
       for (const l of d.lines)
         if (l.kind === kind && !l.river)
           ground.ribbon(l.pts, ROAD[kind]!, ROAD_MATERIAL[kind]!, roadY(kind));
+    // A dead end is a turning circle, room for a car to come round.
+    for (const l of d.lines)
+      if (l.bulb)
+        ground.area(
+          Array.from({ length: 16 }, (_, k) => ({
+            x: l.bulb!.x + Math.cos((k / 16) * Math.PI * 2) * BULB,
+            z: l.bulb!.z + Math.sin((k / 16) * Math.PI * 2) * BULB,
+          })),
+          ROAD_MATERIAL[LOK]!,
+          roadY(LOK),
+        );
     for (const l of d.lines) paint(ground, l);
     this.group.add(...ground.meshes());
 

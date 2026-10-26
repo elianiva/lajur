@@ -6,7 +6,7 @@ import { buildCar, PLAYER_COLOUR } from "./assets/cars.ts";
 import { Around } from "./render/around.ts";
 import { Route } from "./render/route.ts";
 import { Traffic } from "./render/traffic.ts";
-import { advance, bodyLength, restart, snapshot, start } from "./bend.ts";
+import { advance, bodyLength, plan, planKey, restart, snapshot, start } from "./bend.ts";
 import { Ink, light, lookByKey, restyle } from "./render/look.ts";
 
 const VIEW_HEIGHT = 46;
@@ -70,7 +70,9 @@ light(scene, hemi, sun, look);
 let world = start();
 let state = snapshot(world);
 
-const route = new Route(state.seed);
+const route = new Route();
+let planned = planKey(world);
+route.sync(plan(world));
 const town = new Around(state.seed);
 scene.add(town.group);
 
@@ -107,6 +109,11 @@ function follow(dt: number): void {
 function step(ms: number): void {
   world = advance(world, ms, keyboard.controls());
   state = snapshot(world);
+  const key = planKey(world);
+  if (key !== planned) {
+    planned = key;
+    route.sync(plan(world));
+  }
 
   traffic.update(state, ms / 1000);
   follow(ms / 1000);

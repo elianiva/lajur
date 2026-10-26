@@ -37,8 +37,7 @@ export class Traffic {
 
   update(state: Snapshot, dt: number): void {
     const ease = Math.min(1, dt * 9);
-    this.route.sync(state.leg, state.turn);
-    const here = this.route.here(state.along / 100);
+    const here = this.route.here(state.along);
 
     this.playerLateral += (state.x - this.playerLateral) * ease;
     const at = this.route.at(here, this.playerLateral);

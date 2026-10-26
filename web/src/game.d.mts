@@ -16,6 +16,18 @@ export type Status = Constructor<"Driving" | "Crashed">;
 /** One road of the world's lattice, from crossing (i, j) toward `dir`: 0 north, 1 east, 2 south, 3 west. */
 export type Leg = { $: "Leg"; i: number; j: number; dir: number; length: number };
 
+export type Pt = { $: "Pt"; x: number; z: number };
+
+/** A stretch of the route: points in driving order, its length, and the part driven, in centimetres. */
+export type Piece = {
+  $: "Piece";
+  id: number;
+  pts: BendList<Pt>;
+  length: number;
+  from: number;
+  to: number;
+};
+
 export type BendList<T> = Constructor<"Nil"> | { $: "Con"; head: T; tail: BendList<T> };
 
 export type Car = {
@@ -69,8 +81,10 @@ export interface Game {
   advance(world: World, ms: number, input: Controls): World;
   restart(world: World): World;
   lane_offset(lane: Lane): number;
-  lane_offset_on(wide: boolean, lane: Lane): number;
-  wide(world: World): boolean;
+  lane_offset_on(code: number, lane: Lane): number;
+  road_code_of(world: World): number;
+  plan(world: World): BendList<Piece>;
+  plan_key(world: World): number;
   body_length(body: Body): number;
   speed_kmh(world: World): number;
   limit_kmh(world: World): number;
@@ -82,7 +96,6 @@ export interface Game {
   lane_target(world: World): Lane;
   lane_change_ticks(): number;
   lamp_ticks(): number;
-  leg_after(leg: Leg, seed: number, turn: number): Leg;
   rule_name(id: number): string;
   header_of(id: number): string;
   fine_of(id: number): number;

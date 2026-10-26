@@ -11,6 +11,7 @@ import Base
 import ./game.bend as G
 import ./town.bend as T
 import ./world.bend as W
+import ./lokal.bend as L
 import ../../bend/model.bend as M
 import ../../bend/rules.bend as R
 
@@ -18,9 +19,9 @@ import ../../bend/rules.bend as R
 # The route: the world's own roads, one leg at a time
 # ===========================================================================
 
-# At a crossing the route takes a road that is there, and takes the turn the
-# driver signalled whenever that road is there; it turns back only when no
-# other road leaves. The law walks every exit a crossing can offer, open or
+# At a crossing, or a junction of lokal streets, the route takes a road that
+# is there, and takes the turn the driver signalled whenever that road is
+# there; it turns back only when no other road leaves. The law walks every exit a crossing can offer, open or
 # closed, for every turn.
 law the_route_takes_only_roads_that_are_there:
   { G.every_exit_holds() == True{} : Bool }
@@ -79,6 +80,31 @@ def a_one_lane_road_keeps_the_car_in_the_kerb_lane(l):
       {==}
     case G.Outer{}:
       {==}
+
+# PM 111/2015 Pasal 3 ayat (4): a lokal street is a residential road, 30 km/h,
+# whatever main road the car turned in from.
+law a_lokal_street_is_thirty:
+  { U32.is_eq(G.kmh(G.limit_of(G.zone_at(True{}, G.Leg{1, 0, 1, 50000}))), 30) == True{} : Bool }
+
+def a_lokal_street_is_thirty():
+  {==}
+
+# A tap arms a door on its own side only, and only within sixty metres.
+law a_door_arms_on_its_side_within_sixty_metres:
+  { Bool.and(U32.is_eq(G.door_ahead([L.Door{9000, True{}, 0, 0, 0, W.Pt{0, 0}}], True{}, 4000, G.no_door()), 9000),
+    Bool.and(U32.is_eq(G.door_ahead([L.Door{9000, True{}, 0, 0, 0, W.Pt{0, 0}}], False{}, 4000, G.no_door()), G.no_door()),
+             U32.is_eq(G.door_ahead([L.Door{9000, True{}, 0, 0, 0, W.Pt{0, 0}}], True{}, 2000, G.no_door()), G.no_door()))) == True{} : Bool }
+
+def a_door_arms_on_its_side_within_sixty_metres():
+  {==}
+
+# Out of a lokal street with no signal, the car turns left onto the main
+# road: in left-hand traffic, the turn that crosses no lane.
+law out_of_a_lokal_street_unsignalled_is_a_left_turn:
+  { G.pick_exit(1, True{}, False{}, True{}) == 0 : U32 }
+
+def out_of_a_lokal_street_unsignalled_is_a_left_turn():
+  {==}
 
 # ===========================================================================
 # Lanes: two a side, and the car stays inside them
