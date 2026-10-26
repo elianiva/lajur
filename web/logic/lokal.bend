@@ -12,12 +12,14 @@
 import Base
 import ./world.bend as W
 
-# Where a way's first end meets a road of the lattice: the road's key, its
-# parameter there, and the centimetres along it from its key crossing. A
-# mouth onto a collector inside the cell meets no road the route can take.
+# Where a way's first end meets a road: a road of the lattice, by its key,
+# its parameter there, and the centimetres along it from its key crossing; or
+# the collector across cell (i, j), across u or across v, at its parameter
+# t. A mouth onto any other edge meets no road the route can take.
 type Kerb is Data:
   Inside{}
   Kerb{i: U32, j: U32, east: Bool, t: U32, at: U32}
+  OnCut{i: U32, j: U32, u: Bool, t: U32}
 
 # A way runs from a to b, both in the block's frame, so junctions match
 # exactly; its points are on the ground, a to b. ha is the heading leaving a
@@ -26,9 +28,11 @@ type Way is Data:
   Way{a: W.Pt, b: W.Pt, pts: List<&2, W.Pt>, length: U32, ha: U32, hb: U32, kerb: Kerb}
 
 # A place to turn in: centimetres along the leg, on which side, and the
-# block's cell, its place among the cell's blocks, and the mouth's kerb.
+# block's cell, its place among the cell's blocks, and the mouth's kerb. A
+# gate is the mouth of a collector inside cell (ci, cj), entered toward dir.
 type Door is Data:
   Door{at: U32, left: Bool, ci: U32, cj: U32, blk: U32, p: W.Pt}
+  Gate{at: U32, left: Bool, ci: U32, cj: U32, dir: U32}
 
 def same(+p: W.Pt, +q: W.Pt) -> Bool:
   Bool.and(U32.is_eq(W.pt_x(p), W.pt_x(q)), U32.is_eq(W.pt_z(p), W.pt_z(q)))
@@ -81,7 +85,7 @@ def kerb_on(here: Bool, +seed: U32, +i: U32, +j: U32, +east: Bool, +t: U32) -> K
 # A mouth starts on the block's outer edge. On a side of the block that is a
 # side of the cell, that is a road of the lattice: south and north run east
 # along u, west and east run south along v.
-def kerb_of(+seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +f: W.Frame, +p: W.Pt) -> Kerb:
+def road_kerb(+seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +f: W.Frame, +p: W.Pt) -> Kerb:
   +mu = W.frame_mu(f)
   +mv = W.frame_mv(f)
   +x = W.pt_x(p)
@@ -95,6 +99,24 @@ def kerb_of(+seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32
   +east = Bool.or(s, n)
   +t = Bool.pick(U32, east, W.frac16(x, mu), W.frac16(z, mv))
   kerb_on(Bool.and(Bool.or(east, Bool.or(w, e)), W.has_road(seed, ki, kj, east)), seed, ki, kj, east, t)
+
+def cut_kerb(on: Bool, +u: Bool, +seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +f: W.Frame, +p: W.Pt) -> Kerb:
+  match on:
+    case True{}:
+      OnCut{i, j, u, Bool.pick(U32, u, W.frac16(W.pt_z(p), W.frame_mv(f)), W.frac16(W.pt_x(p), W.frame_mu(f)))}
+    case False{}:
+      road_kerb(seed, i, j, u0, u1, v0, v1, f, p)
+
+# On a side of the block that is a collector of the cell, the kerb is on it.
+def kerb_of(+seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +f: W.Frame, +p: W.Pt) -> Kerb:
+  +c = W.cell_cuts(seed, i, j)
+  +uc = W.cuts_u(c)
+  +vc = W.cuts_v(c)
+  +on_u = Bool.and(U32.is_ne(uc, 0), Bool.and(Bool.or(U32.is_eq(u0, uc), U32.is_eq(u1, uc)),
+          U32.is_eq(W.pt_x(p), W.mul16(W.frame_mu(f), uc))))
+  +on_v = Bool.and(U32.is_ne(vc, 0), Bool.and(Bool.or(U32.is_eq(v0, vc), U32.is_eq(v1, vc)),
+          U32.is_eq(W.pt_z(p), W.mul16(W.frame_mv(f), vc))))
+  cut_kerb(Bool.or(on_u, on_v), on_u, seed, i, j, u0, u1, v0, v1, f, p)
 
 def kerb_if(mouth: Bool, +seed: U32, +i: U32, +j: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +f: W.Frame, +p: W.Pt) -> Kerb:
   match mouth:
@@ -208,6 +230,8 @@ def kerb_here(+kb: Kerb, +ki: U32, +kj: U32, +east: Bool) -> Bool:
       False{}
     case Kerb{i, j, e, t, at}:
       Bool.and(Bool.and(U32.is_eq(i, ki), U32.is_eq(j, kj)), Bool.not(Bool.xor(e, east)))
+    case OnCut{i, j, u, t}:
+      False{}
 
 def kerb_at(+kb: Kerb) -> U32:
   match kb:
@@ -215,6 +239,8 @@ def kerb_at(+kb: Kerb) -> U32:
       0
     case Kerb{i, j, e, t, at}:
       at
+    case OnCut{i, j, u, t}:
+      0
 
 # A mouth street of a block makes a door on the road (ki, kj, east) when its
 # kerb is on that road. `length` is the road's, `fwd` whether the car runs
@@ -259,6 +285,64 @@ def doors_of(+seed: U32, +ki: U32, +kj: U32, +east: Bool, +length: U32, +fwd: Bo
   +oj = Bool.pick(U32, east, U32.sub(kj, 1), kj)
   cell_doors(seed, ki, kj, ki, kj, east, length, fwd, own,
     cell_doors(seed, oi, oj, ki, kj, east, length, fwd, Bool.not(own), Nil{}))
+
+def none_t() -> U32:
+  4294967295
+
+# The parameter of a kerb on the collector across u (or v) of this cell,
+# strictly between lo and hi, or none.
+def cut_t(+kb: Kerb, +across_u: Bool, +lo: U32, +hi: U32) -> U32:
+  match kb:
+    case Inside{}:
+      none_t()
+    case Kerb{i, j, e, t, at}:
+      none_t()
+    case OnCut{i, j, u, +t}:
+      Bool.pick(U32, Bool.and(Bool.not(Bool.xor(u, across_u)), Bool.and(U32.is_lt(lo, t), U32.is_lt(t, hi))), t, none_t())
+
+def cut_door(on: Bool, +t: U32, +f: W.Frame, +across_u: Bool, +fixed: U32, +l0: U32, +left: Bool,
+             +i: U32, +j: U32, +k: U32, +p: W.Pt, acc: List<&2, Door>) -> List<&2, Door>:
+  match on:
+    case False{}:
+      acc
+    case True{}:
+      +l = W.frame_to(f, across_u, fixed, t)
+      Door{U32.sub(U32.max(l, l0), U32.min(l, l0)), left, i, j, k, p} <> acc
+
+def cut_mouths(ss: List<&2, W.Street>, +seed: U32, +i: U32, +j: U32, +k: U32, +u0: U32, +u1: U32, +v0: U32, +v1: U32, +f: W.Frame,
+               +across_u: Bool, +fixed: U32, +lo: U32, +hi: U32, +l0: U32, +left: Bool, acc: List<&2, Door>) -> List<&2, Door>:
+  match ss:
+    case Nil{}:
+      acc
+    case Con{s, r}:
+      match s:
+        case W.Street{+tag, bulb, +pts}:
+          +p = first(pts)
+          +t = cut_t(kerb_if(U32.is_eq(tag, 2), seed, i, j, u0, u1, v0, v1, f, p), across_u, lo, hi)
+          cut_mouths(r, seed, i, j, k, u0, u1, v0, v1, f, across_u, fixed, lo, hi, l0, left,
+            cut_door(U32.is_ne(t, none_t()), t, f, across_u, fixed, l0, left, i, j, k, p, acc))
+
+# A block on the side of the collector where u (or v) grows is on the car's
+# left when `flip` is false.
+def cut_blocks(bs: List<&2, W.Blk>, +k: U32, +seed: U32, +i: U32, +j: U32, +f: W.Frame, +across_u: Bool, +fixed: U32,
+               +lo: U32, +hi: U32, +l0: U32, +flip: Bool, acc: List<&2, Door>) -> List<&2, Door>:
+  match bs:
+    case Nil{}:
+      acc
+    case Con{b, r}:
+      match b:
+        case W.Blk{+u0, +u1, +v0, +v1, d, sr, nr, wr, er, +fill}:
+          +grows = U32.is_eq(Bool.pick(U32, across_u, u0, v0), fixed)
+          cut_blocks(r, U32.add(k, 1), seed, i, j, f, across_u, fixed, lo, hi, l0, flip,
+            cut_mouths(tree_streets(fill), seed, i, j, k, u0, u1, v0, v1, f, across_u, fixed, lo, hi, l0,
+                       Bool.xor(grows, flip), acc))
+
+# The doors on the collector of cell (i, j) across u (or v) at `fixed`, for a
+# car running it from t0 to t1: centimetres from t0.
+def cut_doors(+seed: U32, +i: U32, +j: U32, +across_u: Bool, +fixed: U32, +t0: U32, +t1: U32, +flip: Bool) -> List<&2, Door>:
+  +f = W.frame_of(seed, i, j)
+  cut_blocks(W.cell_blocks(seed, i, j), 0, seed, i, j, f, across_u, fixed, U32.min(t0, t1), U32.max(t0, t1),
+             W.frame_to(f, across_u, fixed, t0), flip, Nil{})
 
 # ---- Driving the network ---------------------------------------------------------
 
@@ -343,12 +427,26 @@ def is_kerb(+k: Kerb) -> Bool:
       False{}
     case Kerb{i, j, e, t, at}:
       True{}
+    case OnCut{i, j, u, t}:
+      True{}
+
+def door_cm(+d: Door) -> U32:
+  match d:
+    case Door{at, l, ci, cj, blk, p}:
+      at
+    case Gate{at, l, ci, cj, dir}:
+      at
+
+def door_left(+d: Door) -> Bool:
+  match d:
+    case Door{at, l, ci, cj, blk, p}:
+      l
+    case Gate{at, l, ci, cj, dir}:
+      l
 
 # The door at `at` on the chosen side.
 def door_is(+d: Door, +at: U32, +left: Bool) -> Bool:
-  match d:
-    case Door{a, l, ci, cj, blk, p}:
-      Bool.and(U32.is_eq(a, at), Bool.not(Bool.xor(l, left)))
+  Bool.and(U32.is_eq(door_cm(d), at), Bool.not(Bool.xor(door_left(d), left)))
 
 def door_at(ds: List<&2, Door>, +at: U32, +left: Bool, +found: Door) -> Door:
   match ds:

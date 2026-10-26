@@ -408,6 +408,20 @@ def frame_chords(fuel: Nat, +f: Frame, +fixed_u: Bool, +at: U32, +step: U32, +pr
 def frame_line_length(+f: Frame, +fixed_u: Bool, +at: U32) -> U32:
   frame_chords(32n, f, fixed_u, at, 0, frame_at(f, Bool.pick(U32, fixed_u, at, 0), Bool.pick(U32, fixed_u, 0, at)), 0)
 
+# Centimetres along the same line to t, by the same chords, the one across t
+# cut short there.
+def frame_chords_to(fuel: Nat, +f: Frame, +fixed_u: Bool, +at: U32, +step: U32, +t: U32, +prev: Pt, +acc: U32) -> U32:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      +s = U32.min(U32.mul(U32.add(step, 1), 2048), t)
+      +next = frame_at(f, Bool.pick(U32, fixed_u, at, s), Bool.pick(U32, fixed_u, s, at))
+      frame_chords_to(p, f, fixed_u, at, U32.add(step, 1), t, next, U32.add(acc, dist(prev, next)))
+
+def frame_to(+f: Frame, +fixed_u: Bool, +at: U32, +t: U32) -> U32:
+  frame_chords_to(32n, f, fixed_u, at, 0, t, frame_at(f, Bool.pick(U32, fixed_u, at, 0), Bool.pick(U32, fixed_u, 0, at)), 0)
+
 # ===========================================================================
 # Density: value noise over the world, in 1024ths
 # ===========================================================================

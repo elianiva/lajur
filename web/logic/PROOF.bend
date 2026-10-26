@@ -30,7 +30,9 @@ def the_route_takes_only_roads_that_are_there():
   {==}
 
 # The lattice keeps its crossings at least 230 m apart and a tick at the fastest
-# limit covers under a metre, so one tick passes one crossing at most.
+# limit covers under a metre, so one tick passes one crossing at most. A
+# collector inside a cell meets a road only a third of the cell from either
+# side, so its stretches are longer than a tick too.
 law a_tick_cannot_pass_two_crossings:
   { U32.is_lt(G.roll(G.fastest()), G.shortest_leg()) == True{} : Bool }
 
@@ -80,6 +82,15 @@ def a_one_lane_road_keeps_the_car_in_the_kerb_lane(l):
       {==}
     case G.Outer{}:
       {==}
+
+# A collector inside a cell is a collector like the lattice's own: one lane
+# each way and 50 km/h, whichever stretch of it the car is on.
+law a_collector_inside_a_cell_is_fifty_with_one_lane:
+  { Bool.and(Bool.not(G.wide_on(G.Cut{1, 1, 0, 65536, 28860})),
+             U32.is_eq(G.kmh(G.limit_of(G.zone_on(G.Cut{1, 1, 0, 65536, 28860}))), 50)) == True{} : Bool }
+
+def a_collector_inside_a_cell_is_fifty_with_one_lane():
+  {==}
 
 # PM 111/2015 Pasal 3 ayat (4): a lokal street is a residential road, 30 km/h,
 # whatever main road the car turned in from.

@@ -48,8 +48,14 @@ def mix(id: U32, tick: U32) -> U32:
 # the lab shows.
 # ===========================================================================
 
+# A collector inside a cell is a leg too: the collector across cell (ci, cj),
+# from its parameter t0 to the next place a road meets it, the other
+# collector's crossing or the main road at the cell's side. dir 0 or 2 runs
+# the collector across u, the way v shrinks or grows; 1 or 3 the one across
+# v, the way u grows or shrinks: the compass of the lattice.
 type Leg is Data:
   Leg{i: U32, j: U32, dir: U32, length: U32}
+  Cut{ci: U32, cj: U32, dir: U32, t0: U32, length: U32}
 
 # The lattice names a road by its west or north crossing.
 def key_i(+i: U32, +dir: U32) -> U32:
@@ -81,11 +87,15 @@ def leg_length(l: Leg) -> U32:
   match l:
     case Leg{i, j, dir, length}:
       length
+    case Cut{ci, cj, dir, t0, length}:
+      length
 
 def class_on(l: Leg) -> W.Class:
   match l:
     case Leg{i, j, dir, length}:
       class_toward(i, j, dir)
+    case Cut{ci, cj, dir, t0, length}:
+      W.Collector{}
 
 def zone_on(l: Leg) -> M.Zone:
   W.zone_of(class_on(l))
@@ -124,20 +134,110 @@ def exit_at(+seed: U32, +i: U32, +j: U32, +dir: U32, +want: U32) -> U32:
   turn_to(dir, pick_exit(want, open_road(seed, i, j, l), open_road(seed, i, j, dir),
                          open_road(seed, i, j, r)))
 
-# The road the route takes at the far crossing, for the turn the driver chose.
-def leg_after(l: Leg, +seed: U32, +turn: U32) -> Leg:
+# ---- The collectors inside a cell ---------------------------------------------
+
+# Whether dir runs the way the parameter grows: east along u, south along v.
+def plus(+dir: U32) -> Bool:
+  Bool.or(U32.is_eq(dir, 1), U32.is_eq(dir, 2))
+
+# Where the collector across u (or v) of cell (i, j) sits, or 0 for none.
+def cut_on(+seed: U32, +i: U32, +j: U32, +across_u: Bool) -> U32:
+  +c = W.cell_cuts(seed, i, j)
+  Bool.pick(U32, across_u, W.cuts_u(c), W.cuts_v(c))
+
+# The next place a road meets the collector, from t0 the way dir runs: the
+# other collector at x, if there is one ahead, else the cell's side.
+def stop_ahead(+t0: U32, +x: U32, +up: Bool) -> U32:
+  +has = U32.is_ne(x, 0)
+  Bool.pick(U32, up, Bool.pick(U32, Bool.and(has, U32.is_lt(t0, x)), x, 65536),
+                     Bool.pick(U32, Bool.and(has, U32.is_lt(x, t0)), x, 0))
+
+def stop_behind(+t: U32, +x: U32, +up: Bool) -> U32:
+  +has = U32.is_ne(x, 0)
+  Bool.pick(U32, up, Bool.pick(U32, Bool.and(has, U32.is_lt(x, t)), x, 0),
+                     Bool.pick(U32, Bool.and(has, U32.is_lt(t, x)), x, 65536))
+
+def span(+a: U32, +b: U32) -> U32:
+  U32.sub(U32.max(a, b), U32.min(a, b))
+
+def cut_end(+seed: U32, +ci: U32, +cj: U32, +dir: U32, +t0: U32) -> U32:
+  stop_ahead(t0, cut_on(seed, ci, cj, Bool.not(U32.is_even(dir))), plus(dir))
+
+def cut_from(+seed: U32, +ci: U32, +cj: U32, +dir: U32, +t0: U32) -> Leg:
+  +eu = U32.is_even(dir)
+  +at = cut_on(seed, ci, cj, eu)
+  +f = W.frame_of(seed, ci, cj)
+  Cut{ci, cj, dir, t0, span(W.frame_to(f, eu, at, t0), W.frame_to(f, eu, at, cut_end(seed, ci, cj, dir, t0)))}
+
+# The collector leg running dir through parameter t, and the centimetres
+# into it there.
+def cut_through(+seed: U32, +ci: U32, +cj: U32, +dir: U32, +t: U32) -> Leg & U32:
+  +eu = U32.is_even(dir)
+  +at = cut_on(seed, ci, cj, eu)
+  +t0 = stop_behind(t, cut_on(seed, ci, cj, Bool.not(eu)), plus(dir))
+  +f = W.frame_of(seed, ci, cj)
+  (cut_from(seed, ci, cj, dir, t0), span(W.frame_to(f, eu, at, t0), W.frame_to(f, eu, at, t)))
+
+# The leg along the main road (ki, kj, east) that runs dir, and the
+# centimetres into it at `at` from the key crossing.
+def road_at(+seed: U32, +ki: U32, +kj: U32, +east: Bool, +at: U32, +dir: U32) -> Leg & U32:
+  +up = plus(dir)
+  +si = Bool.pick(U32, Bool.and(east, Bool.not(up)), U32.add(ki, 1), ki)
+  +sj = Bool.pick(U32, Bool.and(Bool.not(east), Bool.not(up)), U32.add(kj, 1), kj)
+  +l2 = leg_from(seed, si, sj, dir)
+  +len = leg_length(l2)
+  (l2, Bool.pick(U32, up, at, U32.sub(len, U32.min(at, len))))
+
+# At the cell's side the collector meets a main road: the car turns onto it,
+# or goes straight on into the next cell's collector where one lines up.
+def side_exit(straight: Bool, +seed: U32, +ci: U32, +cj: U32, +dir: U32, +at: U32, +e: U32) -> Leg & U32:
+  match straight:
+    case True{}:
+      (cut_from(seed, next_i(ci, dir), next_j(cj, dir), dir, Bool.pick(U32, plus(dir), 0, 65536)), 0)
+    case False{}:
+      +eu = U32.is_even(dir)
+      +ki = U32.add(ci, Bool.to_u32(U32.is_eq(dir, 1)))
+      +kj = U32.add(cj, Bool.to_u32(U32.is_eq(dir, 2)))
+      road_at(seed, ki, kj, eu, L.length_to(W.curve_of(seed, ki, kj, eu), at), turn_to(dir, e))
+
+# Where a collector leg ends. At the other collector every way is open; at the
+# cell's side both ways along the main road are, and straight on only into a
+# collector that lines up.
+def cut_exit(inner: Bool, +seed: U32, +ci: U32, +cj: U32, +dir: U32, +t1: U32, +turn: U32) -> Leg & U32:
+  match inner:
+    case True{}:
+      +at = cut_on(seed, ci, cj, U32.is_even(dir))
+      +d2 = turn_to(dir, pick_exit(turn, True{}, True{}, True{}))
+      (cut_from(seed, ci, cj, d2, Bool.pick(U32, U32.is_eq(d2, dir), t1, at)), 0)
+    case False{}:
+      +at = cut_on(seed, ci, cj, U32.is_even(dir))
+      +so = U32.is_eq(cut_on(seed, next_i(ci, dir), next_j(cj, dir), U32.is_even(dir)), at)
+      +e = pick_exit(turn, True{}, so, True{})
+      side_exit(U32.is_eq(e, 1), seed, ci, cj, dir, at, e)
+
+# The road the route takes at the end of a leg, for the turn the driver
+# chose, and the centimetres into it where the car comes onto it.
+def leg_after(l: Leg, +seed: U32, +turn: U32) -> Leg & U32:
   match l:
     case Leg{+i, +j, +dir, length}:
       +ni = next_i(i, dir)
       +nj = next_j(j, dir)
-      leg_from(seed, ni, nj, exit_at(seed, ni, nj, dir, turn))
+      (leg_from(seed, ni, nj, exit_at(seed, ni, nj, dir, turn)), 0)
+    case Cut{+ci, +cj, +dir, +t0, length}:
+      +t1 = cut_end(seed, ci, cj, dir, t0)
+      cut_exit(Bool.and(U32.is_ne(t1, 0), U32.is_ne(t1, 65536)), seed, ci, cj, dir, t1, turn)
+
+def onward(pair: Leg & U32, +over: U32) -> Leg & U32:
+  match pair:
+    case (l, s):
+      (l, U32.add(s, over))
 
 # Walking the route: `along` is centimetres into the leg. A tick covers under a
 # metre and a leg is hundreds, so one crossing is all a tick can pass.
 def crossed(over: Bool, +l: Leg, +along: U32, +seed: U32, +turn: U32) -> Leg & U32:
   match over:
     case True{}:
-      (leg_after(l, seed, turn), U32.sub(along, leg_length(l)))
+      onward(leg_after(l, seed, turn), U32.sub(along, leg_length(l)))
     case False{}:
       (l, along)
 
@@ -723,6 +823,30 @@ def zone_at(side: Bool, +leg: Leg) -> M.Zone:
     case False{}:
       zone_on(leg)
 
+# The mouths of the collectors inside the cells either side of a main road
+# are doors too. The collector of cell (ki, kj) starts on the road and runs
+# away from it; the other cell's ends on it.
+def gate_if(here: Bool, +at: U32, +left: Bool, +ci: U32, +cj: U32, +dir: U32, acc: List<&2, L.Door>) -> List<&2, L.Door>:
+  match here:
+    case False{}:
+      acc
+    case True{}:
+      L.Gate{at, left, ci, cj, dir} <> acc
+
+def gate_cm(+k: W.Curve, +t: U32, +length: U32, +fwd: Bool) -> U32:
+  +a = L.length_to(k, t)
+  Bool.pick(U32, fwd, a, U32.sub(length, U32.min(a, length)))
+
+def gates_of(+seed: U32, +ki: U32, +kj: U32, +east: Bool, +length: U32, +fwd: Bool, acc: List<&2, L.Door>) -> List<&2, L.Door>:
+  +own = Bool.pick(Bool, east, Bool.not(fwd), fwd)
+  +oi = Bool.pick(U32, east, ki, U32.sub(ki, 1))
+  +oj = Bool.pick(U32, east, U32.sub(kj, 1), kj)
+  +k = W.curve_of(seed, ki, kj, east)
+  +bt = cut_on(seed, ki, kj, east)
+  +at = cut_on(seed, oi, oj, east)
+  gate_if(U32.is_ne(bt, 0), gate_cm(k, bt, length, fwd), own, ki, kj, Bool.pick(U32, east, 2, 1),
+    gate_if(U32.is_ne(at, 0), gate_cm(k, at, length, fwd), Bool.not(own), oi, oj, Bool.pick(U32, east, 0, 3), acc))
+
 # The doors of a leg are made once, on its first tick.
 def doors_if(known: Bool, +seed: U32, l: Leg, ds: List<&2, L.Door>) -> List<&2, L.Door>:
   match known:
@@ -731,32 +855,40 @@ def doors_if(known: Bool, +seed: U32, l: Leg, ds: List<&2, L.Door>) -> List<&2, 
     case False{}:
       match l:
         case Leg{+i, +j, +dir, +length}:
-          L.doors_of(seed, key_i(i, dir), key_j(j, dir), eastward(dir), length,
-                     Bool.or(U32.is_eq(dir, 1), U32.is_eq(dir, 2)))
+          +ki = key_i(i, dir)
+          +kj = key_j(j, dir)
+          gates_of(seed, ki, kj, eastward(dir), length, plus(dir),
+            L.doors_of(seed, ki, kj, eastward(dir), length, plus(dir)))
+        case Cut{+ci, +cj, +dir, +t0, length}:
+          +eu = U32.is_even(dir)
+          L.cut_doors(seed, ci, cj, eu, cut_on(seed, ci, cj, eu), t0, cut_end(seed, ci, cj, dir, t0),
+                      Bool.or(U32.is_eq(dir, 0), U32.is_eq(dir, 1)))
 
 # The nearest door on the chosen side, ahead and within reach.
 def door_ahead(ds: List<&2, L.Door>, +left: Bool, +along: U32, +best: U32) -> U32:
   match ds:
     case Nil{}:
       best
-    case Con{d, r}:
-      match d:
-        case L.Door{+at, +dl, ci, cj, blk, p}:
-          +ok = Bool.and(Bool.and(Bool.not(Bool.xor(dl, left)), U32.is_lt(along, at)),
-                Bool.and(U32.is_le(U32.sub(at, along), door_reach_cm()), U32.is_lt(at, best)))
-          door_ahead(r, left, along, Bool.pick(U32, ok, at, best))
+    case Con{+d, r}:
+      +at = L.door_cm(d)
+      +ok = Bool.and(Bool.and(Bool.not(Bool.xor(L.door_left(d), left)), U32.is_lt(along, at)),
+            Bool.and(U32.is_le(U32.sub(at, along), door_reach_cm()), U32.is_lt(at, best)))
+      door_ahead(r, left, along, Bool.pick(U32, ok, at, best))
 
 def no_door_rec() -> L.Door:
   L.Door{0, False{}, 0, 0, 0, W.Pt{0, 0}}
 
 # Turning in at a door: the block's network is made now, and the car starts
-# on the way in from the mouth's kerb.
+# on the way in from the mouth's kerb. At a gate the car starts on the
+# collector, at its mouth.
 def enter_door(d: L.Door, +seed: U32, +over: U32, +leg: Leg) -> Pos:
   match d:
     case L.Door{at, dl, +ci, +cj, +blk, +p}:
       +net = L.net_at(seed, ci, cj, blk)
       +k = L.way_from(net, p, 0, L.none())
       Pos{leg, over, 1, Place{True{}, Nil{}, no_door(), False{}, Side{net, k, True{}, L.length_at(net, k)}}, False{}}
+    case L.Gate{at, dl, +ci, +cj, +dir}:
+      Pos{cut_from(seed, ci, cj, dir, Bool.pick(U32, plus(dir), 0, 65536)), over, 1, fresh_place(), True{}}
 
 def walk_main(pair: Leg & U32, +was: U32, ds: List<&2, L.Door>, +door: U32, +left: Bool, +turn: U32) -> Pos:
   match pair:
@@ -779,21 +911,33 @@ def main_move(+leg: Leg, +along: U32, +dist: U32, +seed: U32, +turn: U32, +ds: L
 # Coming out of a mouth onto a main road. The road's own direction at the
 # kerb is a right turn when it turns clockwise from the heading out of the
 # block. No signal turns left, the turn across no traffic.
+def came_out(pair: Leg & U32, +over: U32) -> Pos:
+  match pair:
+    case (l, a):
+      Pos{l, U32.add(a, over), 1, fresh_place(), True{}}
+
+# Whether the car runs the road the way its parameter grows: when it turns
+# right exactly when that way is a right turn from the heading out.
+def key_way(+h0: W.Pt, +h1: W.Pt, +arr: U32, +turn: U32) -> Bool:
+  +right_key = W.slt(0, W.turn_from(L.heading(h0, h1), arr))
+  Bool.not(Bool.xor(U32.is_eq(pick_exit(turn, True{}, False{}, True{}), 2), right_key))
+
 def turn_out(k: L.Kerb, +arr: U32, +over: U32, +seed: U32, +turn: U32, +leg: Leg) -> Pos:
   match k:
     case L.Inside{}:
       Pos{leg, over, 1, fresh_place(), True{}}
     case L.Kerb{+ki, +kj, +east, +t, +at}:
       +c = W.curve_of(seed, ki, kj, east)
-      +hk = L.heading(W.curve_at(c, U32.sub(t, U32.min(t, 512))), W.curve_at(c, U32.min(U32.add(t, 512), 65536)))
-      +right_key = W.slt(0, W.turn_from(hk, arr))
-      +key = Bool.not(Bool.xor(U32.is_eq(pick_exit(turn, True{}, False{}, True{}), 2), right_key))
-      +si = Bool.pick(U32, Bool.and(east, Bool.not(key)), U32.add(ki, 1), ki)
-      +sj = Bool.pick(U32, Bool.and(Bool.not(east), Bool.not(key)), U32.add(kj, 1), kj)
-      +dir = Bool.pick(U32, east, Bool.pick(U32, key, 1, 3), Bool.pick(U32, key, 2, 0))
-      +l2 = leg_from(seed, si, sj, dir)
-      +len = leg_length(l2)
-      Pos{l2, U32.add(Bool.pick(U32, key, at, U32.sub(len, U32.min(at, len))), over), 1, fresh_place(), True{}}
+      +key = key_way(W.curve_at(c, U32.sub(t, U32.min(t, 512))), W.curve_at(c, U32.min(U32.add(t, 512), 65536)), arr, turn)
+      came_out(road_at(seed, ki, kj, east, at, Bool.pick(U32, east, Bool.pick(U32, key, 1, 3), Bool.pick(U32, key, 2, 0))), over)
+    case L.OnCut{+ci, +cj, +u, +t}:
+      +f = W.frame_of(seed, ci, cj)
+      +x = cut_on(seed, ci, cj, u)
+      +ta = U32.sub(t, U32.min(t, 512))
+      +tb = U32.min(U32.add(t, 512), 65536)
+      +key = key_way(W.frame_at(f, Bool.pick(U32, u, x, ta), Bool.pick(U32, u, ta, x)),
+                     W.frame_at(f, Bool.pick(U32, u, x, tb), Bool.pick(U32, u, tb, x)), arr, turn)
+      came_out(cut_through(seed, ci, cj, Bool.pick(U32, u, Bool.pick(U32, key, 2, 0), Bool.pick(U32, key, 1, 3)), t), over)
 
 # At a junction: the turn chosen if its way is there, else straight on, left,
 # right, and back round the turning circle only at a dead end.
@@ -1151,16 +1295,29 @@ def header_of(+id: U32) -> String:
 type Piece is Data:
   Piece{id: U32, pts: List<&2, W.Pt>, length: U32, from: U32, to: U32}
 
+def cut_pts(fuel: Nat, +f: W.Frame, +eu: Bool, +at: U32, +t0: U32, +t1: U32, +k: U32, acc: List<&2, W.Pt>) -> List<&2, W.Pt>:
+  match fuel:
+    case 0n:
+      acc
+    case 1n+p:
+      +t = W.lerp(t0, t1, U32.mul(k, 2048))
+      cut_pts(p, f, eu, at, t0, t1, U32.sub(k, 1), W.frame_at(f, Bool.pick(U32, eu, at, t), Bool.pick(U32, eu, t, at)) <> acc)
+
 def leg_pts(+seed: U32, l: Leg) -> List<&2, W.Pt>:
   match l:
     case Leg{+i, +j, +dir, length}:
       +ps = W.road_pts(seed, key_i(i, dir), key_j(j, dir), eastward(dir))
       Bool.pick(List<&2, W.Pt>, Bool.or(U32.is_eq(dir, 0), U32.is_eq(dir, 3)), List.reverse(&2, W.Pt, ps), ps)
+    case Cut{+ci, +cj, +dir, +t0, length}:
+      +eu = U32.is_even(dir)
+      cut_pts(33n, W.frame_of(seed, ci, cj), eu, cut_on(seed, ci, cj, eu), t0, cut_end(seed, ci, cj, dir, t0), 32, Nil{})
 
 def leg_id(l: Leg) -> U32:
   match l:
     case Leg{i, j, dir, length}:
       W.hash4(1, i, j, dir, 7)
+    case Cut{ci, cj, dir, t0, length}:
+      W.hash5(5, ci, cj, dir, t0, 11)
 
 def leg_piece(+seed: U32, +l: Leg, +from: U32, +to: U32) -> Piece:
   Piece{leg_id(l), leg_pts(seed, l), leg_length(l), from, to}
@@ -1185,6 +1342,11 @@ def pos_piece(x: Pos, +seed: U32) -> Piece:
         case Place{known, doors, door, left, lok}:
           lok_piece(lok, seed, leg, along, leg_length(leg))
 
+def next_piece(pair: Leg & U32, +seed: U32) -> Piece:
+  match pair:
+    case (+l, +s):
+      leg_piece(seed, l, s, leg_length(l))
+
 def next_main(armed: Bool, +p: Place, +seed: U32, +leg: Leg, +turn: U32) -> Piece:
   match armed:
     case True{}:
@@ -1192,7 +1354,7 @@ def next_main(armed: Bool, +p: Place, +seed: U32, +leg: Leg, +turn: U32) -> Piec
         case Place{known, +doors, +door, +left, lok}:
           pos_piece(enter_door(L.door_at(doors, door, left, no_door_rec()), seed, 0, leg), seed)
     case False{}:
-      leg_piece(seed, leg_after(leg, seed, turn), 0, leg_length(leg_after(leg, seed, turn)))
+      next_piece(leg_after(leg, seed, turn), seed)
 
 def ahead_of(l: Lok, +p: Place, +seed: U32, +leg: Leg, +along: U32, +turn: U32) -> List<&2, Piece>:
   match l:
