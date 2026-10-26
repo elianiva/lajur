@@ -34,6 +34,8 @@ export const mats = {
   paint: mat("paint", 0xfbf8ef, { roughness: 0.8 }),
   yellow: mat("paint", 0xffc93c, { roughness: 0.8 }),
   concrete: mat("concrete", 0xd2cbbb, { roughness: 0.96 }),
+  // A kampung lane: cast concrete, darker than the sandy yards beside it.
+  lane: mat("lane", 0x9c968a, { roughness: 0.96 }),
   kerb: mat("concrete", 0xe9e1cc, { roughness: 0.95 }),
   walk: mat("walk", 0xeedfbf, { roughness: 0.95 }),
   paving: mat("walk", 0xd9b48c, { roughness: 0.95 }),

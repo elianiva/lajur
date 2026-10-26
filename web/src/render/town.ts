@@ -251,7 +251,7 @@ const COURT_GROUND: Record<string, THREE.Material> = {
 const ROAD_MATERIAL: Record<number, THREE.Material> = {
   [ART]: mats.asphalt,
   [COL]: mats.asphalt,
-  [LOK]: mats.concrete,
+  [LOK]: mats.lane,
 };
 
 /** The height of a road's surface, by class: a main road lies over a lokal street. */
