@@ -73,9 +73,6 @@ def open_road(+seed: U32, +i: U32, +j: U32, +dir: U32) -> Bool:
 def class_toward(+i: U32, +j: U32, +dir: U32) -> W.Class:
   W.road_class(key_i(i, dir), key_j(j, dir), eastward(dir))
 
-def arterial(+i: U32, +j: U32, +dir: U32) -> Bool:
-  U32.is_eq(W.road_code(key_i(i, dir), key_j(j, dir), eastward(dir)), 1)
-
 def leg_from(+seed: U32, +i: U32, +j: U32, +dir: U32) -> Leg:
   Leg{i, j, dir, W.road_length(seed, key_i(i, dir), key_j(j, dir), eastward(dir))}
 
@@ -84,10 +81,17 @@ def leg_length(l: Leg) -> U32:
     case Leg{i, j, dir, length}:
       length
 
-def zone_on(l: Leg) -> M.Zone:
+def class_on(l: Leg) -> W.Class:
   match l:
     case Leg{i, j, dir, length}:
-      W.zone_of(class_toward(i, j, dir))
+      class_toward(i, j, dir)
+
+def zone_on(l: Leg) -> M.Zone:
+  W.zone_of(class_on(l))
+
+# An arterial has two lanes each way; every other road one.
+def wide_on(+l: Leg) -> Bool:
+  U32.is_eq(W.class_code(class_on(l)), 1)
 
 # The lattice keeps its crossings at least this far apart.
 def shortest_leg() -> U32:
@@ -97,36 +101,27 @@ def shortest_leg() -> U32:
 def turn_to(+dir: U32, +turn: U32) -> U32:
   U32.mod(U32.add(dir, U32.add(turn, 3)), 4)
 
-# Whether an exit will do: its road is there, and it is an arterial unless
-# `any` road will do.
-def exit_fits(+any: Bool, +turn: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool,
-              +ro: Bool, +ra: Bool) -> Bool:
-  Bool.pick(Bool, U32.is_eq(turn, 0), Bool.and(lo, Bool.or(any, la)),
-  Bool.pick(Bool, U32.is_eq(turn, 1), Bool.and(so, Bool.or(any, sa)),
-  Bool.pick(Bool, U32.is_eq(turn, 2), Bool.and(ro, Bool.or(any, ra)), False{})))
+# Whether a turn's road is there. Back the way the car came is never chosen
+# here: it is what is left when nothing else is.
+def exit_open(+turn: U32, +lo: Bool, +so: Bool, +ro: Bool) -> Bool:
+  Bool.pick(Bool, U32.is_eq(turn, 0), lo,
+  Bool.pick(Bool, U32.is_eq(turn, 1), so,
+  Bool.pick(Bool, U32.is_eq(turn, 2), ro, False{})))
 
-def first_exit(+any: Bool, +want: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool,
-               +ro: Bool, +ra: Bool) -> U32:
-  Bool.pick(U32, exit_fits(any, want, lo, la, so, sa, ro, ra), want,
-  Bool.pick(U32, exit_fits(any, 1, lo, la, so, sa, ro, ra), 1,
-  Bool.pick(U32, exit_fits(any, 0, lo, la, so, sa, ro, ra), 0,
-  Bool.pick(U32, exit_fits(any, 2, lo, la, so, sa, ro, ra), 2, 3))))
-
-# Which way to leave a crossing. Each exit says whether its road is there and
-# whether it is an arterial. The turn asked for wins if it is an arterial,
-# then straight on, left and right along arterials; then the same order along
-# any road; back the way the car came only when nothing else is open.
-def pick_exit(+want: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool, +ro: Bool,
-              +ra: Bool) -> U32:
-  +main = first_exit(False{}, want, lo, la, so, sa, ro, ra)
-  Bool.pick(U32, U32.is_lt(main, 3), main, first_exit(True{}, want, lo, la, so, sa, ro, ra))
+# Which way to leave a crossing, given which of its roads are there: the turn
+# the driver chose if its road is there, else straight on, left, right, and
+# back the way the car came only when no other road leaves.
+def pick_exit(+want: U32, +lo: Bool, +so: Bool, +ro: Bool) -> U32:
+  Bool.pick(U32, exit_open(want, lo, so, ro), want,
+  Bool.pick(U32, so, 1,
+  Bool.pick(U32, lo, 0,
+  Bool.pick(U32, ro, 2, 3))))
 
 def exit_at(+seed: U32, +i: U32, +j: U32, +dir: U32, +want: U32) -> U32:
   +l = turn_to(dir, 0)
   +r = turn_to(dir, 2)
-  turn_to(dir, pick_exit(want, open_road(seed, i, j, l), arterial(i, j, l),
-                         open_road(seed, i, j, dir), arterial(i, j, dir),
-                         open_road(seed, i, j, r), arterial(i, j, r)))
+  turn_to(dir, pick_exit(want, open_road(seed, i, j, l), open_road(seed, i, j, dir),
+                         open_road(seed, i, j, r)))
 
 # The road the route takes at the far crossing, for the turn the driver chose.
 def leg_after(l: Leg, +seed: U32, +turn: U32) -> Leg:
@@ -155,19 +150,14 @@ def bit(+k: U32, +b: U32) -> Bool:
 def implies(a: Bool, b: Bool) -> Bool:
   Bool.or(Bool.not(a), b)
 
-def exit_holds(+want: U32, +lo: Bool, +la: Bool, +so: Bool, +sa: Bool, +ro: Bool,
-               +ra: Bool) -> Bool:
-  +r = pick_exit(want, lo, la, so, sa, ro, ra)
-  +taken_open = exit_fits(True{}, r, lo, la, so, sa, ro, ra)
-  +taken_main = exit_fits(False{}, r, lo, la, so, sa, ro, ra)
+def exit_holds(+want: U32, +lo: Bool, +so: Bool, +ro: Bool) -> Bool:
+  +r = pick_exit(want, lo, so, ro)
   +any_open = Bool.or(lo, Bool.or(so, ro))
-  +any_main = Bool.or(Bool.and(lo, la), Bool.or(Bool.and(so, sa), Bool.and(ro, ra)))
-  Bool.and(Bool.or(taken_open, Bool.not(any_open)),
-  Bool.and(implies(any_main, taken_main),
-           implies(exit_fits(False{}, want, lo, la, so, sa, ro, ra), U32.is_eq(r, want))))
+  Bool.and(Bool.or(exit_open(r, lo, so, ro), Bool.not(any_open)),
+           implies(exit_open(want, lo, so, ro), U32.is_eq(r, want)))
 
 def exit_holds_at(+k: U32) -> Bool:
-  exit_holds(U32.div(k, 64), bit(k, 1), bit(k, 2), bit(k, 4), bit(k, 8), bit(k, 16), bit(k, 32))
+  exit_holds(U32.div(k, 8), bit(k, 1), bit(k, 2), bit(k, 4))
 
 def exits_hold(fuel: Nat, +k: U32) -> Bool:
   match fuel:
@@ -177,7 +167,7 @@ def exits_hold(fuel: Nat, +k: U32) -> Bool:
       Bool.and(exit_holds_at(k), exits_hold(p, U32.add(k, 1)))
 
 def every_exit_holds() -> Bool:
-  exits_hold(256n, 0)
+  exits_hold(32n, 0)
 
 # ===========================================================================
 # Lanes and speed
@@ -191,6 +181,15 @@ def lane_offset(l: Lane) -> U32:
       160
     case Outer{}:
       480
+
+# A collector or a lokal street has one lane each way: the car keeps to the
+# kerb lane, whose centre is half the way to the kerb of a 4.5 m half road.
+def lane_offset_on(wide: Bool, l: Lane) -> U32:
+  match wide:
+    case True{}:
+      lane_offset(l)
+    case False{}:
+      225
 
 def lane_at(i: U32) -> Lane:
   match i:
@@ -382,10 +381,10 @@ def arriving(pair: U32 & Lane) -> Lane:
 
 # A press starts a change only when the car is not already in one, so a second
 # tap cannot skip the manoeuvre the first one began.
-def player_next(p: Player, +held: Controls, +input: Controls) -> Player:
+def player_next(p: Player, +held: Controls, +input: Controls, +wide: Bool) -> Player:
   match p:
     case Player{+lane, speed, signal, lamp, +moving, target}:
-      +idle = U32.is_eq(moving, 0)
+      +idle = Bool.and(U32.is_eq(moving, 0), wide)
       +leftward = Bool.and(pressed(held_left(input), held_left(held)), idle)
       +rightward = Bool.and(Bool.and(pressed(held_right(input), held_right(held)),
                                      Bool.not(leftward)), idle)
@@ -397,8 +396,20 @@ def player_next(p: Player, +held: Controls, +input: Controls) -> Player:
       +lamp2 = lamp_after(lamp, moved)
       +fresh = signal_after(leftward, Left{}, signal_after(rightward, Right{}, signal))
       +signalled = still_on(U32.is_eq(lamp2, 0), fresh)
-      Player{arriving(travel(moving2, lane, target2)), speed2, signalled, lamp2,
-             after_travel(travel(moving2, lane, target2)), target2}
+      # A one-lane road has no lane to change to: the car is in the kerb lane.
+      Player{Bool.pick(Lane, wide, arriving(travel(moving2, lane, target2)), Outer{}), speed2,
+             signalled, lamp2, Bool.pick(U32, wide, after_travel(travel(moving2, lane, target2)), 0),
+             Bool.pick(Lane, wide, target2, Outer{})}
+
+# The player on a one-lane road: in the kerb lane, with no change under way.
+def keep_lane(wide: Bool, p: Player) -> Player:
+  match wide:
+    case True{}:
+      p
+    case False{}:
+      match p:
+        case Player{lane, speed, signal, lamp, moving, target}:
+          Player{Outer{}, speed, signal, lamp, 0, Outer{}}
 
 def cruising(speed: U32) -> Player:
   Player{Inner{}, speed, Off{}, 0, 0, Inner{}}
@@ -511,6 +522,31 @@ def drift_oncoming(cars: List<&2, Car>, +travel: U32, +tick: U32) -> List<&2, Ca
       Nil{}
     case h <> t:
       advance_oncoming(h, travel, tick) <> drift_oncoming(t, travel, tick)
+
+def respawn_all(cars: List<&2, Car>, +tick: U32) -> List<&2, Car>:
+  match cars:
+    case Nil{}:
+      Nil{}
+    case Car{+id, lane, gap, speed, body, colour} <> t:
+      Car{id, respawn_lane(id, tick), respawn_gap(id, tick), respawn_speed(id, tick),
+          respawn_body(id, tick), respawn_colour(id, tick)} <> respawn_all(t, tick)
+
+# On a one-lane road every car keeps to the kerb lane.
+def keep_left(+wide: Bool, cars: List<&2, Car>) -> List<&2, Car>:
+  match cars:
+    case Nil{}:
+      Nil{}
+    case Car{id, lane, gap, speed, body, colour} <> t:
+      Car{id, Bool.pick(Lane, wide, lane, Outer{}), gap, speed, body, colour} <> keep_left(wide, t)
+
+# Past a crossing the cars ahead are the new road's: each comes back ahead,
+# at least seventy metres off, with a fresh lane, body and colour.
+def refresh(fresh: Bool, cars: List<&2, Car>, +tick: U32) -> List<&2, Car>:
+  match fresh:
+    case True{}:
+      respawn_all(cars, tick)
+    case False{}:
+      cars
 
 # A car is in the way when it shares the lane and its nose is inside the
 # player's 4.2 m envelope plus half its own length.
@@ -681,20 +717,28 @@ def turn_after(+near: Bool, +held: Controls, +input: Controls, +turn: U32) -> U3
 def moved(+leg: Leg, along: U32, +dist: U32, +seed: U32, +turn: U32) -> Leg & U32:
   walked(leg, U32.add(along, dist), seed, turn)
 
-# The zone is the class of the road the car is on, so the ceiling changes
-# where the road does. A crossing passed (the car is nearer the start of its
-# leg than it was) spends the turn.
-def assemble(pos: Leg & U32, tick: U32, player: Player, traffic: List<&2, Car>,
-             oncoming: List<&2, Car>, distance: U32,
-             charges: List<&2, U32>, status: Status, held: Controls,
-             residual: U32, +was: U32, +turn: U32, seed: U32) -> World:
+# The car has moved to `pos`. The zone is the class of the road it is on, so
+# the ceiling changes where the road does. Past a crossing (the car is nearer
+# the start of its leg than it was) the traffic is the new road's and the turn
+# is spent. On a one-lane road every car keeps to the kerb lane.
+def settle(pos: Leg & U32, +tick: U32, player: Player, traffic: List<&2, Car>,
+           oncoming: List<&2, Car>, +dist: U32, distance: U32, +input: Controls,
+           residual: U32, +was: U32, +turn: U32, seed: U32) -> World:
   match pos:
     case (+leg, +along):
-      World{tick, player, traffic, oncoming, distance, zone_on(leg), charges, status,
-            held, residual, leg, along, Bool.pick(U32, U32.is_lt(along, was), 1, turn), seed}
+      +passed = U32.is_lt(along, was)
+      +wide = wide_on(leg)
+      +zone = zone_on(leg)
+      +kept = keep_lane(wide, player)
+      +traffic2 = keep_left(wide, refresh(passed, drift(traffic, dist, tick), tick))
+      +oncoming2 = keep_left(wide, refresh(passed, drift_oncoming(oncoming, dist, tick), tick))
+      +hit = blocked(traffic2, lane_of(kept))
+      World{tick, kept, traffic2, oncoming2, U32.add(distance, dist), zone,
+            spread(R.charges(scenario_among(kept, traffic2, zone, hit))), status_after(hit),
+            input, residual, leg, along, Bool.pick(U32, passed, 1, turn), seed}
 
 def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
-         oncoming: List<&2, Car>, distance: U32, +zone: M.Zone,
+         oncoming: List<&2, Car>, distance: U32, zone: M.Zone,
          charges: List<&2, U32>, +held: Controls, residual: U32,
          +leg: Leg, +along: U32, turn: U32, +seed: U32, +input: Controls) -> World:
   match frozen:
@@ -702,16 +746,11 @@ def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
       World{tick, player, traffic, oncoming, distance, zone, charges, Crashed{},
             held, residual, leg, along, turn, seed}
     case False{}:
-      +player2 = player_next(player, held, input)
+      +player2 = player_next(player, held, input, wide_on(leg))
       +dist = roll(speed_of(player2))
-      +traffic2 = drift(traffic, dist, U32.add(tick, 1))
-      +oncoming2 = drift_oncoming(oncoming, dist, U32.add(tick, 1))
-      +hit = blocked(traffic2, lane_of(player2))
       +turn2 = turn_after(near_crossing(leg, along), held, input, turn)
-      assemble(moved(leg, along, dist, seed, turn2), U32.add(tick, 1), player2, traffic2,
-               oncoming2, U32.add(distance, dist),
-               spread(R.charges(scenario_among(player2, traffic2, zone, hit))), status_after(hit),
-               input, residual, along, turn2, seed)
+      settle(moved(leg, along, dist, seed, turn2), U32.add(tick, 1), player2, traffic,
+             oncoming, dist, distance, input, residual, along, turn2, seed)
 
 def tick(w: World, input: Controls) -> World:
   match w:
@@ -795,8 +834,14 @@ def lane_move(w: World) -> U32:
 def lane_target(w: World) -> Lane:
   target_of(player_of(w))
 
-def lane_centre(w: World) -> U32:
-  lane_offset(lane_of(player_of(w)))
+def wide(w: World) -> Bool:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, seed}:
+      wide_on(leg)
+
+def lane_centre(+w: World) -> U32:
+  lane_offset_on(wide(w), lane_of(player_of(w)))
 
 def traffic_of(w: World) -> List<&2, Car>:
   match w:

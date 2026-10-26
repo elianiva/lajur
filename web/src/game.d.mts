@@ -69,6 +69,8 @@ export interface Game {
   advance(world: World, ms: number, input: Controls): World;
   restart(world: World): World;
   lane_offset(lane: Lane): number;
+  lane_offset_on(wide: boolean, lane: Lane): number;
+  wide(world: World): boolean;
   body_length(body: Body): number;
   speed_kmh(world: World): number;
   limit_kmh(world: World): number;

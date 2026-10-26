@@ -10,6 +10,7 @@
 import Base
 import ./game.bend as G
 import ./town.bend as T
+import ./world.bend as W
 import ../../bend/model.bend as M
 import ../../bend/rules.bend as R
 
@@ -17,10 +18,10 @@ import ../../bend/rules.bend as R
 # The route: the world's own roads, one leg at a time
 # ===========================================================================
 
-# At a crossing the route takes a road that is there, stays on the arterials
-# while one goes on, and takes the turn the driver signalled whenever that
-# turn is an arterial; it turns back only when no other road leaves. The law walks every
-# exit a crossing can offer, open or closed, arterial or not, for every turn.
+# At a crossing the route takes a road that is there, and takes the turn the
+# driver signalled whenever that road is there; it turns back only when no
+# other road leaves. The law walks every exit a crossing can offer, open or
+# closed, for every turn.
 law the_route_takes_only_roads_that_are_there:
   { G.every_exit_holds() == True{} : Bool }
 
@@ -58,10 +59,26 @@ def only_the_last_hundred_metres_choose_a_turn():
 
 # The first road of every drive is there, and it is an arterial.
 law the_drive_starts_on_an_arterial_that_is_there:
-  { Bool.and(G.open_road(G.start_seed(), 1, 0, 1), G.arterial(1, 0, 1)) == True{} : Bool }
+  { Bool.and(G.open_road(G.start_seed(), 1, 0, 1), U32.is_eq(W.class_code(G.class_on(G.start_leg())), 1)) == True{} : Bool }
 
 def the_drive_starts_on_an_arterial_that_is_there():
   {==}
+
+# A collector or a lokal street has one lane each way. On one, a tap of the
+# indicator starts no lane change, and the car keeps to the kerb lane from
+# any lane it arrives in.
+law a_one_lane_road_keeps_the_car_in_the_kerb_lane:
+  for l: G.Lane
+  { G.lane_of(G.player_next(G.Player{l, 1000, G.Off{}, 0, 0, l},
+      G.Controls{False{}, False{}, False{}, False{}},
+      G.Controls{False{}, True{}, False{}, False{}}, False{})) == G.Outer{} : G.Lane }
+
+def a_one_lane_road_keeps_the_car_in_the_kerb_lane(l):
+  match l:
+    case G.Inner{}:
+      {==}
+    case G.Outer{}:
+      {==}
 
 # ===========================================================================
 # Lanes: two a side, and the car stays inside them

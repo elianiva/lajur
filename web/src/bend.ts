@@ -65,9 +65,10 @@ export function fine(id: number): number {
 }
 
 // The model measures lanes from the centre line; the player keeps the left
-// half of the road, so their lanes sit at negative x.
-export function laneX(lane: Lane): number {
-  return -game.lane_offset(lane) / 100;
+// half of the road, so their lanes sit at negative x. A collector has one lane
+// each way, so its lane centre differs from an arterial's.
+export function laneX(lane: Lane, wide = true): number {
+  return -game.lane_offset_on(wide, lane) / 100;
 }
 
 /** One tick of the lane change, in the model's own count. */
@@ -85,18 +86,15 @@ export function bodyLength(body: Body["$"]): number {
   return game.body_length({ $: body }) / 100;
 }
 
-// The oncoming carriageway sits across the median, so its lanes are offset by
-// the median and two more lanes; the model keeps them in the same Lane enum.
-const ONCOMING: Record<string, number> = { Inner: 1.6, Outer: 4.8 };
-
-function cars(list: World["traffic"], oncoming = false): CarView[] {
+// Oncoming cars keep the other half of the road, in the same Lane enum.
+function cars(list: World["traffic"], wide: boolean, oncoming = false): CarView[] {
   const out: CarView[] = [];
   let node = list;
   while (node.$ === "Con") {
     const car: Car = node.head;
     out.push({
       id: car.id,
-      lateral: oncoming ? (ONCOMING[car.lane.$] ?? 12.6) : laneX(car.lane),
+      lateral: oncoming ? -laneX(car.lane, wide) : laneX(car.lane, wide),
       z: car.gap / 100,
       speed: car.speed,
       body: car.body.$,
@@ -123,8 +121,9 @@ export function snapshot(world: World): Snapshot {
   // the lane it left and the one it is taking, by the model's own arithmetic.
   const moving = game.lane_move(world);
   const target = game.lane_target(world);
-  const from = laneX(world.player.lane);
-  const to = laneX(target);
+  const wide = game.wide(world);
+  const from = laneX(world.player.lane, wide);
+  const to = laneX(target, wide);
   const done = 1 - Math.min(moving, game.lane_change_ticks()) / game.lane_change_ticks();
   return {
     x: from + (to - from) * done,
@@ -141,7 +140,7 @@ export function snapshot(world: World): Snapshot {
     crashed: game.crashed(world),
     signal: game.signal_state(world).$,
     charges: ids(world.charges),
-    traffic: cars(world.traffic),
-    oncoming: cars(world.oncoming, true),
+    traffic: cars(world.traffic, wide),
+    oncoming: cars(world.oncoming, wide, true),
   };
 }

@@ -88,10 +88,10 @@ guarantees.
 
 `web/` is where the model is felt. `index.html` drives through the generated
 world: an endless lattice of arterials and collectors, cut into cells of
-kampung, ruko rows, sawah and civic courts. The car follows the arterials,
-undivided with two lanes each way. In the last hundred metres before a
-crossing, the indicator chooses the road: left, right, or straight on with no
-signal.
+kampung, ruko rows, sawah and civic courts. The car drives the main roads:
+arterials, undivided with two lanes each way, and collectors with one lane
+each way. In the last hundred metres before a crossing, the indicator chooses
+the road: left, right, or straight on with no signal.
 
 Every cell is a function of (seed, i, j), so a worker makes the cells near the
 car and the crossing ahead before the car gets there. The renderer bakes each
