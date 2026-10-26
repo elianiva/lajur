@@ -49,6 +49,7 @@ export function buildLogic(): Built {
       ["game.bend", "src/game.mjs"],
       ["town.bend", "src/town.mjs"],
       ["world.bend", "src/world.mjs"],
+      ["parcels.bend", "src/parcels.mjs"],
     ]) {
       execFileSync(findBend(), [`${BEND_DIR}/${from}`, "-o", to], {
         stdio: "pipe",

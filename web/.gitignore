@@ -27,6 +27,7 @@ dist-ssr
 src/game.mjs
 src/town.mjs
 src/world.mjs
+src/parcels.mjs
 
 # Orb state (portal manifests) written by `amp orb service`.
 .amp/

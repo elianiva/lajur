@@ -14,12 +14,13 @@ function lajurLogic(): Plugin {
       this.addWatchFile("logic/game.bend");
       this.addWatchFile("logic/town.bend");
       this.addWatchFile("logic/world.bend");
+      this.addWatchFile("logic/parcels.bend");
       this.addWatchFile("logic/PROOF.bend");
     },
 
     // Editing the model rebuilds it rather than reloading a stale copy.
     handleHotUpdate({ file, server }) {
-      const model = /logic\/(game|town|world)\.bend$/.exec(file);
+      const model = /logic\/(game|town|world|parcels)\.bend$/.exec(file);
       if (!model) return;
       const built = buildLogic();
       if (!built.ok) {
@@ -27,8 +28,11 @@ function lajurLogic(): Plugin {
         console.error(built.output);
         return;
       }
-      const module = server.moduleGraph.getModuleById(resolve(`src/${model[1]}.mjs`));
-      if (module) server.moduleGraph.invalidateModule(module);
+      // The parcels import the world, so a change to the world reaches both.
+      for (const name of model[1] === "world" ? ["world", "parcels"] : [model[1]]) {
+        const module = server.moduleGraph.getModuleById(resolve(`src/${name}.mjs`));
+        if (module) server.moduleGraph.invalidateModule(module);
+      }
       server.ws.send({ type: "full-reload" });
       return [];
     },
