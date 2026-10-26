@@ -1,5 +1,6 @@
 import { along, cell, segCurve, segExists, segKind, type Cell, type Line } from "./cells.ts";
-import { parcels, type Plan } from "./parcels.ts";
+import { framePoly, parcels, type Plan } from "./parcels.ts";
+import type { Pt } from "./cells.ts";
 
 /**
  * A window of cells, i0 ≤ i < i0 + cols and j0 ≤ j < j0 + rows, with their
@@ -52,4 +53,33 @@ export function extent(w: World): [number, number, number, number] {
         z1 = Math.max(z1, p.z);
       }
   return [x0, z0, x1, z1];
+}
+
+/**
+ * What a window draws, as plain data: no frames, so a worker can make it and
+ * post it. A river cell is two blocks, one each side of the water; its bank
+ * is the strip of the frame between them.
+ */
+export interface Drawn {
+  seed: number;
+  plans: Plan[];
+  lines: Line[];
+  banks: Pt[][];
+}
+
+export function drawn(w: World): Drawn {
+  const banks: Pt[][] = [];
+  w.cells.forEach((c, k) => {
+    const blocks = w.plans[k]!.blocks;
+    for (const south of blocks)
+      for (const north of blocks)
+        if (
+          south.b.u0 === north.b.u0 &&
+          !south.b.roads.N &&
+          !north.b.roads.S &&
+          south.b.v1 < north.b.v0
+        )
+          banks.push(framePoly(c.frame, south.b.u0, south.b.u1, south.b.v1, north.b.v0, 12));
+  });
+  return { seed: w.seed, plans: w.plans, lines: w.lines, banks };
 }
