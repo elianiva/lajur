@@ -44,9 +44,6 @@ def local(+o: W.Pt, +p: W.Pt) -> V:
 def roll(+h: U32) -> F32:
   (f32(U32.shrn(h, 8n)) / 16777216.0 : F32)
 
-def r1(+k: U32, +a: U32) -> F32:
-  roll(W.mix(k, a))
-
 def r2(+k: U32, +a: U32, +b: U32) -> F32:
   roll(W.mix(W.mix(k, a), b))
 
@@ -112,27 +109,39 @@ def point_seg2(+p: V, +a: V, +b: V) -> F32:
               +ez = (pz - az - t * dz : F32)
               (ex * ex + ez * ez : F32)
 
-# The distance from p to the segment ab.
-def point_seg(+p: V, +a: V, +b: V) -> F32:
-  F32.sqrt(point_seg2(p, a, b))
-
 def cross3(+o: V, +a: V, +b: V) -> F32:
   ((vx(a) - vx(o)) * (vz(b) - vz(o)) - (vz(a) - vz(o)) * (vx(b) - vx(o)) : F32)
 
-# The distance between two segments; 0 where they cross.
-def seg_seg(+a: V, +b: V, +c: V, +d: V) -> F32:
-  +hit = Bool.and((cross3(c, d, a) * cross3(c, d, b) < 0.0 : F32), (cross3(a, b, c) * cross3(a, b, d) < 0.0 : F32))
-  Bool.pick(F32, hit, 0.0, F32.min(F32.min(point_seg(a, c, d), point_seg(b, c, d)), F32.min(point_seg(c, a, b), point_seg(d, a, b))))
+# The squared distance between two segments; 0 where they cross.
+def seg_far(hit: Bool, +a: V, +b: V, +c: V, +d: V) -> F32:
+  match hit:
+    case True{}:
+      0.0
+    case False{}:
+      F32.min(F32.min(point_seg2(a, c, d), point_seg2(b, c, d)), F32.min(point_seg2(c, a, b), point_seg2(d, a, b)))
+
+def seg_seg2(+a: V, +b: V, +c: V, +d: V) -> F32:
+  seg_far(Bool.and((cross3(c, d, a) * cross3(c, d, b) < 0.0 : F32), (cross3(a, b, c) * cross3(a, b, d) < 0.0 : F32)), a, b, c, d)
 
 def edges_seg(ps: List<&2, V>, +prev: V, +a: V, +b: V, +best: F32) -> F32:
   match ps:
     case Nil{}:
       best
     case Con{+q, r}:
-      edges_seg(r, q, a, b, F32.min(best, seg_seg(a, b, prev, q)))
+      edges_seg(r, q, a, b, F32.min(best, seg_seg2(a, b, prev, q)))
+
+# The distance from a polygon to a segment; 0 where the segment starts inside.
+# Each candidate is squared and the root taken once, which picks the same
+# value as the least of the roots.
+def poly_far(inside: Bool, +poly: List<&2, V>, +a: V, +b: V) -> F32:
+  match inside:
+    case True{}:
+      0.0
+    case False{}:
+      F32.sqrt(edges_seg(poly, last_v(poly, a), a, b, 1000000000000.0))
 
 def poly_seg(+poly: List<&2, V>, +a: V, +b: V) -> F32:
-  Bool.pick(F32, in_poly(a, poly), 0.0, edges_seg(poly, last_v(poly, a), a, b, 1000000.0))
+  poly_far(in_poly(a, poly), poly, a, b)
 
 type Span is Data:
   Span{lo: F32, hi: F32}
@@ -198,6 +207,27 @@ def box_has(+b: Box, +p: V) -> Bool:
     case Box{x0, z0, x1, z1}:
       Bool.and(Bool.and((vx(p) >= x0 : F32), (vx(p) <= x1 : F32)), Bool.and((vz(p) >= z0 : F32), (vz(p) <= z1 : F32)))
 
+# The same tests on a box grown by d, without building the grown box.
+def box_near(+b: Box, +p: V, +d: F32) -> Bool:
+  match b:
+    case Box{x0, z0, x1, z1}:
+      Bool.and(Bool.and((vx(p) >= x0 - d : F32), (vx(p) <= x1 + d : F32)), Bool.and((vz(p) >= z0 - d : F32), (vz(p) <= z1 + d : F32)))
+
+def boxes_near(+a: Box, +b: Box, +d: F32) -> Bool:
+  match a:
+    case Box{ax0, az0, ax1, az1}:
+      match b:
+        case Box{bx0, bz0, bx1, bz1}:
+          Bool.and(Bool.and((ax0 - d <= bx1 : F32), (bx0 <= ax1 + d : F32)), Bool.and((az0 - d <= bz1 : F32), (bz0 <= az1 + d : F32)))
+
+# The squared distance from p to a box: no more than to anything inside it.
+def box_gap2(+b: Box, +p: V) -> F32:
+  match b:
+    case Box{x0, z0, x1, z1}:
+      +dx = F32.max(F32.max((x0 - vx(p) : F32), (vx(p) - x1 : F32)), 0.0)
+      +dz = F32.max(F32.max((z0 - vz(p) : F32), (vz(p) - z1 : F32)), 0.0)
+      (dx * dx + dz * dz : F32)
+
 def boxes_meet(+a: Box, +b: Box) -> Bool:
   match a:
     case Box{ax0, az0, ax1, az1}:
@@ -206,16 +236,16 @@ def boxes_meet(+a: Box, +b: Box) -> Bool:
           Bool.and(Bool.and((ax0 <= bx1 : F32), (bx0 <= ax1 : F32)), Bool.and((az0 <= bz1 : F32), (bz0 <= az1 : F32)))
 
 # ===========================================================================
-# What is near: 24 m buckets over the cell, as a persistent binary tree
+# What is near: 48 m buckets over the cell, as a persistent binary tree
 #
-# 64 by 64 buckets from 320 m before the cell's first corner; anything past
+# 32 by 32 buckets from 320 m before the cell's first corner; anything past
 # the edge falls in the edge bucket, so a query there only looks at more.
 # An item sits in every bucket its box touches; a query reads every bucket
 # its box touches and may see an item twice, which no test minds.
 # ===========================================================================
 
 type Item is Data:
-  ISeg{a: V, b: V, kind: U32}
+  ISeg{a: V, b: V, kind: U32, sb: Box}
   ISol{what: U32, pts: List<&2, V>, box: Box}
 
 type Tr is Data:
@@ -256,10 +286,10 @@ def tr_get(fuel: Nat, +t: Tr, +k: U32, +mask: U32) -> List<&2, Item>:
       tr_get(p, Bool.pick(Tr, U32.is_ne(U32.and(k, mask), 0), r, l), k, U32.shrn(mask, 1n))
 
 def bucket(+x: F32) -> U32:
-  floor_u(F32.min(((x + 320.0) / 24.0 : F32), 63.0))
+  floor_u(F32.min(((x + 320.0) / 48.0 : F32), 31.0))
 
 def key(+bx: U32, +bz: U32) -> U32:
-  U32.add(U32.mul(bz, 64), bx)
+  U32.add(U32.mul(bz, 32), bx)
 
 type Range is Data:
   Range{bx0: U32, bz0: U32, nx: U32, nz: U32}
@@ -277,7 +307,7 @@ def add_cols(fuel: Nat, t: Tr, +bx: U32, +bz: U32, +it: Item) -> Tr:
     case 0n:
       t
     case 1n+p:
-      add_cols(p, tr_add(12n, t, key(bx, bz), 2048, it), U32.add(bx, 1), bz, it)
+      add_cols(p, tr_add(10n, t, key(bx, bz), 512, it), U32.add(bx, 1), bz, it)
 
 def add_rows(fuel: Nat, t: Tr, +bx0: U32, +nx: Nat, +bz: U32, +it: Item) -> Tr:
   match fuel:
@@ -295,26 +325,26 @@ def tr_put(t: Tr, +b: Box, +it: Item) -> Tr:
   put_range(range_of(b), t, it)
 
 # Everything in the buckets of a box.
-def get_cols(fuel: Nat, +t: Tr, +bx: U32, +bz: U32, acc: List<&2, Item>) -> List<&2, Item>:
+def get_cols(fuel: Nat, +t: Tr, +bx: U32, +bz: U32, acc: List<&2, List<&2, Item>>) -> List<&2, List<&2, Item>>:
   match fuel:
     case 0n:
       acc
     case 1n+p:
-      get_cols(p, t, U32.add(bx, 1), bz, List.append(&2, Item, tr_get(12n, t, key(bx, bz), 2048), acc))
+      get_cols(p, t, U32.add(bx, 1), bz, tr_get(10n, t, key(bx, bz), 512) <> acc)
 
-def get_rows(fuel: Nat, +t: Tr, +bx0: U32, +nx: Nat, +bz: U32, acc: List<&2, Item>) -> List<&2, Item>:
+def get_rows(fuel: Nat, +t: Tr, +bx0: U32, +nx: Nat, +bz: U32, acc: List<&2, List<&2, Item>>) -> List<&2, List<&2, Item>>:
   match fuel:
     case 0n:
       acc
     case 1n+p:
       get_rows(p, t, bx0, nx, U32.add(bz, 1), get_cols(nx, t, bx0, bz, acc))
 
-def range_near(r: Range, +t: Tr) -> List<&2, Item>:
+def range_near(r: Range, +t: Tr) -> List<&2, List<&2, Item>>:
   match r:
     case Range{bx0, bz0, nx, nz}:
       get_rows(U32.to_nat(nz), t, bx0, U32.to_nat(nx), bz0, Nil{})
 
-def near(+t: Tr, +b: Box) -> List<&2, Item>:
+def near(+t: Tr, +b: Box) -> List<&2, List<&2, Item>>:
   range_near(range_of(b), t)
 
 # ===========================================================================
@@ -335,15 +365,134 @@ def front(+k: U32) -> F32:
 type Size is Data:
   Size{w0: F32, w1: F32, d0: F32, d1: F32, gap: F32}
 
+def size_17(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{32.0, 40.0, 26.0, 32.0, 3.0}
+    case False{}:
+      Size{8.0, 11.0, 10.0, 14.0, 1.5}
+
+def size_16(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{20.0, 26.0, 16.0, 20.0, 3.0}
+    case False{}:
+      size_17(U32.is_eq(u, 17), u)
+
+def size_15(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{40.0, 50.0, 30.0, 38.0, 3.0}
+    case False{}:
+      size_16(U32.is_eq(u, 16), u)
+
+def size_14(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{16.0, 20.0, 18.0, 22.0, 3.0}
+    case False{}:
+      size_15(U32.is_eq(u, 15), u)
+
+def size_13(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{18.0, 24.0, 24.0, 30.0, 3.0}
+    case False{}:
+      size_14(U32.is_eq(u, 14), u)
+
+def size_12(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{15.0, 20.0, 15.0, 20.0, 3.0}
+    case False{}:
+      size_13(U32.is_eq(u, 13), u)
+
+def size_11(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{55.0, 70.0, 40.0, 50.0, 5.0}
+    case False{}:
+      size_12(U32.is_eq(u, 12), u)
+
+def size_10(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{30.0, 40.0, 12.0, 14.0, 5.0}
+    case False{}:
+      size_11(U32.is_eq(u, 11), u)
+
+def size_9(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{22.0, 26.0, 22.0, 26.0, 5.0}
+    case False{}:
+      size_10(U32.is_eq(u, 10), u)
+
+def size_8(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{22.0, 28.0, 20.0, 26.0, 4.0}
+    case False{}:
+      size_9(U32.is_eq(u, 9), u)
+
+def size_7(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{25.0, 35.0, 20.0, 28.0, 3.0}
+    case False{}:
+      size_8(U32.is_eq(u, 8), u)
+
+def size_6(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{9.0, 12.0, 10.0, 14.0, 2.0}
+    case False{}:
+      size_7(U32.is_eq(u, 7), u)
+
+def size_5(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{13.0, 16.0, 16.0, 20.0, 3.0}
+    case False{}:
+      size_6(U32.is_eq(u, 6), u)
+
+def size_4(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{4.5, 6.0, 13.0, 16.0, 0.0}
+    case False{}:
+      size_5(U32.is_eq(u, 5), u)
+
+def size_3(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{5.0, 7.0, 5.0, 7.0, 1.0}
+    case False{}:
+      size_4(U32.is_eq(u, 4), u)
+
+def size_2(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{10.0, 13.0, 12.0, 15.0, 1.5}
+    case False{}:
+      size_3(U32.is_eq(u, 3), u)
+
+def size_1(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{14.0, 18.0, 8.0, 10.0, 1.0}
+    case False{}:
+      size_2(U32.is_eq(u, 2), u)
+
+def size_0(here: Bool, +u: U32) -> Size:
+  match here:
+    case True{}:
+      Size{8.0, 11.0, 10.0, 14.0, 1.5}
+    case False{}:
+      size_1(U32.is_eq(u, 1), u)
+
 def size_of(+u: U32) -> Size:
-  Maybe.default(&2, Size, List.get(&2, Size, [
-    Size{8.0, 11.0, 10.0, 14.0, 1.5}, Size{14.0, 18.0, 8.0, 10.0, 1.0}, Size{10.0, 13.0, 12.0, 15.0, 1.5},
-    Size{5.0, 7.0, 5.0, 7.0, 1.0}, Size{4.5, 6.0, 13.0, 16.0, 0.0}, Size{13.0, 16.0, 16.0, 20.0, 3.0},
-    Size{9.0, 12.0, 10.0, 14.0, 2.0}, Size{25.0, 35.0, 20.0, 28.0, 3.0}, Size{22.0, 28.0, 20.0, 26.0, 4.0},
-    Size{22.0, 26.0, 22.0, 26.0, 5.0}, Size{30.0, 40.0, 12.0, 14.0, 5.0}, Size{55.0, 70.0, 40.0, 50.0, 5.0},
-    Size{15.0, 20.0, 15.0, 20.0, 3.0}, Size{18.0, 24.0, 24.0, 30.0, 3.0}, Size{16.0, 20.0, 18.0, 22.0, 3.0},
-    Size{40.0, 50.0, 30.0, 38.0, 3.0}, Size{20.0, 26.0, 16.0, 20.0, 3.0}, Size{32.0, 40.0, 26.0, 32.0, 3.0}], U32.to_nat(u)),
-    Size{8.0, 11.0, 10.0, 14.0, 1.5})
+  size_0(U32.is_eq(u, 0), u)
 
 def size_w(+s: Size, +h: F32) -> F32:
   match s:
@@ -375,16 +524,37 @@ def pick_from(cs: List<&2, Cut>, +h: F32, +dflt: U32) -> U32:
 
 # What a lot facing a road of class k, in a block that became `land`, at
 # density d, is.
-def pick_use(+k: U32, +land: U32, +d: F32, +h: F32) -> U32:
-  Bool.pick(U32, U32.is_ne(k, 3),
-    Bool.pick(U32, (d > 0.72 : F32),
-      pick_from([Cut{0.34, 4}, Cut{0.46, 8}, Cut{0.56, 9}, Cut{0.66, 5}, Cut{0.74, 10}, Cut{0.77, 11}, Cut{0.87, 3}], h, 2),
+def main_use(town: Bool, +d: F32, +h: F32) -> U32:
+  match town:
+    case True{}:
+      pick_from([Cut{0.34, 4}, Cut{0.46, 8}, Cut{0.56, 9}, Cut{0.66, 5}, Cut{0.74, 10}, Cut{0.77, 11}, Cut{0.87, 3}], h, 2)
+    case False{}:
       pick_from([Cut{0.4, 4}, Cut{0.52, 3}, Cut{0.66, 0}, Cut{0.74, 5}, Cut{0.83, 6}, Cut{0.9, 2},
-        Cut{Bool.pick(F32, (d < 0.32 : F32), 0.93, 0.0), 7}], h, 4)),
-  Bool.pick(U32, Bool.and(U32.is_eq(land, 4), (d > 0.72 : F32)),
-    pick_from([Cut{0.25, 2}, Cut{0.45, 4}, Cut{0.6, 8}, Cut{0.74, 9}, Cut{0.86, 10}, Cut{0.95, 5}], h, 3),
-  Bool.pick(U32, U32.is_eq(land, 6), pick_from([Cut{0.5, 4}, Cut{0.8, 0}], h, 3),
-    pick_from([Cut{0.56, 0}, Cut{0.7, 1}, Cut{(0.7 + Bool.pick(F32, (d > 0.5 : F32), 0.14, 0.05) : F32), 2}, Cut{0.89, 3}], h, 0))))
+        Cut{Bool.pick(F32, (d < 0.32 : F32), 0.93, 0.0), 7}], h, 4)
+
+def kampung_use(shops: Bool, +d: F32, +h: F32) -> U32:
+  match shops:
+    case True{}:
+      pick_from([Cut{0.5, 4}, Cut{0.8, 0}], h, 3)
+    case False{}:
+      pick_from([Cut{0.56, 0}, Cut{0.7, 1}, Cut{(0.7 + Bool.pick(F32, (d > 0.5 : F32), 0.14, 0.05) : F32), 2}, Cut{0.89, 3}], h, 0)
+
+def lokal_use(core: Bool, +land: U32, +d: F32, +h: F32) -> U32:
+  match core:
+    case True{}:
+      pick_from([Cut{0.25, 2}, Cut{0.45, 4}, Cut{0.6, 8}, Cut{0.74, 9}, Cut{0.86, 10}, Cut{0.95, 5}], h, 3)
+    case False{}:
+      kampung_use(U32.is_eq(land, 6), d, h)
+
+def road_use(main: Bool, +land: U32, +d: F32, +h: F32) -> U32:
+  match main:
+    case True{}:
+      main_use((d > 0.72 : F32), d, h)
+    case False{}:
+      lokal_use(Bool.and(U32.is_eq(land, 4), (d > 0.72 : F32)), land, d, h)
+
+def pick_use(+k: U32, +land: U32, +d: F32, +h: F32) -> U32:
+  road_use(U32.is_ne(k, 3), land, d, h)
 
 # A house along a road through the fields.
 def ribbon_use(+h: F32) -> U32:
@@ -464,7 +634,7 @@ def put_pieces(ps: List<&2, V>, +prev: V, +kind: U32, t: Tr) -> Tr:
     case Nil{}:
       t
     case Con{+q, r}:
-      put_pieces(r, q, kind, tr_put(t, pad(bbox([prev, q]), (road_half(kind) + 12.0 : F32)), ISeg{prev, q, kind}))
+      put_pieces(r, q, kind, tr_put(t, pad(bbox([prev, q]), (road_half(kind) + 12.0 : F32)), ISeg{prev, q, kind, bbox([prev, q])}))
 
 def put_road(+pts: List<&2, V>, +kind: U32, t: Tr) -> Tr:
   match pts:
@@ -594,28 +764,60 @@ def all_in(ps: List<&2, V>, +bs: List<&2, Ba>) -> Bool:
 
 # Whether a lot keeps its front verge beyond every road's front line, and
 # 6 m from the river.
-def blocked(xs: List<&2, Item>, +poly: List<&2, V>) -> Bool:
-  match xs:
-    case Nil{}:
+# A piece whose box, grown by what the lot needs and a metre more, misses the
+# lot's box is further than that from the lot, so only the rest are measured.
+def piece_blocks(close: Bool, +poly: List<&2, V>, +a: V, +b: V, +need: F32) -> Bool:
+  match close:
+    case False{}:
       False{}
-    case Con{+it, r}:
-      match it:
-        case ISeg{a, b, kind}:
-          +need = Bool.pick(F32, U32.is_eq(kind, 0), 20.0, (front(kind) - 0.6 : F32))
-          Bool.or((poly_seg(poly, a, b) < need : F32), blocked(r, poly))
-        case ISol{what, pts, box}:
-          blocked(r, poly)
+    case True{}:
+      (poly_seg(poly, a, b) < need : F32)
 
-def touching(xs: List<&2, Item>, +poly: List<&2, V>) -> Bool:
+def blocked_in(xs: List<&2, Item>, +poly: List<&2, V>, +pb: Box) -> Bool:
   match xs:
     case Nil{}:
       False{}
     case Con{+it, r}:
       match it:
-        case ISeg{a, b, kind}:
-          touching(r, poly)
+        case ISeg{a, b, kind, sb}:
+          +need = Bool.pick(F32, U32.is_eq(kind, 0), 20.0, (front(kind) - 0.6 : F32))
+          Bool.or(piece_blocks(boxes_near(sb, pb, (need + 1.0 : F32)), poly, a, b, need), blocked_in(r, poly, pb))
         case ISol{what, pts, box}:
-          Bool.or(overlap(pts, poly), touching(r, poly))
+          blocked_in(r, poly, pb)
+
+def blocked(bs: List<&2, List<&2, Item>>, +poly: List<&2, V>) -> Bool:
+  match bs:
+    case Nil{}:
+      False{}
+    case Con{+xs, r}:
+      Bool.or(blocked_in(xs, poly, bbox(poly)), blocked(r, poly))
+
+# Two solids whose boxes stand a metre apart cannot come within the 0.3 m the
+# overlap test allows: a rectangle's edge normals see at least 0.7 of a gap.
+def solid_touches(close: Bool, +pts: List<&2, V>, +poly: List<&2, V>) -> Bool:
+  match close:
+    case False{}:
+      False{}
+    case True{}:
+      overlap(pts, poly)
+
+def touching_in(xs: List<&2, Item>, +poly: List<&2, V>, +pb: Box) -> Bool:
+  match xs:
+    case Nil{}:
+      False{}
+    case Con{+it, r}:
+      match it:
+        case ISeg{a, b, kind, sb}:
+          touching_in(r, poly, pb)
+        case ISol{what, pts, box}:
+          Bool.or(solid_touches(boxes_near(box, pb, 1.0), pts, poly), touching_in(r, poly, pb))
+
+def touching(bs: List<&2, List<&2, Item>>, +poly: List<&2, V>) -> Bool:
+  match bs:
+    case Nil{}:
+      False{}
+    case Con{+xs, r}:
+      Bool.or(touching_in(xs, poly, bbox(poly)), touching(r, poly))
 
 def ctx_roads(+c: Ctx) -> Tr:
   match c:
@@ -1074,19 +1276,50 @@ def civics(rs: List<&2, Rd>, +c: Ctx, +n: U32, s: St) -> St:
 type Nb is Data:
   Nb{found: Bool, a: V, b: V, d: F32}
 
-def nearest_street(xs: List<&2, Item>, +p: V, +best: Nb) -> Nb:
+def nb_d(+nb: Nb) -> F32:
+  match nb:
+    case Nb{found, a, b, d}:
+      d
+
+# Nearer, or as near and first by its ends, so that which piece wins does
+# not depend on the order the buckets are read in.
+def v_before(+p: V, +q: V) -> Bool:
+  Bool.or((vx(p) < vx(q) : F32), Bool.and(F32.is_eq(vx(p), vx(q)), (vz(p) < vz(q) : F32)))
+
+def v_same(+p: V, +q: V) -> Bool:
+  Bool.and(F32.is_eq(vx(p), vx(q)), F32.is_eq(vz(p), vz(q)))
+
+def before(+d: F32, +a: V, +b: V, +best: Nb) -> Bool:
+  match best:
+    case Nb{found, ba, bb, bd}:
+      Bool.or((d < bd : F32), Bool.and(F32.is_eq(d, bd), Bool.or(v_before(a, ba), Bool.and(v_same(a, ba), v_before(b, bb)))))
+
+# A street piece, measured only when its box could hold a nearer point.
+def nearer(look: Bool, +p: V, +a: V, +b: V, +best: Nb) -> Nb:
+  match look:
+    case False{}:
+      best
+    case True{}:
+      +d = point_seg2(p, a, b)
+      Bool.pick(Nb, before(d, a, b, best), Nb{True{}, a, b, d}, best)
+
+def nearest_in(xs: List<&2, Item>, +p: V, +best: Nb) -> Nb:
   match xs:
     case Nil{}:
       best
     case Con{+it, r}:
       match it:
         case ISol{what, pts, box}:
-          nearest_street(r, p, best)
-        case ISeg{a, b, kind}:
-          match best:
-            case Nb{found, ba, bb, bd}:
-              +d = point_seg2(p, a, b)
-              nearest_street(r, p, Bool.pick(Nb, Bool.and(U32.is_ne(kind, 0), (d < bd : F32)), Nb{True{}, a, b, d}, Nb{found, ba, bb, bd}))
+          nearest_in(r, p, best)
+        case ISeg{a, b, kind, sb}:
+          nearest_in(r, p, nearer(Bool.and(U32.is_ne(kind, 0), (box_gap2(sb, p) <= nb_d(best) * 1.001 + 0.01 : F32)), p, a, b, best))
+
+def nearest_street(bs: List<&2, List<&2, Item>>, +p: V, +best: Nb) -> Nb:
+  match bs:
+    case Nil{}:
+      best
+    case Con{+xs, r}:
+      nearest_street(r, p, nearest_in(xs, p, best))
 
 type Lat is Data:
   Lat{x0: U32, z0: U32, nx: U32, nz: U32}
@@ -1102,9 +1335,19 @@ def lattice(+b: Box, +step: F32) -> Lat:
 def at_lattice(+k: U32, +step: F32) -> F32:
   (f32(k) * step - 1000.0 : F32)
 
-def back_use(+core: Bool, +d: F32, +h2: F32) -> U32:
-  Bool.pick(U32, core, pick_from([Cut{0.4, 9}, Cut{0.7, 10}], h2, 8),
-    pick_from([Cut{0.68, 0}, Cut{0.82, 1}, Cut{Bool.pick(F32, (d > 0.5 : F32), 2.0, 0.9), 2}], h2, 0))
+def back_use(core: Bool, +d: F32, +h2: F32) -> U32:
+  match core:
+    case True{}:
+      pick_from([Cut{0.4, 9}, Cut{0.7, 10}], h2, 8)
+    case False{}:
+      pick_from([Cut{0.68, 0}, Cut{0.82, 1}, Cut{Bool.pick(F32, (d > 0.5 : F32), 2.0, 0.9), 2}], h2, 0)
+
+def back_place(found: Bool, +c: Ctx, +s: St, +use: U32, +poly: List<&2, V>) -> St:
+  match found:
+    case False{}:
+      s
+    case True{}:
+      got_st(got_of(place(c, s, use, poly), 0.0))
 
 def back_face(+nb: Nb, +c: Ctx, +s: St, +p: V, +core: Bool, +d: F32, +h: F32, +h2: F32) -> St:
   match nb:
@@ -1118,7 +1361,7 @@ def back_face(+nb: Nb, +c: Ctx, +s: St, +p: V, +core: Bool, +d: F32, +h: F32, +h
       +hw = (size_w(sz, (h * 0.8 : F32)) * k / 2.0 : F32)
       +hd = (size_d(sz, h2) * k / 2.0 : F32)
       +q = {At{p, V{tx, tz}} : At}
-      Bool.pick(St, found, got_st(got_of(place(c, s, use, [off(q, F32.neg(hw), F32.neg(hd)), off(q, hw, F32.neg(hd)), off(q, hw, hd), off(q, F32.neg(hw), hd)]), 0.0)), s)
+      back_place(found, c, s, use, [off(q, F32.neg(hw), F32.neg(hd)), off(q, hw, F32.neg(hd)), off(q, hw, hd), off(q, F32.neg(hw), hd)])
 
 def nb_found(+nb: Nb) -> Bool:
   match nb:
@@ -1204,71 +1447,126 @@ def back_lots(bs: List<&2, Ba>, +c: Ctx, s: St) -> St:
 # ===========================================================================
 
 # How far a point stands beyond the nearest carriageway.
-# The nearest piece of each class, squared: the river, arterials,
-# collectors, lokal streets.
-type Gap4 is Data:
-  Gap4{g0: F32, g1: F32, g2: F32, g3: F32}
+# Whether p stands at least `need` beyond every carriageway. A piece whose box, grown by its half width, the need and a metre, misses p
+# is further than that, and is not measured.
+def piece_clear(close: Bool, +p: V, +a: V, +b: V, +kind: U32, +need: F32) -> Bool:
+  match close:
+    case False{}:
+      True{}
+    case True{}:
+      (F32.sqrt(point_seg2(p, a, b)) - road_half(kind) >= need : F32)
 
-def gap_go(xs: List<&2, Item>, +p: V, +g: Gap4) -> Gap4:
+def clear_in(xs: List<&2, Item>, +p: V, +need: F32) -> Bool:
   match xs:
     case Nil{}:
-      g
+      True{}
     case Con{+it, r}:
       match it:
         case ISol{what, pts, box}:
-          gap_go(r, p, g)
-        case ISeg{a, b, kind}:
-          match g:
-            case Gap4{g0, g1, g2, g3}:
-              +d = point_seg2(p, a, b)
-              gap_go(r, p, Gap4{Bool.pick(F32, U32.is_eq(kind, 0), F32.min(g0, d), g0), Bool.pick(F32, U32.is_eq(kind, 1), F32.min(g1, d), g1),
-                Bool.pick(F32, U32.is_eq(kind, 2), F32.min(g2, d), g2), Bool.pick(F32, U32.is_eq(kind, 3), F32.min(g3, d), g3)})
+          clear_in(r, p, need)
+        case ISeg{a, b, kind, sb}:
+          +close = box_near(sb, p, (road_half(kind) + need + 1.0 : F32))
+          Bool.and(piece_clear(close, p, a, b, kind, need), clear_in(r, p, need))
 
-def gap_of(+g: Gap4) -> F32:
-  match g:
-    case Gap4{g0, g1, g2, g3}:
-      F32.min(F32.min((F32.sqrt(g0) - road_half(0) : F32), (F32.sqrt(g1) - road_half(1) : F32)),
-              F32.min((F32.sqrt(g2) - road_half(2) : F32), (F32.sqrt(g3) - road_half(3) : F32)))
+def clear_go(bs: List<&2, List<&2, Item>>, +p: V, +need: F32) -> Bool:
+  match bs:
+    case Nil{}:
+      True{}
+    case Con{+xs, r}:
+      Bool.and(clear_in(xs, p, need), clear_go(r, p, need))
 
-def road_gap(+c: Ctx, +p: V, +r: F32) -> F32:
-  +big = {1000000000000.0 : F32}
-  gap_of(gap_go(near(ctx_roads(c), around(p, (r + 16.0 : F32))), p, Gap4{big, big, big, big}))
+def road_clear(+c: Ctx, +p: V, +r: F32, +need: F32) -> Bool:
+  clear_go(near(ctx_roads(c), around(p, (r + 16.0 : F32))), p, need)
 
-# Whether a point is inside a solid of the given kind.
-def in_what(xs: List<&2, Item>, +p: V, +w: U32) -> Bool:
+# Whether a point is inside a solid of a kind below `upto`: lots (0), and
+# courts too (1).
+def solid_has(near: Bool, +pts: List<&2, V>, +p: V) -> Bool:
+  match near:
+    case False{}:
+      False{}
+    case True{}:
+      in_poly(p, pts)
+
+def in_what_in(xs: List<&2, Item>, +p: V, +upto: U32) -> Bool:
   match xs:
     case Nil{}:
       False{}
     case Con{+it, r}:
       match it:
-        case ISeg{a, b, kind}:
-          in_what(r, p, w)
+        case ISeg{a, b, kind, sb}:
+          in_what_in(r, p, upto)
         case ISol{what, pts, box}:
-          Bool.or(Bool.and(U32.is_eq(what, w), Bool.and(box_has(box, p), in_poly(p, pts))), in_what(r, p, w))
+          Bool.or(solid_has(Bool.and(U32.is_lt(what, upto), box_has(box, p)), pts, p), in_what_in(r, p, upto))
 
-def lot_near(xs: List<&2, Item>, +b: Box) -> Bool:
+def in_what(bs: List<&2, List<&2, Item>>, +p: V, +upto: U32) -> Bool:
+  match bs:
+    case Nil{}:
+      False{}
+    case Con{+xs, r}:
+      Bool.or(in_what_in(xs, p, upto), in_what(r, p, upto))
+
+def lot_near_in(xs: List<&2, Item>, +b: Box) -> Bool:
   match xs:
     case Nil{}:
       False{}
     case Con{+it, r}:
       match it:
-        case ISeg{a, bb, kind}:
-          lot_near(r, b)
+        case ISeg{a, bb, kind, sb}:
+          lot_near_in(r, b)
         case ISol{what, pts, box}:
-          Bool.or(Bool.and(U32.is_eq(what, 0), boxes_meet(box, b)), lot_near(r, b))
+          Bool.or(Bool.and(U32.is_eq(what, 0), boxes_meet(box, b)), lot_near_in(r, b))
 
-def river_near(xs: List<&2, Item>, +p: V) -> Bool:
+def lot_near(bs: List<&2, List<&2, Item>>, +b: Box) -> Bool:
+  match bs:
+    case Nil{}:
+      False{}
+    case Con{+xs, r}:
+      Bool.or(lot_near_in(xs, b), lot_near(r, b))
+
+def river_piece(look: Bool, +p: V, +a: V, +b: V) -> Bool:
+  match look:
+    case False{}:
+      False{}
+    case True{}:
+      (point_seg2(p, a, b) < 1024.0 : F32)
+
+def river_near_in(xs: List<&2, Item>, +p: V) -> Bool:
   match xs:
     case Nil{}:
       False{}
     case Con{+it, r}:
       match it:
         case ISol{what, pts, box}:
-          river_near(r, p)
-        case ISeg{a, b, kind}:
-          Bool.or(Bool.and(U32.is_eq(kind, 0), (point_seg2(p, a, b) < 1024.0 : F32)), river_near(r, p))
+          river_near_in(r, p)
+        case ISeg{a, b, kind, sb}:
+          Bool.or(river_piece(Bool.and(U32.is_eq(kind, 0), box_near(sb, p, 33.0)), p, a, b), river_near_in(r, p))
+
+def river_near(bs: List<&2, List<&2, Item>>, +p: V) -> Bool:
+  match bs:
+    case Nil{}:
+      False{}
+    case Con{+xs, r}:
+      Bool.or(river_near_in(xs, p), river_near(r, p))
 
 # ---- Street trees on the verges of main roads ------------------------------------
+
+def court_has_in(xs: List<&2, Item>, +p: V) -> Bool:
+  match xs:
+    case Nil{}:
+      False{}
+    case Con{+it, r}:
+      match it:
+        case ISeg{a, b, kind, sb}:
+          court_has_in(r, p)
+        case ISol{what, pts, box}:
+          Bool.or(solid_has(Bool.and(U32.is_eq(what, 1), box_has(box, p)), pts, p), court_has_in(r, p))
+
+def in_court(bs: List<&2, List<&2, Item>>, +p: V) -> Bool:
+  match bs:
+    case Nil{}:
+      False{}
+    case Con{+xs, r}:
+      Bool.or(court_has_in(xs, p), in_court(r, p))
 
 def verge_tree(ok: Bool, +s: St, +q: V, +h: F32) -> St:
   match ok:
@@ -1283,7 +1581,7 @@ def verge_check(inblock: Bool, +c: Ctx, +s: St, +q: V, +h: F32) -> St:
       s
     case True{}:
       +here = near(st_sol(s), around(q, 1.0))
-      verge_tree(Bool.and((road_gap(c, q, 0.0) >= 1.2 : F32), Bool.not(in_what(here, q, 1))), s, q, h)
+      verge_tree(Bool.and(road_clear(c, q, 0.0, 1.2), Bool.not(in_court(here, q))), s, q, h)
 
 def verge_go(go: Bool, +c: Ctx, +s: St, +rd: Rd, +side: F32, +at: F32, +h: F32) -> St:
   match go:
@@ -1323,11 +1621,53 @@ def species(+river: Bool, +land: U32, +roll: F32) -> U32:
   Bool.pick(U32, Bool.and(Bool.and(river, U32.is_ne(land, 1)), (roll < 0.6 : F32)), 3,
     pick_from([Cut{0.04, 1}, Cut{0.1, 2}], roll, 0))
 
-def land_keep(+land: U32, +core: Bool, +river: Bool, +by_lot: Bool, +clump: Bool) -> F32:
-  Bool.pick(F32, U32.is_eq(land, 1), 0.92,
-  Bool.pick(F32, U32.is_eq(land, 0),
-    Bool.pick(F32, river, 0.6, Bool.pick(F32, by_lot, 0.8, Bool.pick(F32, clump, 0.85, 0.0))),
-  Bool.pick(F32, core, 0.2, Bool.pick(F32, U32.is_eq(land, 6), 0.55, 0.8))))
+def grow_tree(+s: St, +p: V, +r: F32, +river: Bool, +land: U32, +roll: F32) -> St:
+  +sp = species(river, land, roll)
+  +rr = Bool.pick(F32, U32.is_eq(sp, 1), (r + 2.5 : F32), Bool.pick(F32, U32.is_eq(sp, 3), (r * 0.7 : F32), r))
+  add_tree(s, Tree{vx(p), vz(p), rr, sp})
+
+def keep_if(keep: Bool, +s: St, +p: V, +r: F32, +river: Bool, +land: U32, +roll: F32) -> St:
+  match keep:
+    case False{}:
+      s
+    case True{}:
+      grow_tree(s, p, r, river, land, roll)
+
+# Bambu only grows by the river, outside kebun, on a low roll; nowhere else
+# does the river matter, so it is looked for only then.
+def river_for(look: Bool, +c: Ctx, +p: V) -> Bool:
+  match look:
+    case False{}:
+      False{}
+    case True{}:
+      river_near(near(ctx_roads(c), around(p, 30.0)), p)
+
+# Sawah keeps a tree by the river, then by a lot, then in a clump.
+def sawah_by_lot(look: Bool, +c: Ctx, +s: St, +p: V, +r: F32, +h: F32, +roll: F32) -> St:
+  match look:
+    case False{}:
+      s
+    case True{}:
+      +key = ctx_key(c)
+      +clump = (r3(key, 53, floor_u(((vx(p) + 1000.0) / 70.0 : F32)), floor_u(((vz(p) + 1000.0) / 70.0 : F32))) < 0.14 : F32)
+      +by_lot = lot_near(near(st_sol(s), around(p, 14.0)), around(p, 14.0))
+      keep_if((h < Bool.pick(F32, by_lot, 0.8, Bool.pick(F32, clump, 0.85, 0.0)) : F32), s, p, r, False{}, 0, roll)
+
+def sawah_keep(river: Bool, +c: Ctx, +s: St, +p: V, +r: F32, +h: F32, +roll: F32) -> St:
+  match river:
+    case True{}:
+      keep_if((h < 0.6 : F32), s, p, r, True{}, 0, roll)
+    case False{}:
+      sawah_by_lot((h < 0.85 : F32), c, s, p, r, h, roll)
+
+def land_tree(sawah: Bool, +c: Ctx, +s: St, +p: V, +r: F32, +land: U32, +core: Bool, +h: F32, +roll: F32) -> St:
+  match sawah:
+    case True{}:
+      sawah_keep(river_for(True{}, c, p), c, s, p, r, h, roll)
+    case False{}:
+      +keep = Bool.pick(F32, U32.is_eq(land, 1), 0.92, Bool.pick(F32, core, 0.2, Bool.pick(F32, U32.is_eq(land, 6), 0.55, 0.8)))
+      +kept = (h < keep : F32)
+      keep_if(kept, s, p, r, river_for(Bool.and(kept, Bool.and(U32.is_ne(land, 1), (roll < 0.6 : F32))), c, p), land, roll)
 
 def canopy_keep(free: Bool, +c: Ctx, +s: St, +p: V, +r: F32, +kx: U32, +kz: U32, +land: U32, +core: Bool) -> St:
   match free:
@@ -1335,13 +1675,7 @@ def canopy_keep(free: Bool, +c: Ctx, +s: St, +p: V, +r: F32, +kx: U32, +kz: U32,
       s
     case True{}:
       +key = ctx_key(c)
-      +river = river_near(near(ctx_roads(c), around(p, 30.0)), p)
-      +by_lot = lot_near(near(st_sol(s), around(p, 14.0)), around(p, 14.0))
-      +clump = (r3(key, 53, floor_u(((vx(p) + 1000.0) / 70.0 : F32)), floor_u(((vz(p) + 1000.0) / 70.0 : F32))) < 0.14 : F32)
-      +roll = r3(key, 55, kx, kz)
-      +sp = species(river, land, roll)
-      +rr = Bool.pick(F32, U32.is_eq(sp, 1), (r + 2.5 : F32), Bool.pick(F32, U32.is_eq(sp, 3), (r * 0.7 : F32), r))
-      Bool.pick(St, (r3(key, 54, kx, kz) < land_keep(land, core, river, by_lot, clump) : F32), add_tree(s, Tree{vx(p), vz(p), rr, sp}), s)
+      land_tree(U32.is_eq(land, 0), c, s, p, r, land, core, r3(key, 54, kx, kz), r3(key, 55, kx, kz))
 
 def canopy_gap(clear: Bool, +c: Ctx, +s: St, +p: V, +r: F32, +kx: U32, +kz: U32, +land: U32, +core: Bool) -> St:
   match clear:
@@ -1349,7 +1683,7 @@ def canopy_gap(clear: Bool, +c: Ctx, +s: St, +p: V, +r: F32, +kx: U32, +kz: U32,
       s
     case True{}:
       +here = near(st_sol(s), around(p, 1.0))
-      canopy_keep(Bool.not(Bool.or(in_what(here, p, 0), in_what(here, p, 1))), c, s, p, r, kx, kz, land, core)
+      canopy_keep(Bool.not(in_what(here, p, 2)), c, s, p, r, kx, kz, land, core)
 
 def canopy_in(inside: Bool, +c: Ctx, +s: St, +p: V, +kx: U32, +kz: U32, +land: U32, +core: Bool) -> St:
   match inside:
@@ -1357,7 +1691,7 @@ def canopy_in(inside: Bool, +c: Ctx, +s: St, +p: V, +kx: U32, +kz: U32, +land: U
       s
     case True{}:
       +r = lerp(3.0, 5.8, r3(ctx_key(c), 52, kx, kz))
-      canopy_gap((road_gap(c, p, r) >= r * 0.5 + 1.0 : F32), c, s, p, r, kx, kz, land, core)
+      canopy_gap(road_clear(c, p, r, (r * 0.5 + 1.0 : F32)), c, s, p, r, kx, kz, land, core)
 
 def canopy_cols(fuel: Nat, +c: Ctx, s: St, +poly: List<&2, V>, +kx: U32, +kz: U32, +step: F32, +land: U32, +core: Bool) -> St:
   match fuel:
@@ -1420,8 +1754,8 @@ def cell_parcels(c: W.Cell, +seed: U32, +i: U32, +j: U32) -> Plan:
       +streets = List.append(&2, Rd, streets_of(ws, 1), List.append(&2, Rd, streets_of(ws, 2), streets_of(ws, 3)))
       +bs = areas(blocks, f, o)
       +key = W.hash3(seed, 40, i, j)
-      +ctx = {Ctx{key, index_ways(ws, tr_empty(12n)), bs, streets} : Ctx}
-      +s0 = blk_courts(blocks, key, f, o, St{tr_empty(12n), Nil{}, Nil{}, Nil{}})
+      +ctx = {Ctx{key, index_ways(ws, tr_empty(10n)), bs, streets} : Ctx}
+      +s0 = blk_courts(blocks, key, f, o, St{tr_empty(10n), Nil{}, Nil{}, Nil{}})
       plan_of(o, canopies(bs, ctx, verges(streets, ctx, 0, back_lots(bs, ctx, frontage(streets, ctx, 0, civics(streets, ctx, 0, s0))))))
 
 def parcels_of(+seed: U32, +i: U32, +j: U32) -> Plan:
