@@ -21,7 +21,8 @@ export type Car = {
   $: "Car";
   id: number;
   lane: Lane;
-  z: number;
+  /** Centimetres ahead of the player. */
+  gap: number;
   speed: number;
   body: Body;
   colour: number;

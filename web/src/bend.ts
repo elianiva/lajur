@@ -98,7 +98,7 @@ function cars(list: World["traffic"], oncoming = false): CarView[] {
     out.push({
       id: car.id,
       lateral: oncoming ? (ONCOMING[car.lane.$] ?? 12.6) : laneX(car.lane),
-      z: car.z / 100,
+      z: car.gap / 100,
       speed: car.speed,
       body: car.body.$,
       colour: car.colour,
