@@ -2,11 +2,9 @@
 // around the car and the network of the door armed. The model takes each
 // only where it is the value it would make itself, and makes its own when
 // none has come, so this file decides nothing.
-import graph from "./game.mjs";
-import type { BendList, Door, Game, Leg, Way, World } from "./game.mjs";
+import game from "./game.mjs";
+import type { BendList, Door, Leg, Way, World } from "./game.mjs";
 import type { Ask } from "./world/ahead-worker.ts";
-
-const game = graph as Game;
 
 /** Legs whose doors are kept; a crossing needs four. */
 const KEEP = 16;

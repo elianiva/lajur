@@ -1,7 +1,5 @@
-import graph from "./game.mjs";
-import type { BendList, Body, Car, Controls, Game, Lane, Signal, World } from "./game.mjs";
-
-const game = graph as Game;
+import game from "./game.mjs";
+import type { BendList, Body, Car, Controls, Lane, Signal, World } from "./game.mjs";
 
 export type { Body, Controls, Signal, World };
 
