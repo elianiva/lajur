@@ -69,3 +69,31 @@ jobs:
       # through Bend's checker only.
       - name: Prove the game's and the town's laws
         run: bend PROOF.bend
+
+  # The page that draws the model. The build compiles the Bend modules first, so
+  # this job also proves the generated modules match the hand-written types.
+  web:
+    runs-on: ubuntu-latest
+    env:
+      BEND_NO_TELEMETRY: 1
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Bend
+        run: |
+          curl -fsSL https://bend-lang.com/install.sh | sh
+          echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
+      - name: Install Vite+
+        run: |
+          curl -fsSL https://vite.plus | CI=1 VP_NODE_MANAGER=no VP_PM_MANAGER=no bash
+          echo "$HOME/.local/share/vite-plus/bin" >> "$GITHUB_PATH"
+      - name: Install packages
+        run: vp install
+      - name: Format, lint and types
+        run: vp check
+      - name: Check the world's plan
+        run: vp run plan
+      - name: Build
+        run: vp build
