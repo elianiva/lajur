@@ -17,9 +17,10 @@ the catalogue:
 
 ```sh
 .venv/bin/python tools/check_citations.py
-``` `.agents/setup` installs Bend 2.0.39 in a
-fresh orb and runs no proofs; the verdict needs Lean 4.34.0, which only CI
-installs.
+```
+
+`.agents/setup` installs Bend 2.0.39 and the web packages in a fresh orb and
+runs no proofs; the verdict needs Lean 4.34.0, which only CI installs.
 
 ## The game
 
