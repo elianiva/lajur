@@ -6,7 +6,7 @@ import { Ink, light, lookByKey, looks, restyle, type Look } from "../render/look
 import { initialState, nprState, query, share } from "./npr.ts";
 import { shelfView } from "./shelf.ts";
 import { studio } from "./studio.ts";
-import { townView } from "./town.ts";
+import { showroomView } from "./showroom.ts";
 import { worldView } from "./world.ts";
 import type { View } from "./view.ts";
 import "./lab.css";
@@ -161,7 +161,7 @@ function show(reframe: boolean): void {
       ? shelfView(shelves, seed, () => spinning)
       : mode === "world"
         ? worldView(seed)
-        : townView(seed);
+        : showroomView(seed);
   controls.maxZoom = view.maxZoom ?? 12;
   scene.add(view.group);
   dress();

@@ -1,19 +1,6 @@
 import * as THREE from "three";
 import { bodyLength } from "../bend.ts";
-import {
-  bengkel,
-  gudang,
-  house,
-  kos,
-  minimarket,
-  mal,
-  petak,
-  ruko,
-  rusun,
-  apartemen,
-  kantor,
-  warung,
-} from "../assets/buildings.ts";
+import { gudang, house, mal, rusun, apartemen, kantor } from "../assets/buildings.ts";
 import { buildCar, trafficColour } from "../assets/cars.ts";
 import {
   flag,
@@ -50,19 +37,49 @@ import {
   tong,
   umbul,
 } from "../assets/street.ts";
-import {
-  bambu,
-  banana,
-  beringin,
-  flamboyan,
-  kamboja,
-  mangga,
-  palm,
-  pepaya,
-  semak,
-} from "../assets/trees.ts";
+import { beringin, flamboyan, kamboja, palm, semak } from "../assets/trees.ts";
 import type { Body } from "../game.mjs";
 import { random, type View } from "./view.ts";
+import {
+  HX,
+  HZ,
+  UP,
+  type Kind,
+  type Road,
+  ROADS,
+  ALONG_X,
+  ALONG_Z,
+  WATER,
+  WALL,
+  BANK,
+  riverX,
+  stripZ,
+  wallZ,
+  onBridge,
+  APRON,
+  plinth,
+  bankWall,
+} from "./showroom/site.ts";
+import {
+  type Rect,
+  front,
+  nose,
+  overlaps,
+  wet,
+  shop,
+  FRONTAGE,
+  choose,
+  STREET_TREES,
+  BANK_TREES,
+} from "./showroom/placement.ts";
+import {
+  type Variant,
+  variant,
+  type Lane,
+  type Mover,
+  SPAN,
+  lanePoint,
+} from "./showroom/movers.ts";
 
 /**
  * A kota, packed: a boulevard with a planted median, side streets, a river
@@ -75,286 +92,11 @@ import { random, type View } from "./view.ts";
  * material; everything that moves is instanced.
  */
 
-const HX = 170;
-const HZ = 120;
-const UP = new THREE.Vector3(0, 1, 0);
-
-type Kind = "raya" | "jalan" | "lokal";
-
-interface Road {
-  axis: "x" | "z";
-  at: number;
-  kind: Kind;
-  half: number;
-  walk: number;
-  /** Lane centres from the road's middle, one direction's worth. */
-  lanes: number[];
-}
-
-const ROADS: Road[] = [
-  { axis: "x", at: -70, kind: "jalan", half: 3.75, walk: 2.2, lanes: [1.75] },
-  { axis: "x", at: 0, kind: "raya", half: 7.4, walk: 3, lanes: [2.5, 5.75] },
-  { axis: "x", at: 75, kind: "jalan", half: 3.75, walk: 2.2, lanes: [1.75] },
-  { axis: "z", at: -105, kind: "jalan", half: 3.75, walk: 2.2, lanes: [1.75] },
-  { axis: "z", at: -40, kind: "lokal", half: 2.9, walk: 1.5, lanes: [1.4] },
-  { axis: "z", at: 65, kind: "lokal", half: 2.9, walk: 1.5, lanes: [1.4] },
-  { axis: "z", at: 100, kind: "jalan", half: 3.75, walk: 2.2, lanes: [1.75] },
-];
-const ALONG_X = ROADS.filter((road) => road.axis === "x");
-const ALONG_Z = ROADS.filter((road) => road.axis === "z");
-
-// --- the river ------------------------------------------------------------------
-
-const WATER = 7;
-const WALL = 8.5;
-const BANK = 12;
-
-function riverX(z: number): number {
-  return 26 + 13 * Math.sin(z / 34) + 5 * Math.sin(z / 13 + 1);
-}
-
-/** A quad strip along z between two x functions, at height y, facing up. */
-function stripZ(left: (z: number) => number, right: (z: number) => number, y: number) {
-  const position: number[] = [];
-  for (let z = -HZ; z < HZ; z += 2) {
-    const z1 = Math.min(z + 2, HZ);
-    const a = [left(z), y, z];
-    const b = [right(z), y, z];
-    const c = [right(z1), y, z1];
-    const d = [left(z1), y, z1];
-    position.push(...a, ...d, ...b, ...b, ...d, ...c);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-/** An upright wall along z at x = at(z), from y0 to y1. */
-function wallZ(at: (z: number) => number, y0: number, y1: number) {
-  const position: number[] = [];
-  for (let z = -HZ; z < HZ; z += 2) {
-    const z1 = Math.min(z + 2, HZ);
-    const a = [at(z), y0, z];
-    const b = [at(z), y1, z];
-    const c = [at(z1), y1, z1];
-    const d = [at(z1), y0, z1];
-    position.push(...a, ...b, ...d, ...d, ...b, ...c);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-/** Whether a riverside z falls under one of the road bridges. */
-function onBridge(z: number): boolean {
-  return ALONG_X.some((road) => Math.abs(z - road.at) < road.half + road.walk + 0.6);
-}
-
-const bankWall = mats.concrete.clone();
-bankWall.side = THREE.DoubleSide;
-
-// --- the plinth -------------------------------------------------------------------
-
-/** How far the base reaches past the city, and how deep it stands. */
-const APRON = 4.5;
-const DEEP = 14;
-
-/**
- * The base: a rounded, bevelled rim the city stands on. Hollow, so the river
- * runs on under it and out of the frame, the way a cut-away model does.
- */
-function plinth(): THREE.ExtrudeGeometry {
-  const hx = HX + APRON;
-  const hz = HZ + APRON;
-  const corner = 9;
-  const shape = new THREE.Shape();
-  shape.moveTo(-hx + corner, -hz);
-  // Round the corners, and let the river run on under the rim.
-  shape.lineTo(hx - corner, -hz);
-  shape.quadraticCurveTo(hx, -hz, hx, -hz + corner);
-  shape.lineTo(hx, hz - corner);
-  shape.quadraticCurveTo(hx, hz, hx - corner, hz);
-  shape.lineTo(-hx + corner, hz);
-  shape.quadraticCurveTo(-hx, hz, -hx, hz - corner);
-  shape.lineTo(-hx, -hz + corner);
-  shape.quadraticCurveTo(-hx, -hz, -hx + corner, -hz);
-
-  const hollow = new THREE.Path();
-  hollow.moveTo(-HX + 0.5, -HZ + 0.5);
-  hollow.lineTo(HX - 0.5, -HZ + 0.5);
-  hollow.lineTo(HX - 0.5, HZ - 0.5);
-  hollow.lineTo(-HX + 0.5, HZ - 0.5);
-  shape.holes.push(hollow);
-
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: DEEP,
-    bevelEnabled: true,
-    bevelThickness: 2.2,
-    bevelSize: 1.4,
-    bevelSegments: 3,
-    curveSegments: 6,
-  });
-  // Stand it up: the shape's plane becomes the ground, its extrusion the drop.
-  // The top sits a hair under the road so the two never fight for a pixel.
-  geometry.rotateX(Math.PI / 2);
-  geometry.computeBoundingBox();
-  geometry.translate(0, -0.06 - geometry.boundingBox!.max.y, 0);
-  geometry.computeBoundingBox();
-  return geometry;
-}
-
-// --- placement ------------------------------------------------------------------
-
-interface Rect {
-  x0: number;
-  x1: number;
-  z0: number;
-  z1: number;
-}
-
-/** The yaw that points a model's local +x (a building's front) along (fx, fz). */
-function front(fx: number, fz: number): number {
-  return Math.atan2(-fz, fx);
-}
-
-/** The yaw that points a model's local -z (a vehicle's nose) along (tx, tz). */
-function nose(tx: number, tz: number): number {
-  return Math.atan2(-tx, -tz);
-}
-
-function overlaps(a: Rect, b: Rect): boolean {
-  return a.x0 < b.x1 && a.x1 > b.x0 && a.z0 < b.z1 && a.z1 > b.z0;
-}
-
-function wet(rect: Rect, margin = 0): boolean {
-  for (const z of [rect.z0, (rect.z0 + rect.z1) / 2, rect.z1]) {
-    const river = riverX(z);
-    if (rect.x1 > river - BANK - margin && rect.x0 < river + BANK + margin) return true;
-  }
-  return false;
-}
-
-interface Built {
-  object: THREE.Object3D;
-  /** Pavement life in front of it: parked bikes, a cart, a customer. */
-  busy: number;
-}
-
-type Pick = (roll: () => number, depth: number) => Built;
-
-const shop = (object: THREE.Object3D, busy: number): Built => ({ object, busy });
-
-/** What lines each kind of frontage, by weight. */
-const FRONTAGE: Record<Kind | "gang", [number, Pick][]> = {
-  raya: [
-    [
-      6,
-      (roll, depth) =>
-        shop(ruko(roll() * 0.3 + 0.7, 5 + roll() * 2, Math.min(depth - 1.8, 12)), 0.9),
-    ],
-    [1.2, (roll) => shop(minimarket(roll()), 1)],
-    [1, (roll) => shop(warung(roll(), 4, 5), 1)],
-    [0.8, (roll) => shop(bengkel(roll()), 0.6)],
-    [0.6, (roll, depth) => shop(house(roll(), 8 + roll() * 3, depth - 1), 0.2)],
-  ],
-  jalan: [
-    [4, (roll, depth) => shop(ruko(roll(), 4.5 + roll() * 2, Math.min(depth - 1.8, 11)), 0.8)],
-    [2, (roll) => shop(warung(roll(), 4, 5), 1)],
-    [3, (roll, depth) => shop(house(roll(), 7 + roll() * 4, depth - 0.8), 0.25)],
-    [1, (roll, depth) => shop(kos(roll(), 12, Math.min(depth - 1, 10)), 0.4)],
-    [0.5, (roll) => shop(minimarket(roll()), 1)],
-    [0.5, (roll) => shop(bengkel(roll()), 0.6)],
-  ],
-  lokal: [
-    [4, (roll, depth) => shop(house(roll(), 6.5 + roll() * 4, depth - 0.6), 0.3)],
-    [2, (roll) => shop(warung(roll(), 4, 5), 1)],
-    [1.5, (roll, depth) => shop(kos(roll(), 12, Math.min(depth - 1, 10)), 0.4)],
-    [1.2, (roll, depth) => shop(petak(roll(), 13.6, Math.min(depth - 1, 8)), 0.3)],
-    [1.2, (roll, depth) => shop(ruko(roll(), 4.5 + roll() * 2, Math.min(depth - 1.8, 9)), 0.7)],
-  ],
-  gang: [
-    [5, (roll, depth) => shop(house(roll(), 6 + roll() * 3.5, depth - 0.5), 0.2)],
-    [2.6, (roll, depth) => shop(petak(roll(), 13.6, Math.min(depth - 1, 8)), 0.25)],
-    [0.8, (roll, depth) => shop(kos(roll(), 12, Math.min(depth - 1, 10)), 0.3)],
-    [0.6, (roll) => shop(warung(roll(), 4, 5), 0.8)],
-  ],
-};
-
-function choose<T>(roll: () => number, table: [number, T][]): T {
-  const total = table.reduce((sum, [weight]) => sum + weight, 0);
-  let at = roll() * total;
-  for (const [weight, value] of table) {
-    at -= weight;
-    if (at <= 0) return value;
-  }
-  return table[table.length - 1]![1];
-}
-
-const STREET_TREES = [palm, mangga, kamboja, flamboyan, pepaya, banana];
-const BANK_TREES = [palm, bambu, banana, mangga, palm];
-
-// --- vehicles and people --------------------------------------------------------
-
-interface Variant {
-  meshes: THREE.InstancedMesh[];
-  length: number;
-  count: number;
-}
-
-/** One model, baked once, drawn as many times as there are movers using it. */
-function variant(object: THREE.Object3D, capacity: number): Variant {
-  const length = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3()).z;
-  const baked = bake(object);
-  const meshes = baked.children.map((child) => {
-    const mesh = child as THREE.Mesh;
-    const instanced = new THREE.InstancedMesh(mesh.geometry, mesh.material, capacity);
-    instanced.castShadow = true;
-    instanced.receiveShadow = true;
-    instanced.frustumCulled = false;
-    instanced.count = 0;
-    return instanced;
-  });
-  return { meshes, length, count: 0 };
-}
-
-interface Lane {
-  axis: "x" | "z";
-  fixed: number;
-  dir: 1 | -1;
-  /** Stop lines, in metres along the lane. */
-  stops: number[];
-  movers: Mover[];
-  people: boolean;
-}
-
-interface Mover {
-  lane: Lane;
-  variant: Variant;
-  slot: number;
-  s: number;
-  v: number;
-  top: number;
-  length: number;
-  jitter: number;
-  phase: number;
-}
-
-const SPAN = { x: 2 * HX, z: 2 * HZ };
-
-function lanePoint(lane: Lane, s: number, jitter: number): [number, number] {
-  const from = lane.axis === "x" ? -HX : -HZ;
-  const to = -from;
-  const along = lane.dir > 0 ? from + s : to - s;
-  return lane.axis === "x" ? [along, lane.fixed + jitter] : [lane.fixed + jitter, along];
-}
-
 // --- the town -------------------------------------------------------------------
 
 const BODIES: Body["$"][] = ["Sedan", "Sedan", "Hatch", "Hatch", "Taxi", "Van", "Bus", "Truck"];
 
-export function townView(seed: number): View {
+export function showroomView(seed: number): View {
   const group = new THREE.Group();
   const still = new THREE.Group();
   const roll = random(seed);
