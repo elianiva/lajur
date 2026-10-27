@@ -270,9 +270,9 @@ class Piece {
   private tiles = new Map<string, Tile>();
   private styledAs: unknown = null;
 
-  private town: Town;
+  private town: City;
 
-  constructor(town: Town, d: Drawn) {
+  constructor(town: City, d: Drawn) {
     this.town = town;
     const kinds = town.kinds;
     // ---- Ground ----------------------------------------------------------------
@@ -460,7 +460,7 @@ class Piece {
 let shared: Map<string, Variant[]> | null = null;
 
 /** Every piece of the world on screen, and the batches their near assets share. */
-export class Town {
+export class City {
   readonly group = new THREE.Group();
   readonly kinds: Map<string, Variant[]>;
   readonly near = new Map<THREE.Material, Batch>();

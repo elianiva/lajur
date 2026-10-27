@@ -7,7 +7,7 @@ import { initialState, nprState, query, share } from "./npr.ts";
 import { shelfView } from "./shelf.ts";
 import { studio } from "./studio.ts";
 import { showroomView } from "./showroom.ts";
-import { worldView } from "./world.ts";
+import { worldView } from "./world-view.ts";
 import type { View } from "./view.ts";
 import "./lab.css";
 
@@ -71,9 +71,9 @@ function aspect(): number {
   return (window.innerWidth - inset) / window.innerHeight;
 }
 
-type Mode = "shelf" | "town" | "world";
+type Mode = "shelf" | "showroom" | "world";
 let mode: Mode =
-  location.hash === "#shelf" ? "shelf" : location.hash === "#world" ? "world" : "town";
+  location.hash === "#shelf" ? "shelf" : location.hash === "#world" ? "world" : "showroom";
 let seed = 0.2024;
 let spinning = false;
 let view: View | null = null;

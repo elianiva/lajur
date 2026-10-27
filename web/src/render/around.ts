@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mats } from "../assets/kit.ts";
 import type { Drawn } from "../world/world.ts";
-import { Town } from "./town.ts";
+import { City } from "./city.ts";
 
 /**
  * The town around the car, made a cell at a time.
@@ -30,7 +30,7 @@ function reach(i: number, j: number, p: Spot): number {
 
 export class Around {
   readonly group = new THREE.Group();
-  private town = new Town();
+  private town = new City();
   private worker = new Worker(new URL("../world/worker.ts", import.meta.url), { type: "module" });
   private asked: string | null = null;
   private ready: { key: string; drawn: Drawn }[] = [];

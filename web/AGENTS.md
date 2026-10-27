@@ -45,7 +45,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## The lab
 
-- `/lab.html` opens on the city (`Town`); `#shelf` shows every asset row.
+- `/lab.html` opens on the showroom town; `#shelf` shows every asset row.
 - `#world` is the generated world, made cell by cell, each cell a function of
   (seed, i, j), so cells tile in any order. `logic/world.bend` is the lattice,
   the roads, each cell's frame, its collectors, the entrance slots, what each
@@ -53,7 +53,7 @@ release. Add a tool name to select part of the graph. For example, run
   `logic/PROOF_WORLD.bend`. `logic/parcels.bend` places the lots, courts and
   trees on each cell. `src/world/cells.ts` and `parcels.ts` read them, and
   `plan.ts` draws it as a flat SVG for a minimap or
-  preview. The game drives through it, drawn by `src/render/town.ts`, the
+  preview. The game drives through it, drawn by `src/render/city.ts`, the
   same renderer as `#world`. `vp run plan` checks it.
 - The city is drawn by the NPR studio: the look the game drives, plus five
   more in `src/lab/npr.ts`, sliders for their bands, shadow stain, rim,

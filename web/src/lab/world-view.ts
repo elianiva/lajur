@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Town } from "../render/town.ts";
+import { City } from "../render/city.ts";
 import { drawn, extent, world } from "../world/world.ts";
 import type { View } from "./view.ts";
 
@@ -15,7 +15,7 @@ const NEAR_PPM = 1.6;
 export function worldView(roll: number): View {
   const seed = Math.floor(roll * 4294967296) >>> 0;
   const w = world(seed, 0, 0, CELLS, CELLS);
-  const town = new Town();
+  const town = new City();
   town.add("window", drawn(w));
 
   const [x0, z0, x1, z1] = extent(w);
