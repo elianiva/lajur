@@ -8,6 +8,7 @@
     "build": "tsc && vp build",
     "preview": "vp preview",
     "logic": "vpx scripts/bend.ts",
+    "contract": "vpx scripts/contract.ts",
     "proof": "vpx scripts/bend.ts proof",
     "layers": "vpx scripts/layers.ts",
     "plan": "vpx scripts/plan.ts"

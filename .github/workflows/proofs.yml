@@ -93,6 +93,8 @@ jobs:
         run: vp install
       - name: Format, lint and types
         run: vp check
+      - name: Match the types to the compiled model
+        run: vp run contract
       - name: Check the world's plan
         run: vp run plan
       - name: Build

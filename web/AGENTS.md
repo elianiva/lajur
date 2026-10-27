@@ -41,7 +41,10 @@ release. Add a tool name to select part of the graph. For example, run
 - TypeScript reads the model and draws it: three.js meshes, camera follow, HUD
   formatting, keyboard mapping. If a change would put a decision in `src/`, it
   belongs in `logic/game.bend` with a law next to it.
-- `vp check` must pass before a change counts; so must `vp run proof`.
+- `src/*.d.mts` are written by hand. `vp run contract` fails when one declares a
+  function the compiled module no longer exports.
+- `vp check` must pass before a change counts; so must `vp run proof` and
+  `vp run contract`.
 
 ## The lab
 
