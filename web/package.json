@@ -7,7 +7,7 @@
     "dev": "vp dev",
     "build": "tsc && vp build",
     "preview": "vp preview",
-    "logic": "vpx scripts/bend.ts logic/game.bend -o src/game.mjs",
+    "logic": "vpx scripts/bend.ts",
     "proof": "vpx scripts/bend.ts proof",
     "layers": "vpx scripts/layers.ts",
     "plan": "vpx scripts/plan.ts"

@@ -6,6 +6,22 @@ import { pathToFileURL } from "node:url";
 
 const BEND_DIR = "logic";
 
+/** The ES modules the page imports, each compiled from logic/<name>.bend to src/<name>.mjs. */
+export const MODULES = ["game", "town", "world", "parcels"] as const;
+
+/**
+ * Every Bend source the page depends on, and the modules it feeds: a file's
+ * own module plus each module that imports it. A new source or module is one
+ * entry here; the build, the dev server's watch list and its hot update read it.
+ */
+export const SOURCES: Record<string, readonly string[]> = {
+  game: ["game"],
+  town: ["town"],
+  world: ["world", "parcels", "game"],
+  parcels: ["parcels"],
+  lokal: ["game"],
+};
+
 function candidates(): string[] {
   const home = homedir();
   return [process.env.BEND, `${home}/.bend/bin/bend`, "bend"].filter((entry): entry is string =>
@@ -45,13 +61,8 @@ export interface Built {
  */
 export function buildLogic(): Built {
   try {
-    for (const [from, to] of [
-      ["game.bend", "src/game.mjs"],
-      ["town.bend", "src/town.mjs"],
-      ["world.bend", "src/world.mjs"],
-      ["parcels.bend", "src/parcels.mjs"],
-    ]) {
-      execFileSync(findBend(), [`${BEND_DIR}/${from}`, "-o", to], {
+    for (const name of MODULES) {
+      execFileSync(findBend(), [`${BEND_DIR}/${name}.bend`, "-o", `src/${name}.mjs`], {
         stdio: "pipe",
         encoding: "utf8",
       });

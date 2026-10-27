@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import type { Plugin } from "vite-plus";
 import { defineConfig } from "vite-plus";
-import { buildLogic } from "./scripts/bend.ts";
+import { buildLogic, SOURCES } from "./scripts/bend.ts";
 
 // The model in logic/ is the source of truth; src/game.mjs is its output, so
 // every dev start and build regenerates it rather than trusting a stale copy.
@@ -11,31 +11,22 @@ function lajurLogic(): Plugin {
     buildStart() {
       const built = buildLogic();
       if (!built.ok) this.error(built.output);
-      this.addWatchFile("logic/game.bend");
-      this.addWatchFile("logic/town.bend");
-      this.addWatchFile("logic/world.bend");
-      this.addWatchFile("logic/parcels.bend");
-      this.addWatchFile("logic/lokal.bend");
+      for (const source of Object.keys(SOURCES)) this.addWatchFile(`logic/${source}.bend`);
       this.addWatchFile("logic/PROOF.bend");
     },
 
     // Editing the model rebuilds it rather than reloading a stale copy.
     handleHotUpdate({ file, server }) {
-      const model = /logic\/(game|town|world|parcels|lokal)\.bend$/.exec(file);
-      if (!model) return;
+      const source = /logic\/(\w+)\.bend$/.exec(file)?.[1];
+      const touched = source && SOURCES[source];
+      if (!touched) return;
       const built = buildLogic();
       if (!built.ok) {
         // Keep the last good module: a broken law should not take the page down.
         console.error(built.output);
         return;
       }
-      // The parcels import the world, so a change to the world reaches both.
-      // The game imports the world and the lokal streets; the parcels, the world.
-      const touched: Record<string, string[]> = {
-        world: ["world", "parcels", "game"],
-        lokal: ["game"],
-      };
-      for (const name of touched[model[1]!] ?? [model[1]!]) {
+      for (const name of touched) {
         const module = server.moduleGraph.getModuleById(resolve(`src/${name}.mjs`));
         if (module) server.moduleGraph.invalidateModule(module);
       }
