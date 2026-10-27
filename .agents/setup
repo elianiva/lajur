@@ -66,8 +66,8 @@ else
 fi
 done_step
 
-# The rest of setup covers work around the laws: the corpus tools, the game and
-# the module checks. Proving is CI's job, so Lean is not installed here.
+# The rest of setup covers work around the laws: the web packages, the corpus
+# tools and the module checks. Proving is CI's job, so Lean is not installed here.
 #
 # Vite+ is here for work around the laws, not for the laws themselves. The orb
 # template already ships Node.js and package managers, so the installer keeps
@@ -94,6 +94,14 @@ if [ "${vp_version%% *}" = "vp" ]; then
   done
 else
   warn "cannot install Vite+; the laws still check without it"
+fi
+done_step
+
+step "Installing the web packages"
+if [ "${vp_version%% *}" = "vp" ]; then
+  (cd web && vp install)
+else
+  warn "no vp, so web/node_modules is not installed"
 fi
 done_step
 
