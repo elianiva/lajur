@@ -2,5 +2,5 @@
 *.bendtt
 __pycache__/
 .venv/
-.amp/portals/*
+# Orb state (portal manifests) written by `amp orb service`.
 **/.amp/

@@ -23,7 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Generated from logic/*.bend by `vp run logic`
+# Generated from logic/*.bend by `vp run logic`; the list is MODULES in scripts/bend.ts
 src/game.mjs
 src/town.mjs
 src/world.mjs
