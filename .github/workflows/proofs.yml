@@ -95,6 +95,8 @@ jobs:
         run: vp check
       - name: Match the types to the compiled model
         run: vp run contract
+      - name: Test
+        run: vp test
       - name: Check the world's plan
         run: vp run plan
       - name: Build
