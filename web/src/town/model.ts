@@ -3,7 +3,7 @@ import graph from "../town.mjs";
 /**
  * The town, read out of the model.
  *
- * `logic/town.bend` decides everything: where a junction sits, how its street
+ * `logic/town/` decides everything: where a junction sits, how its street
  * bends, what each approach carries, and which lot holds which building. This
  * file only unwraps the compiler's encoding into plain numbers. It decides
  * nothing, and it must not: a rule that lives here cannot be proved.

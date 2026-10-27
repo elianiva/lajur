@@ -17,7 +17,7 @@ function lajurLogic(): Plugin {
 
     // Editing the model rebuilds it rather than reloading a stale copy.
     handleHotUpdate({ file, server }) {
-      const source = /logic\/(\w+)\.bend$/.exec(file)?.[1];
+      const source = /logic\/([\w/]+)\.bend$/.exec(file)?.[1];
       const touched = source && SOURCES[source];
       if (!touched) return;
       const built = buildLogic();

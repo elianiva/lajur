@@ -102,8 +102,9 @@ car and the crossing ahead before the car gets there. The renderer bakes each
 into a few meshes and drops the cells left behind.
 
 Speed, lanes, lane changes, the gap to the car ahead and the verdict belong to
-`logic/game.bend`. The town's lattice is `logic/town.bend`. `logic/PROOF.bend`
-proves both, and the TypeScript in `src/` reads the result and draws it.
+`logic/game.bend`. The town's lattice and what stands on it are `logic/town/`,
+six layers that each import only the ones beneath them; `logic/town.bend` names
+the functions the page calls. `logic/PROOF.bend` proves both, and the TypeScript in `src/` reads the result and draws it.
 
 A crash ends the run: the panel lists each rule broken with its article and its
 fine, or says that no article was broken.

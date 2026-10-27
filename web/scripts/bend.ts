@@ -17,6 +17,12 @@ export const MODULES = ["game", "town", "world", "parcels"] as const;
 export const SOURCES: Record<string, readonly string[]> = {
   game: ["game"],
   town: ["town"],
+  "town/lattice": ["town"],
+  "town/streets": ["town"],
+  "town/junction": ["town"],
+  "town/blocks": ["town"],
+  "town/pavement": ["town"],
+  "town/split": ["town"],
   world: ["world", "parcels", "game"],
   parcels: ["parcels"],
   lokal: ["game"],

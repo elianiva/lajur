@@ -1,5 +1,5 @@
 // The contract with the town model. `town.mjs` is generated from
-// logic/town.bend by `vp run logic` (and by every `vp dev` / `vp build`), so
+// logic/town.bend (a flat list over logic/town/) by `vp run logic` (and by every `vp dev` / `vp build`), so
 // this file is hand-written to say what that module exports.
 //
 // Bend's JS target represents a constructor as `{ $: "Name", field: value }`,

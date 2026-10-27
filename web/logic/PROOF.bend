@@ -9,7 +9,12 @@
 #   cd web/logic && bend PROOF.bend --verdict  the same through the Lean kernel
 import Base
 import ./game.bend as G
-import ./town.bend as T
+import ./town/lattice.bend as Lat
+import ./town/streets.bend as Str
+import ./town/junction.bend as Jun
+import ./town/blocks.bend as Blk
+import ./town/pavement.bend as Pav
+import ./town/split.bend as Spl
 import ./world.bend as W
 import ./lokal.bend as L
 import ../../bend/model.bend as M
@@ -422,79 +427,79 @@ def a_gap_never_goes_below_zero():
 # ===========================================================================
 
 law a_block_pitches_a_hundred_and_forty_metres:
-  { T.pitch_cm() == 14000 : U32 }
+  { Lat.pitch_cm() == 14000 : U32 }
 
 def a_block_pitches_a_hundred_and_forty_metres():
   {==}
 
 law no_block_can_fold:
-  { U32.is_lt(0, T.edge_cm()) == True{} : Bool }
+  { U32.is_lt(0, Str.edge_cm()) == True{} : Bool }
 
 def no_block_can_fold():
   {==}
 
 law the_tightest_bend_clears_the_minimum_radius:
-  { U32.is_le(8000, T.radius_floor_cm()) == True{} : Bool }
+  { U32.is_le(8000, Str.radius_floor_cm()) == True{} : Bool }
 
 def the_tightest_bend_clears_the_minimum_radius():
   {==}
 
 law every_junction_keeps_a_street_to_leave_by:
-  { T.every_node_wide(30n, 0) == True{} : Bool }
+  { Jun.every_node_wide(30n, 0) == True{} : Bool }
 
 def every_junction_keeps_a_street_to_leave_by():
   {==}
 
 law the_left_of_a_northern_approach_is_the_west_branch:
-  { T.left_of(T.North{}) == T.West{} : T.Dir }
+  { Str.left_of(Str.North{}) == Str.West{} : Str.Dir }
 
 def the_left_of_a_northern_approach_is_the_west_branch():
   {==}
 
 law a_four_way_of_equal_roads_yields_to_the_left:
-  { T.duty_of(T.Uncontrolled{}, T.FourEqual{}) == T.YieldLeft{} : T.Duty }
+  { Jun.duty_of(Jun.Uncontrolled{}, Jun.FourEqual{}) == Jun.YieldLeft{} : Jun.Duty }
 
 def a_four_way_of_equal_roads_yields_to_the_left():
   {==}
 
 law a_minor_branch_yields_to_the_main_road:
-  { T.duty_of(T.Uncontrolled{}, T.FourMajor{}) == T.YieldMain{} : T.Duty }
+  { Jun.duty_of(Jun.Uncontrolled{}, Jun.FourMajor{}) == Jun.YieldMain{} : Jun.Duty }
 
 def a_minor_branch_yields_to_the_main_road():
   {==}
 
 law a_perpendicular_t_yields_to_the_through_road:
-  { T.duty_of(T.Uncontrolled{}, T.StraightT{}) == T.YieldThrough{} : T.Duty }
+  { Jun.duty_of(Jun.Uncontrolled{}, Jun.StraightT{}) == Jun.YieldThrough{} : Jun.Duty }
 
 def a_perpendicular_t_yields_to_the_through_road():
   {==}
 
 law a_skew_t_yields_to_the_left_branch:
-  { T.duty_of(T.Uncontrolled{}, T.SkewT{}) == T.YieldLeft{} : T.Duty }
+  { Jun.duty_of(Jun.Uncontrolled{}, Jun.SkewT{}) == Jun.YieldLeft{} : Jun.Duty }
 
 def a_skew_t_yields_to_the_left_branch():
   {==}
 
 law a_roundabout_yields_to_the_right:
-  { T.duty_of(T.Roundabout{}, T.FourEqual{}) == T.YieldRight{} : T.Duty }
+  { Jun.duty_of(Jun.Roundabout{}, Jun.FourEqual{}) == Jun.YieldRight{} : Jun.Duty }
 
 def a_roundabout_yields_to_the_right():
   {==}
 
 law a_signal_outranks_the_shape:
-  { T.duty_of(T.Signal{}, T.SkewT{}) == T.ObeySignal{} : T.Duty }
+  { Jun.duty_of(Jun.Signal{}, Jun.SkewT{}) == Jun.ObeySignal{} : Jun.Duty }
 
 def a_signal_outranks_the_shape():
   {==}
 
 law a_bend_asks_nothing_of_priority:
-  { T.duty_of(T.Uncontrolled{}, T.Bend{}) == T.FreePassage{} : T.Duty }
+  { Jun.duty_of(Jun.Uncontrolled{}, Jun.Bend{}) == Jun.FreePassage{} : Jun.Duty }
 
 def a_bend_asks_nothing_of_priority():
   {==}
 
 law the_two_signal_phases_never_show_green_together:
-  { T.phases_disjoint(26n, 0) == True{} : Bool }
+  { Jun.phases_disjoint(26n, 0) == True{} : Bool }
 
 def the_two_signal_phases_never_show_green_together():
   {==}
@@ -504,19 +509,19 @@ def the_two_signal_phases_never_show_green_together():
 # ---------------------------------------------------------------------------
 
 law the_town_has_a_signalised_crossing:
-  { T.control(2, 0) == T.Signal{} : T.Control }
+  { Jun.control(2, 0) == Jun.Signal{} : Jun.Control }
 
 def the_town_has_a_signalised_crossing():
   {==}
 
 law the_town_has_a_roundabout_at_its_heart:
-  { T.control(4, 4) == T.Roundabout{} : T.Control }
+  { Jun.control(4, 4) == Jun.Roundabout{} : Jun.Control }
 
 def the_town_has_a_roundabout_at_its_heart():
   {==}
 
 law the_town_has_a_perpendicular_t:
-  { T.shape(1, 0, T.seed_of_town()) == T.StraightT{} : T.Shape }
+  { Jun.shape(1, 0, Lat.seed_of_town()) == Jun.StraightT{} : Jun.Shape }
 
 def the_town_has_a_perpendicular_t():
   {==}
@@ -525,25 +530,25 @@ def the_town_has_a_perpendicular_t():
 # town itself has no skew T. The rule still classifies one, which is what the
 # verdict text promises: a T on a bend is a skew T.
 law a_t_on_a_bend_is_a_skew_t:
-  { T.shape_of(3, False{}, False{}) == T.SkewT{} : T.Shape }
+  { Jun.shape_of(3, False{}, False{}) == Jun.SkewT{} : Jun.Shape }
 
 def a_t_on_a_bend_is_a_skew_t():
   {==}
 
 law the_town_has_a_four_way_of_equal_roads:
-  { T.duty(1, 1, T.seed_of_town()) == T.YieldLeft{} : T.Duty }
+  { Jun.duty(1, 1, Lat.seed_of_town()) == Jun.YieldLeft{} : Jun.Duty }
 
 def the_town_has_a_four_way_of_equal_roads():
   {==}
 
 law the_town_has_a_minor_branch_onto_a_main_road:
-  { T.duty(1, 2, T.seed_of_town()) == T.YieldMain{} : T.Duty }
+  { Jun.duty(1, 2, Lat.seed_of_town()) == Jun.YieldMain{} : Jun.Duty }
 
 def the_town_has_a_minor_branch_onto_a_main_road():
   {==}
 
 law the_town_has_a_bend:
-  { T.duty(0, 0, T.seed_of_town()) == T.FreePassage{} : T.Duty }
+  { Jun.duty(0, 0, Lat.seed_of_town()) == Jun.FreePassage{} : Jun.Duty }
 
 def the_town_has_a_bend():
   {==}
@@ -553,25 +558,25 @@ def the_town_has_a_bend():
 # ---------------------------------------------------------------------------
 
 law a_street_starts_at_its_first_node:
-  { T.at(T.curve_of(3, 3, T.East{}, T.seed_of_town()), 0) == T.site(3, 3, T.seed_of_town()) : T.Pt }
+  { Str.at(Str.curve_of(3, 3, Str.East{}, Lat.seed_of_town()), 0) == Lat.site(3, 3, Lat.seed_of_town()) : Lat.Pt }
 
 def a_street_starts_at_its_first_node():
   {==}
 
 law a_street_ends_at_its_second_node:
-  { T.at(T.curve_of(3, 3, T.East{}, T.seed_of_town()), 1024) == T.site(4, 3, T.seed_of_town()) : T.Pt }
+  { Str.at(Str.curve_of(3, 3, Str.East{}, Lat.seed_of_town()), 1024) == Lat.site(4, 3, Lat.seed_of_town()) : Lat.Pt }
 
 def a_street_ends_at_its_second_node():
   {==}
 
 law every_street_stays_inside_the_town:
-  { T.samples_inside(T.samples(3, 3, T.East{}, T.seed_of_town())) == True{} : Bool }
+  { Str.samples_inside(Str.samples(3, 3, Str.East{}, Lat.seed_of_town())) == True{} : Bool }
 
 def every_street_stays_inside_the_town():
   {==}
 
 law a_street_is_drawn_in_nine_points:
-  { T.sample_count(T.samples(3, 3, T.East{}, T.seed_of_town())) == 9 : U32 }
+  { Str.sample_count(Str.samples(3, 3, Str.East{}, Lat.seed_of_town())) == 9 : U32 }
 
 def a_street_is_drawn_in_nine_points():
   {==}
@@ -581,49 +586,49 @@ def a_street_is_drawn_in_nine_points():
 # ---------------------------------------------------------------------------
 
 law a_signalised_approach_has_a_stop_line:
-  { T.every_mark(T.approaches(2, 0, T.seed_of_town()), T.StopLine{}) == True{} : Bool }
+  { Jun.every_mark(Jun.approaches(2, 0, Lat.seed_of_town()), Jun.StopLine{}) == True{} : Bool }
 
 def a_signalised_approach_has_a_stop_line():
   {==}
 
 law a_signalised_approach_has_a_head:
-  { T.every_head(T.approaches(2, 0, T.seed_of_town())) == True{} : Bool }
+  { Jun.every_head(Jun.approaches(2, 0, Lat.seed_of_town())) == True{} : Bool }
 
 def a_signalised_approach_has_a_head():
   {==}
 
 law a_bundaran_gives_way_from_every_approach:
-  { T.every_mark(T.approaches(4, 4, T.seed_of_town()), T.GiveWayLine{}) == True{} : Bool }
+  { Jun.every_mark(Jun.approaches(4, 4, Lat.seed_of_town()), Jun.GiveWayLine{}) == True{} : Bool }
 
 def a_bundaran_gives_way_from_every_approach():
   {==}
 
 law a_skew_t_posts_nothing:
-  { T.every_post(T.approaches(3, 0, T.seed_of_town()), T.NoSign{}) == True{} : Bool }
+  { Jun.every_post(Jun.approaches(3, 0, Lat.seed_of_town()), Jun.NoSign{}) == True{} : Bool }
 
 def a_skew_t_posts_nothing():
   {==}
 
 law a_perpendicular_t_stops_its_stem:
-  { T.mark_at(1, 0, T.South{}, T.seed_of_town()) == T.GiveWayLine{} : T.Mark }
+  { Jun.mark_at(1, 0, Str.South{}, Lat.seed_of_town()) == Jun.GiveWayLine{} : Jun.Mark }
 
 def a_perpendicular_t_stops_its_stem():
   {==}
 
 law the_warning_stands_across_from_the_give_way:
-  { T.post_at(1, 0, T.East{}, T.seed_of_town()) == T.PriorityWarning{} : T.Post }
+  { Jun.post_at(1, 0, Str.East{}, Lat.seed_of_town()) == Jun.PriorityWarning{} : Jun.Post }
 
 def the_warning_stands_across_from_the_give_way():
   {==}
 
 law the_minor_road_carries_the_give_way_sign:
-  { T.post_at(1, 4, T.North{}, T.seed_of_town()) == T.GiveWaySign{} : T.Post }
+  { Jun.post_at(1, 4, Str.North{}, Lat.seed_of_town()) == Jun.GiveWaySign{} : Jun.Post }
 
 def the_minor_road_carries_the_give_way_sign():
   {==}
 
 law every_line_stands_behind_the_kerb:
-  { T.every_line_behind_the_box(T.approaches(1, 4, T.seed_of_town()), 1, 4) == True{} : Bool }
+  { Jun.every_line_behind_the_box(Jun.approaches(1, 4, Lat.seed_of_town()), 1, 4) == True{} : Bool }
 
 def every_line_stands_behind_the_kerb():
   {==}
@@ -637,32 +642,32 @@ def every_line_stands_behind_the_kerb():
 # ---------------------------------------------------------------------------
 
 law a_kerb_return_clears_six_metres:
-  { U32.is_le(600, T.junction_radius_cm(3, 3, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(600, Jun.junction_radius_cm(3, 3, Lat.seed_of_town())) == True{} : Bool }
 
 def a_kerb_return_clears_six_metres():
   {==}
 
 law a_kerb_return_stays_inside_its_band:
-  { U32.is_le(T.junction_radius_cm(0, 0, T.seed_of_town()), 1200) == True{} : Bool }
+  { U32.is_le(Jun.junction_radius_cm(0, 0, Lat.seed_of_town()), 1200) == True{} : Bool }
 
 def a_kerb_return_stays_inside_its_band():
   {==}
 
 law a_kerb_return_moves_with_the_class:
-  { T.junction_rank(0, 0) == 2 : U32 }
+  { Jun.junction_rank(0, 0) == 2 : U32 }
 
 def a_kerb_return_moves_with_the_class():
   {==}
 
 law a_mouth_clears_the_street_across_it:
-  { U32.is_le(T.cross_half(1, 4, T.North{}), T.mouth_cm(1, 4, T.North{}, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(Jun.cross_half(1, 4, Str.North{}), Jun.mouth_cm(1, 4, Str.North{}, Lat.seed_of_town())) == True{} : Bool }
 
 def a_mouth_clears_the_street_across_it():
   {==}
 
 law a_line_stands_behind_the_box:
-  { U32.is_le(T.mouth_cm(1, 4, T.North{}, T.seed_of_town()),
-              T.line_at(1, 4, T.North{}, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(Jun.mouth_cm(1, 4, Str.North{}, Lat.seed_of_town()),
+              Jun.line_at(1, 4, Str.North{}, Lat.seed_of_town())) == True{} : Bool }
 
 def a_line_stands_behind_the_box():
   {==}
@@ -679,7 +684,7 @@ def a_line_stands_behind_the_box():
 # ---------------------------------------------------------------------------
 
 law a_block_holds_at_least_one_ring:
-  { U32.is_le(1, T.rings_in(1, 1, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(1, Blk.rings_in(1, 1, Lat.seed_of_town())) == True{} : Bool }
 
 def a_block_holds_at_least_one_ring():
   {==}
@@ -689,97 +694,97 @@ def a_block_holds_at_least_one_ring():
 # than fifty-eight degrees. This is the field's own corners, every one of them,
 # checked against that sine rather than assumed to clear it.
 law every_block_corner_stays_near_square:
-  { T.every_block_corner(30n, 0, T.seed_of_town()) == True{} : Bool }
+  { Blk.every_block_corner(30n, 0, Lat.seed_of_town()) == True{} : Bool }
 
 def every_block_corner_stays_near_square():
   {==}
 
 law a_core_tiles_its_own_ground:
-  { Bool.and(T.core_edges_rise(8n, 0, 1, 1, True{}, T.seed_of_town()),
-             T.core_edges_rise(8n, 0, 1, 1, False{}, T.seed_of_town())) == True{} : Bool }
+  { Bool.and(Blk.core_edges_rise(8n, 0, 1, 1, True{}, Lat.seed_of_town()),
+             Blk.core_edges_rise(8n, 0, 1, 1, False{}, Lat.seed_of_town())) == True{} : Bool }
 
 def a_core_tiles_its_own_ground():
   {==}
 
 law every_frontage_holds_a_lot_inside_the_town:
-  { T.sides_inside(2n, 0, 1, 1, T.seed_of_town()) == True{} : Bool }
+  { Blk.sides_inside(2n, 0, 1, 1, Lat.seed_of_town()) == True{} : Bool }
 
 def every_frontage_holds_a_lot_inside_the_town():
   {==}
 
 law a_frontage_row_is_thirteen_metres_deep:
-  { T.row_depth_cm() == 1300 : U32 }
+  { Blk.row_depth_cm() == 1300 : U32 }
 
 def a_frontage_row_is_thirteen_metres_deep():
   {==}
 
 law a_frontage_starts_behind_the_box:
-  { U32.is_le(T.mouth_cm(1, 1, T.East{}, T.seed_of_town()),
-              T.side_len(1, 1, 0, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(Jun.mouth_cm(1, 1, Str.East{}, Lat.seed_of_town()),
+              Blk.side_len(1, 1, 0, Lat.seed_of_town())) == True{} : Bool }
 
 def a_frontage_starts_behind_the_box():
   {==}
 
 law a_lot_is_never_narrower_than_its_pitch:
-  { U32.is_le(T.pitch_of(0), T.lot_width(1, 1, 0, 0, T.seed_of_town())) == True{} : Bool }
+  { U32.is_le(Blk.pitch_of(0), Blk.lot_width(1, 1, 0, 0, Lat.seed_of_town())) == True{} : Bool }
 
 def a_lot_is_never_narrower_than_its_pitch():
   {==}
 
 law a_frontage_lot_holds_a_shop_house:
-  { U32.is_le(T.kind_min_cm(T.Ruko{}), T.pitch_of(0)) == True{} : Bool }
+  { U32.is_le(Blk.kind_min_cm(Blk.Ruko{}), Blk.pitch_of(0)) == True{} : Bool }
 
 def a_frontage_lot_holds_a_shop_house():
   {==}
 
 law a_frontage_lot_holds_a_warung:
-  { U32.is_le(T.kind_min_cm(T.Warung{}), T.pitch_of(0)) == True{} : Bool }
+  { U32.is_le(Blk.kind_min_cm(Blk.Warung{}), Blk.pitch_of(0)) == True{} : Bool }
 
 def a_frontage_lot_holds_a_warung():
   {==}
 
 law a_rear_lot_holds_a_house:
-  { U32.is_le(T.kind_min_cm(T.House{}), T.pitch_of(1)) == True{} : Bool }
+  { U32.is_le(Blk.kind_min_cm(Blk.House{}), Blk.pitch_of(1)) == True{} : Bool }
 
 def a_rear_lot_holds_a_house():
   {==}
 
 law a_rear_lot_holds_a_kos:
-  { U32.is_le(T.kind_min_cm(T.Kos{}), T.pitch_of(1)) == True{} : Bool }
+  { U32.is_le(Blk.kind_min_cm(Blk.Kos{}), Blk.pitch_of(1)) == True{} : Bool }
 
 def a_rear_lot_holds_a_kos():
   {==}
 
 law a_rear_lot_holds_a_terrace:
-  { U32.is_le(T.kind_min_cm(T.Petak{}), T.pitch_of(1)) == True{} : Bool }
+  { U32.is_le(Blk.kind_min_cm(Blk.Petak{}), Blk.pitch_of(1)) == True{} : Bool }
 
 def a_rear_lot_holds_a_terrace():
   {==}
 
 law no_building_outgrows_its_ring:
-  { Bool.and(U32.is_le(T.kind_depth_cm(T.Ruko{}), T.row_depth_cm()),
-    Bool.and(U32.is_le(T.kind_depth_cm(T.Warung{}), T.row_depth_cm()),
-    Bool.and(U32.is_le(T.kind_depth_cm(T.House{}), T.row_depth_cm()),
-    Bool.and(U32.is_le(T.kind_depth_cm(T.Kos{}), T.row_depth_cm()),
-    Bool.and(U32.is_le(T.kind_depth_cm(T.Petak{}), T.row_depth_cm()),
-    Bool.and(U32.is_le(T.kind_depth_cm(T.Filler{}), T.row_depth_cm()),
-    Bool.and(U32.is_le(T.kind_depth_cm(T.Minimarket{}), T.row_depth_cm()),
-    Bool.and(U32.is_le(T.kind_depth_cm(T.Bengkel{}), T.row_depth_cm()),
-             U32.is_le(T.kind_depth_cm(T.Gudang{}), T.row_depth_cm()))))))))) == True{} : Bool }
+  { Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.Ruko{}), Blk.row_depth_cm()),
+    Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.Warung{}), Blk.row_depth_cm()),
+    Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.House{}), Blk.row_depth_cm()),
+    Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.Kos{}), Blk.row_depth_cm()),
+    Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.Petak{}), Blk.row_depth_cm()),
+    Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.Filler{}), Blk.row_depth_cm()),
+    Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.Minimarket{}), Blk.row_depth_cm()),
+    Bool.and(U32.is_le(Blk.kind_depth_cm(Blk.Bengkel{}), Blk.row_depth_cm()),
+             U32.is_le(Blk.kind_depth_cm(Blk.Gudang{}), Blk.row_depth_cm()))))))))) == True{} : Bool }
 
 def no_building_outgrows_its_ring():
   {==}
 
 law every_kind_fits_the_lot_it_is_chosen_for:
-  { Bool.and(T.every_roll_fits(100n, 0, True{}, T.pitch_of(0)),
-             T.every_roll_fits(100n, 0, False{}, T.pitch_of(1))) == True{} : Bool }
+  { Bool.and(Blk.every_roll_fits(100n, 0, True{}, Blk.pitch_of(0)),
+             Blk.every_roll_fits(100n, 0, False{}, Blk.pitch_of(1))) == True{} : Bool }
 
 def every_kind_fits_the_lot_it_is_chosen_for():
   {==}
 
 law every_lot_of_a_block_holds_a_building_that_fits:
-  { Bool.and(T.lots_fit(2n, 0, 0, 0, 1, 1, T.seed_of_town()),
-             T.lots_fit(2n, 0, 1, 1, 1, 1, T.seed_of_town())) == True{} : Bool }
+  { Bool.and(Blk.lots_fit(2n, 0, 0, 0, 1, 1, Lat.seed_of_town()),
+             Blk.lots_fit(2n, 0, 1, 1, 1, 1, Lat.seed_of_town())) == True{} : Bool }
 
 def every_lot_of_a_block_holds_a_building_that_fits():
   {==}
@@ -793,26 +798,26 @@ def every_lot_of_a_block_holds_a_building_that_fits():
 # ---------------------------------------------------------------------------
 
 law no_two_crowns_meet:
-  { U32.is_le(U32.mul(2, T.widest_crown_cm()), T.pitch_of(0)) == True{} : Bool }
+  { U32.is_le(U32.mul(2, Pav.widest_crown_cm()), Blk.pitch_of(0)) == True{} : Bool }
 
 def no_two_crowns_meet():
   {==}
 
 law a_prop_stands_on_the_pavement:
-  { Bool.and(T.prop_on_pavement(1, 1, 0), Bool.and(T.prop_on_pavement(1, 1, 1),
-             Bool.and(T.prop_on_pavement(1, 1, 2), T.prop_on_pavement(1, 1, 3)))) == True{} : Bool }
+  { Bool.and(Pav.prop_on_pavement(1, 1, 0), Bool.and(Pav.prop_on_pavement(1, 1, 1),
+             Bool.and(Pav.prop_on_pavement(1, 1, 2), Pav.prop_on_pavement(1, 1, 3)))) == True{} : Bool }
 
 def a_prop_stands_on_the_pavement():
   {==}
 
 law the_props_of_a_frontage_keep_apart:
-  { T.props_apart(2n, 0, 1, 1, 0, T.seed_of_town()) == True{} : Bool }
+  { Pav.props_apart(2n, 0, 1, 1, 0, Lat.seed_of_town()) == True{} : Bool }
 
 def the_props_of_a_frontage_keep_apart():
   {==}
 
 law a_pole_spans_forty_metres:
-  { U32.is_le(4000, U32.mul(7, T.pitch_of(0))) == True{} : Bool }
+  { U32.is_le(4000, U32.mul(7, Blk.pitch_of(0))) == True{} : Bool }
 
 def a_pole_spans_forty_metres():
   {==}
@@ -827,7 +832,7 @@ def a_pole_spans_forty_metres():
 # twenty and one in four of the junctions; and no cut leaves a half narrower
 # than nine metres.
 law the_split_has_every_kind_of_cut_a_fair_share_of_dead_ends_and_no_sliver:
-  { T.split_holds(T.town_cuts(T.seed_of_town())) == True{} : Bool }
+  { Spl.split_holds(Spl.town_cuts(Lat.seed_of_town())) == True{} : Bool }
 
 def the_split_has_every_kind_of_cut_a_fair_share_of_dead_ends_and_no_sliver():
   {==}
@@ -836,12 +841,12 @@ def the_split_has_every_kind_of_cut_a_fair_share_of_dead_ends_and_no_sliver():
 # the distance to the segment, and each end of the segment is measured from the
 # end: a point beside the cut, past its end, near its end and on a slant.
 law a_point_is_clear_of_a_cut_only_by_its_reach:
-  { Bool.and(Bool.not(T.seg_clear(100, 100, T.Pt{0, 0}, T.Pt{1000, 0}, 300)),
-    Bool.and(T.seg_clear(100, 500, T.Pt{0, 0}, T.Pt{1000, 0}, 300),
-    Bool.and(Bool.not(T.seg_clear(1200, 0, T.Pt{0, 0}, T.Pt{1000, 0}, 300)),
-    Bool.and(T.seg_clear(1400, 0, T.Pt{0, 0}, T.Pt{1000, 0}, 300),
-    Bool.and(T.seg_clear(1000, 0, T.Pt{0, 0}, T.Pt{1000, 1000}, 500),
-             Bool.not(T.seg_clear(600, 400, T.Pt{0, 0}, T.Pt{1000, 1000}, 300))))))) == True{} : Bool }
+  { Bool.and(Bool.not(Spl.seg_clear(100, 100, Lat.Pt{0, 0}, Lat.Pt{1000, 0}, 300)),
+    Bool.and(Spl.seg_clear(100, 500, Lat.Pt{0, 0}, Lat.Pt{1000, 0}, 300),
+    Bool.and(Bool.not(Spl.seg_clear(1200, 0, Lat.Pt{0, 0}, Lat.Pt{1000, 0}, 300)),
+    Bool.and(Spl.seg_clear(1400, 0, Lat.Pt{0, 0}, Lat.Pt{1000, 0}, 300),
+    Bool.and(Spl.seg_clear(1000, 0, Lat.Pt{0, 0}, Lat.Pt{1000, 1000}, 500),
+             Bool.not(Spl.seg_clear(600, 400, Lat.Pt{0, 0}, Lat.Pt{1000, 1000}, 300))))))) == True{} : Bool }
 
 def a_point_is_clear_of_a_cut_only_by_its_reach():
   {==}
