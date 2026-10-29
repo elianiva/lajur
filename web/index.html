@@ -10,15 +10,17 @@
     <div id="stage"></div>
 
     <div id="hud">
-      <div class="speed"><b id="speed">0</b><span>km/h</span></div>
-      <div class="limit"><span id="limit">50</span></div>
-      <div class="metres"><b id="metres">0</b><span>m</span></div>
-      <div class="lamps" id="lamps" data-signal="Off"><i></i><i></i></div>
+      <svg id="dial" viewBox="0 0 224 224" aria-label="Speed"></svg>
+      <div id="lamps" data-signal="Off">
+        <svg viewBox="0 0 24 24"><path d="M2 12 11 3v6h11v6H11v6z" /></svg>
+        <svg viewBox="0 0 24 24"><path d="M2 12 11 3v6h11v6H11v6z" /></svg>
+      </div>
     </div>
 
     <section id="verdict" hidden>
-      <h1>Crashed</h1>
+      <h1>Tilang</h1>
       <ul id="causes"></ul>
+      <p id="total"><span>Rp</span><b></b></p>
       <kbd>R</kbd>
     </section>
 

@@ -40,8 +40,8 @@ const port = Number(process.env.PORT ?? 5173);
 
 export default defineConfig({
   plugins: [lajurLogic()],
-  server: { host: true, port, strictPort: true },
-  preview: { host: true, port, strictPort: true },
+  server: { host: true, port, strictPort: true, allowedHosts: [".onamp.dev"] },
+  preview: { host: true, port, strictPort: true, allowedHosts: [".onamp.dev"] },
   // The game, and the lab that shows every asset in src/assets.
   build: {
     rollupOptions: {
