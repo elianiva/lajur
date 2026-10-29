@@ -208,6 +208,22 @@ export class Hud {
   private fares = need("#fares b");
   private seen = 0;
   private ended = false;
+  private today = need("#today");
+  private bestRow = need<HTMLElement>("#best");
+
+  /** The title's line under today's shift: the date and the best on it. */
+  title(seed: number, today: number): void {
+    const date = new Date(Math.floor(seed / 10000), (Math.floor(seed / 100) % 100) - 1, seed % 100);
+    const day = date.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+    this.today.textContent = today > 0 ? `${day} · best Rp${rupiah.format(today)}` : day;
+  }
+
+  /** The receipt's best line, marked when this shift set it. */
+  best(fresh: boolean, best: number): void {
+    this.bestRow.classList.toggle("new", fresh);
+    this.bestRow.querySelector("b")!.textContent =
+      `${fresh ? "New · " : ""}Rp${rupiah.format(best)}`;
+  }
 
   update(state: Snapshot, car: { x: number; z: number }): void {
     const left = Math.ceil(state.clock);

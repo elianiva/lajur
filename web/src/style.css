@@ -295,6 +295,36 @@ body {
   background: #fff;
 }
 
+#menu #any {
+  border-color: #fff;
+  color: #fff;
+  font-size: 15px;
+}
+
+#menu #any:hover,
+#menu #any:focus-visible {
+  background: #fff;
+  color: var(--ink);
+}
+
+#today {
+  margin: calc(var(--u) * -2) 0 0;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(16, 22, 26, 0.6);
+}
+
+#best {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding-top: 4px;
+  font-size: 13px;
+}
+
+#best.new b {
+  color: #1a8a55;
+}
+
 #keys {
   display: grid;
   grid-template-columns: auto auto;

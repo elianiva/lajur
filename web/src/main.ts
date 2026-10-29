@@ -3,6 +3,7 @@ import "./style.css";
 import { Hud } from "./hud.ts";
 import { Keyboard, type Command } from "./input.ts";
 import { Sound } from "./sound.ts";
+import { anyStreet, best, record, today } from "./best.ts";
 import { buildCar, PLAYER_COLOUR } from "./assets/cars.ts";
 import { Around } from "./render/around.ts";
 import { Route } from "./render/route.ts";
@@ -129,8 +130,8 @@ class Run {
   }
 }
 
-const SEED = 20261024;
-let run = new Run(SEED);
+let seed = today();
+let run = new Run(seed);
 
 /** The screen the player is on. Only `playing` advances the model. */
 type Screen = "menu" | "playing" | "paused" | "finished";
@@ -144,12 +145,15 @@ function show(next: Screen): void {
   document.body.dataset.screen = next;
   pause.hidden = next !== "paused";
   menu.hidden = next !== "menu";
+  run.stop.group.visible = next !== "menu";
   if (next === "playing") sound.wake();
+  if (next === "menu") hud.title(seed, best(seed));
+  if (next === "finished") hud.best(record(seed, run.state.earned), best(seed));
 }
 
 function fresh(next: Screen): void {
   run.dispose();
-  run = new Run(SEED);
+  run = new Run(seed);
   hud.reset();
   sound.reset();
   shake = 0;
@@ -164,11 +168,17 @@ function obey(command: Command): void {
     sound.wake();
     sound.toggle();
   } else if (command === "start" && screen === "menu") show("playing");
-  else if (command === "start" && screen === "finished") fresh("playing");
+  else if (command === "any" && screen === "menu") {
+    seed = anyStreet();
+    fresh("playing");
+  } else if (command === "start" && screen === "finished") fresh("playing");
   else if (command === "pause" && screen === "playing") show("paused");
   else if (command === "pause" && screen === "paused") show("playing");
   else if (command === "restart" && screen !== "menu") fresh("playing");
-  else if (command === "menu" && screen !== "menu" && screen !== "playing") fresh("menu");
+  else if (command === "menu" && screen !== "menu" && screen !== "playing") {
+    seed = today();
+    fresh("menu");
+  }
 }
 
 show("menu");

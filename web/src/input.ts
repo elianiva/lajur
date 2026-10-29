@@ -11,10 +11,11 @@ type Field = keyof typeof KEYS;
 type Held = Record<Field, boolean>;
 
 /** Keys that act once per press rather than while held. */
-export type Command = "start" | "pause" | "restart" | "menu" | "mute";
+export type Command = "start" | "any" | "pause" | "restart" | "menu" | "mute";
 
 const COMMANDS: Record<string, Command> = {
   Enter: "start",
+  KeyN: "any",
   Escape: "pause",
   KeyP: "pause",
   KeyR: "restart",
