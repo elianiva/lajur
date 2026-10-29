@@ -986,3 +986,52 @@ law a_late_drop_off_pays_half:
 
 def a_late_drop_off_pays_half():
   {==}
+
+# ===========================================================================
+# Lights
+# ===========================================================================
+
+# An approach shows green for eight seconds, amber for three, then red.
+law the_light_is_green_for_eight_seconds:
+  { Bool.and(U32.is_eq(G.light_of(0), 0), U32.is_eq(G.light_of(479), 0)) == True{} : Bool }
+
+def the_light_is_green_for_eight_seconds():
+  {==}
+
+law the_light_is_amber_for_three_seconds:
+  { Bool.and(U32.is_eq(G.light_of(480), 1), U32.is_eq(G.light_of(659), 1)) == True{} : Bool }
+
+def the_light_is_amber_for_three_seconds():
+  {==}
+
+law the_light_is_red_after_amber:
+  { G.light_of(660) == 2 : U32 }
+
+def the_light_is_red_after_amber():
+  {==}
+
+law the_two_roads_of_a_crossing_are_never_green_together:
+  { G.never_both_green(1440n, 0) == True{} : Bool }
+
+def the_two_roads_of_a_crossing_are_never_green_together():
+  {==}
+
+# Crossing (1, 1) is on no arterial, so it has no lights.
+law a_crossing_of_collectors_has_no_lights:
+  { G.light_at(20261024, 1, 1, 1, 0) == 3 : U32 }
+
+def a_crossing_of_collectors_has_no_lights():
+  {==}
+
+# Pasal 106 ayat (4) huruf c: passing a red light is charged under rule 7.
+law running_a_red_light_is_charged:
+  { R.contains(7, R.charges(G.scenario_at(G.cruising(1000), Nil{}, M.Urban{}, False{}, True{}))) == True{} : Bool }
+
+def running_a_red_light_is_charged():
+  {==}
+
+law passing_on_green_is_charged_nothing:
+  { G.spread(R.charges(G.scenario_at(G.cruising(1000), Nil{}, M.Urban{}, False{}, False{}))) == Nil{} : List<&2, U32> }
+
+def passing_on_green_is_charged_nothing():
+  {==}

@@ -190,6 +190,7 @@ export class Hud {
   private dial = new Dial(need<SVGElement>("#dial"));
   private licence = new Licence();
   private lamps = need<HTMLElement>("#lamps");
+  private light = need<HTMLElement>("#light");
   private slips = need<HTMLOListElement>("#slips");
   private panel = need<HTMLElement>("#verdict");
   private ending = need("#ending");
@@ -221,6 +222,8 @@ export class Hud {
     this.dial.update(state.speed, state.limit);
     this.licence.update(state.points, state.heldAt);
     this.lamps.dataset.signal = state.signal;
+    // The light ahead, once it is near enough to matter.
+    this.light.dataset.state = String(state.light.ahead < 160 ? state.light.state : 3);
 
     // Tickets arrive newest first; each new one gets its own slip.
     const fresh = state.tickets.length - this.seen;

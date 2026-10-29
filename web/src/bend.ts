@@ -13,6 +13,18 @@ export interface OrderView {
   dueIn: number;
 }
 
+/** The light at the crossing ahead, and the crossing behind, in metres. */
+export interface LightView {
+  /** 0 green, 1 amber, 2 red, 3 no lights. */
+  state: number;
+  x: number;
+  z: number;
+  backX: number;
+  backZ: number;
+  /** Metres to the crossing along the road. */
+  ahead: number;
+}
+
 /** A ticket as the slip shows it. */
 export interface TicketView {
   id: number;
@@ -58,6 +70,7 @@ export interface Snapshot {
   earned: number;
   served: number;
   order: OrderView;
+  light: LightView;
   traffic: CarView[];
   oncoming: CarView[];
 }
@@ -180,6 +193,19 @@ function orderView(shift: Shift): OrderView {
   };
 }
 
+function lightView(world: World): LightView {
+  const at = game.light_node(world);
+  const back = game.light_back(world);
+  return {
+    state: game.light_state(world),
+    x: (at.x | 0) / 100,
+    z: (at.z | 0) / 100,
+    backX: (back.x | 0) / 100,
+    backZ: (back.z | 0) / 100,
+    ahead: (world.leg.length - world.along) / 100,
+  };
+}
+
 export function snapshot(shift: Shift): Snapshot {
   const world = shift.drive;
   // A manoeuvre is a count of ticks, not a jump: the car sits part way between
@@ -211,6 +237,7 @@ export function snapshot(shift: Shift): Snapshot {
     earned: shift.earned,
     served: shift.served,
     order: orderView(shift),
+    light: lightView(world),
     // On a lokal street the main road's traffic is out of sight.
     traffic: code === 3 ? [] : cars(world.traffic, code),
     oncoming: code === 3 ? [] : cars(world.oncoming, code, true),

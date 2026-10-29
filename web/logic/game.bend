@@ -719,16 +719,20 @@ def outruns_all(+at: Lane, +speed: U32, cars: List<&2, Car>) -> Bool:
 
 # Pasal 108 ayat (4): the right lane is for a vehicle moving faster than the
 # traffic beside it. With nothing beside it, nothing is slower.
-def scenario_among(p: Player, +cars: List<&2, Car>, zone: M.Zone, hit: Bool) -> R.Scenario:
+def scenario_at(p: Player, +cars: List<&2, Car>, zone: M.Zone, hit: Bool, red: Bool) -> R.Scenario:
   match p:
     case Player{+lane, +speed, signal, lamp, moving, target}:
       +changing = Bool.or(signalling(signal), Bool.not(U32.is_eq(moving, 0)))
       # A scenario carries the signs in force at the moment; the game posts no
       # sign duty, so it names the clean act apart from the lane facts.
-      R.Scenario{R.road_in(zone), R.clean_load(), R.clean_gear(),
+      R.Scenario{R.Road{zone, R.Left{}, False{}, True{}, red, False{}, False{}, False{}, False{}, False{}, R.NoPriority{}, True{}},
+                 R.clean_load(), R.clean_gear(),
                  motion_for(kmh(speed), changing, changing),
                  R.clean_yield(), R.clean_docs(),
                  R.act_in_lane(lane_use(lane), outruns_all(lane, speed, cars), hit)}
+
+def scenario_among(p: Player, +cars: List<&2, Car>, zone: M.Zone, hit: Bool) -> R.Scenario:
+  scenario_at(p, cars, zone, hit, False{})
 
 # A moment with no traffic beside the player, for the proofs that judge one car.
 def scenario_for(p: Player) -> R.Scenario:
@@ -1030,6 +1034,48 @@ def move(p: Place, +leg: Leg, +along: U32, +dist: U32, +seed: U32, +turn: U32, +
 
 
 # ===========================================================================
+# Lights
+#
+# A crossing where an arterial runs has lights. Each approach shows green,
+# then amber, then red, in a 24 s cycle; the two axes take turns, with a
+# second of red both ways between them, and each crossing starts its cycle
+# at its own offset. A car that passes the crossing while its approach shows
+# red runs the light: Pasal 106 ayat (4) huruf c.
+# ===========================================================================
+
+def cycle_ticks() -> U32:
+  1440
+
+def green_ticks() -> U32:
+  480
+
+def amber_ticks() -> U32:
+  180
+
+def has_lights(+i: U32, +j: U32) -> Bool:
+  Bool.or(U32.is_eq(W.smod3(i), 0), U32.is_eq(W.smod3(j), 0))
+
+# Where the approach is in its cycle: 0 green, 1 amber, 2 red.
+def light_of(+mine: U32) -> U32:
+  Bool.pick(U32, U32.is_lt(mine, green_ticks()), 0,
+  Bool.pick(U32, U32.is_lt(mine, U32.add(green_ticks(), amber_ticks())), 1, 2))
+
+# The light for a car heading dir into crossing (i, j) at a tick: 0 green,
+# 1 amber, 2 red, 3 no lights.
+def light_at(+seed: U32, +i: U32, +j: U32, +dir: U32, +tick: U32) -> U32:
+  +t = U32.mod(U32.add(tick, U32.mod(W.hash3(seed, 79, i, j), cycle_ticks())), cycle_ticks())
+  +mine = Bool.pick(U32, eastward(dir), t, U32.mod(U32.add(t, U32.div(cycle_ticks(), 2)), cycle_ticks()))
+  Bool.pick(U32, has_lights(i, j), light_of(mine), 3)
+
+# The light ahead of a car on a main road; a collector meets no lights.
+def light_ahead(+l: Leg, +side: Bool, +seed: U32, +tick: U32) -> U32:
+  match l:
+    case Leg{+i, +j, +dir, length}:
+      Bool.pick(U32, side, 3, light_at(seed, next_i(i, dir), next_j(j, dir), dir, tick))
+    case Cut{ci, cj, dir, t0, length}:
+      3
+
+# ===========================================================================
 # The world
 # ===========================================================================
 
@@ -1096,7 +1142,7 @@ def drift_oncoming_if(go: Bool, cars: List<&2, Car>, +dist: U32, +tick: U32) -> 
 # the kerb lane; on a lokal street the main road's traffic waits, unseen.
 def settle(pos: Pos, +tick: U32, player: Player, traffic: List<&2, Car>,
            oncoming: List<&2, Car>, +dist: U32, distance: U32, +input: Controls,
-           residual: U32, seed: U32) -> World:
+           residual: U32, seed: U32, red: Bool) -> World:
   match pos:
     case Pos{+leg, along, turn, +place, +passed}:
       +side = on_side(place)
@@ -1108,7 +1154,7 @@ def settle(pos: Pos, +tick: U32, player: Player, traffic: List<&2, Car>,
       +met = Bool.pick(List<&2, Car>, side, Nil{}, traffic2)
       +hit = blocked(met, lane_of(kept))
       World{tick, kept, traffic2, oncoming2, U32.add(distance, dist), zone,
-            spread(R.charges(scenario_among(kept, met, zone, hit))), status_after(hit),
+            spread(R.charges(scenario_at(kept, met, zone, hit, Bool.and(passed, red)))), status_after(hit),
             input, residual, leg, along, turn, place, seed}
 
 def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
@@ -1124,7 +1170,8 @@ def step(frozen: Bool, +tick: U32, player: Player, traffic: List<&2, Car>,
       +dist = roll(speed_of(player2))
       settle(move(place, leg, along, dist, seed, turn, pressed(held_left(input), held_left(held)),
                   pressed(held_right(input), held_right(held))),
-             U32.add(tick, 1), player2, traffic, oncoming, dist, distance, input, residual, seed)
+             U32.add(tick, 1), player2, traffic, oncoming, dist, distance, input, residual, seed,
+             U32.is_eq(light_ahead(leg, on_side(place), seed, tick), 2))
 
 def tick(w: World, input: Controls) -> World:
   match w:
@@ -1718,13 +1765,14 @@ def kerb_side(p: Player) -> Player:
       Player{Outer{}, speed, signal, lamp, moving, Outer{}}
 
 # The car that starts every shift, on an arterial no seed can drop: crossing
-# (1, 3) is odd in i, and only a crossing even in both drops a road.
+# (1, 3) is odd in i, and only a crossing even in both drops a road. The
+# traffic ahead starts at least seventy metres off, as past a crossing.
 def reseed(w: World, +seed: U32) -> World:
   match w:
     case World{tick, player, traffic, oncoming, distance, zone, charges, status,
                held, residual, leg, along, turn, place, s0}:
       +first = leg_from(seed, 1, 3, 1)
-      World{tick, kerb_side(player), traffic, oncoming, distance, zone_on(first), charges, status,
+      World{tick, kerb_side(player), refresh(True{}, traffic, 0), oncoming, distance, zone_on(first), charges, status,
             held, residual, first, along, turn, place, seed}
 
 def start_on(+seed: U32) -> World:
@@ -1916,3 +1964,41 @@ def with_drive(s: Shift, w: World) -> Shift:
   match s:
     case Shift{drive, points, tickets, live, phase, order, earned, served}:
       Shift{w, points, tickets, live, phase, order, earned, served}
+
+# The light the car drives toward, and the crossing it hangs at and the one
+# behind it, for the renderer.
+def light_state(+w: World) -> U32:
+  light_ahead(leg_of(w), on_side(place_of(w)), seed_of(w), tick_of(w))
+
+def light_node(+w: World) -> W.Pt:
+  +l = leg_of(w)
+  W.node(seed_of(w), toward_i(l), toward_j(l))
+
+def back_i(l: Leg) -> U32:
+  match l:
+    case Leg{i, j, dir, length}:
+      i
+    case Cut{ci, cj, dir, t0, length}:
+      ci
+
+def back_j(l: Leg) -> U32:
+  match l:
+    case Leg{i, j, dir, length}:
+      j
+    case Cut{ci, cj, dir, t0, length}:
+      cj
+
+def light_back(+w: World) -> W.Pt:
+  +l = leg_of(w)
+  W.node(seed_of(w), back_i(l), back_j(l))
+
+# The laws walk a whole cycle: at no point of it are both axes of a crossing
+# green. A crossing's offset only shifts where in the cycle a tick falls.
+def never_both_green(fuel: Nat, +t: U32) -> Bool:
+  match fuel:
+    case 0n:
+      True{}
+    case 1n+p:
+      +ew = light_of(t)
+      +ns = light_of(U32.mod(U32.add(t, U32.div(cycle_ticks(), 2)), cycle_ticks()))
+      Bool.and(Bool.not(Bool.and(U32.is_eq(ew, 0), U32.is_eq(ns, 0))), never_both_green(p, U32.add(t, 1)))

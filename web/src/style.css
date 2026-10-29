@@ -52,6 +52,41 @@ body {
   font-family: inherit;
 }
 
+/* The light ahead: three lamps on a dark housing, the lit one the model's. */
+#light {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(16, 22, 26, 0.75);
+}
+
+#light[data-state="3"] {
+  display: none;
+}
+
+#light i {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #2b3238;
+}
+
+#light[data-state="2"] i:nth-child(1) {
+  background: var(--warn);
+  box-shadow: 0 0 12px var(--warn);
+}
+
+#light[data-state="1"] i:nth-child(2) {
+  background: var(--amber);
+  box-shadow: 0 0 12px var(--amber);
+}
+
+#light[data-state="0"] i:nth-child(3) {
+  background: #2ec27e;
+  box-shadow: 0 0 12px #2ec27e;
+}
+
 #lamps {
   display: flex;
   gap: var(--u);

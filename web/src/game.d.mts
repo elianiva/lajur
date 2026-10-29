@@ -158,6 +158,10 @@ export interface Game {
   points_of_rule(id: number): number;
   clock_left(shift: Shift): number;
   order_point(shift: Shift): Pt;
+  /** The light ahead: 0 green, 1 amber, 2 red, 3 none. */
+  light_state(world: World): number;
+  light_node(world: World): Pt;
+  light_back(world: World): Pt;
 }
 
 declare const game: Game;
