@@ -1,7 +1,14 @@
 import game from "./game.mjs";
-import type { BendList, Body, Car, Controls, Lane, Signal, World } from "./game.mjs";
+import type { BendList, Body, Car, Controls, Lane, Shift, Signal, World } from "./game.mjs";
 
-export type { Body, Controls, Signal, World };
+export type { Body, Controls, Shift, Signal, World };
+
+/** A ticket as the slip shows it. */
+export interface TicketView {
+  id: number;
+  tick: number;
+  points: number;
+}
 
 /** One car as the renderer needs it: metres, not the model's centimetres. */
 export interface CarView {
@@ -30,20 +37,26 @@ export interface Snapshot {
   lane: Lane["$"];
   target: Lane["$"];
   charges: number[];
+  /** Licence points so far, and the count at which the licence is held. */
+  points: number;
+  heldAt: number;
+  phase: Shift["phase"]["$"];
+  /** Newest first. */
+  tickets: TicketView[];
   traffic: CarView[];
   oncoming: CarView[];
 }
 
-export function start(): World {
-  return game.start();
+export function start(seed: number): Shift {
+  return game.shift_start(seed);
 }
 
-export function advance(world: World, ms: number, input: Controls): World {
-  return game.advance(world, ms, input);
+export function advance(shift: Shift, ms: number, input: Controls): Shift {
+  return game.shift_advance(shift, ms, input);
 }
 
-export function restart(world: World): World {
-  return game.restart(world);
+export function withDrive(shift: Shift, world: World): Shift {
+  return game.with_drive(shift, world);
 }
 
 // The catalogue's numbers, asked of the catalogue itself rather than copied.
@@ -57,6 +70,10 @@ export function citation(id: number): string {
 
 export function fine(id: number): number {
   return game.fine_of(id);
+}
+
+export function points(id: number): number {
+  return game.points_of_rule(id);
 }
 
 // The model measures lanes from the centre line; the player keeps the left
@@ -137,7 +154,8 @@ function ids(list: World["charges"]): number[] {
   return out;
 }
 
-export function snapshot(world: World): Snapshot {
+export function snapshot(shift: Shift): Snapshot {
+  const world = shift.drive;
   // A manoeuvre is a count of ticks, not a jump: the car sits part way between
   // the lane it left and the one it is taking, by the model's own arithmetic.
   const moving = game.lane_move(world);
@@ -159,6 +177,10 @@ export function snapshot(world: World): Snapshot {
     crashed: game.crashed(world),
     signal: game.signal_state(world).$,
     charges: ids(world.charges),
+    points: shift.points,
+    heldAt: game.held_at(),
+    phase: shift.phase.$,
+    tickets: items(shift.tickets).map((t) => ({ id: t.id, tick: t.tick, points: t.points })),
     // On a lokal street the main road's traffic is out of sight.
     traffic: code === 3 ? [] : cars(world.traffic, code),
     oncoming: code === 3 ? [] : cars(world.oncoming, code, true),

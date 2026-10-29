@@ -90,3 +90,11 @@ def requirements_count() -> U32:
 
 def health_check_count() -> U32:
   count_health(health_checks())
+
+# Pasal 37 ayat (2), 38 ayat (1) and 39 ayat (1): points add up, and at 12 the
+# licence is held before trial; at 18 a court may revoke it.
+def held_at_points() -> U32:
+  12
+
+def revoked_at_points() -> U32:
+  18

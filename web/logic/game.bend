@@ -17,6 +17,7 @@ import ../../bend/model.bend as M
 import ../../bend/rules.bend as R
 import ./world.bend as W
 import ./lokal.bend as L
+import ../../bend/licence.bend as Lic
 
 # ===========================================================================
 # The road
@@ -1542,3 +1543,172 @@ def with_net(w: World, d: L.Door, net: List<&2, L.Way>) -> World:
           World{tick, player, traffic, oncoming, distance, zone, charges, status,
                 held, residual, leg, along, turn,
                 Place{known, doors, door, left, lok_with(lok, Bool.pick(U32, U32.is_eq(want, given), want, no_door()), net)}, seed}
+
+# ===========================================================================
+# The shift
+#
+# A drive is a shift. A charge is a ticket when it starts and again every
+# five seconds while it lasts, each with the points Perpol 5/2021 Pasal 35
+# and 36 put on the licence. The shift ends when the car crashes or the
+# points reach the 12 at which Pasal 38 holds the licence.
+# ===========================================================================
+
+type Phase is Data:
+  Running{}
+  Held{}
+  Wrecked{}
+
+type Ticket is Data:
+  Ticket{id: U32, tick: U32, points: U32}
+
+type Shift is Data:
+  Shift{drive: World, points: U32, tickets: List<&2, Ticket>, live: List<&2, Ticket>, phase: Phase}
+
+# A charge that lasts is ticketed again after this many ticks.
+def again_ticks() -> U32:
+  300
+
+# The car that starts every shift, on an arterial no seed can drop: crossing
+# (1, 3) is odd in i, and only a crossing even in both drops a road.
+def reseed(w: World, +seed: U32) -> World:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, place, s0}:
+      +first = leg_from(seed, 1, 3, 1)
+      World{tick, player, traffic, oncoming, distance, zone_on(first), charges, status,
+            held, residual, first, along, turn, place, seed}
+
+def start_on(+seed: U32) -> World:
+  reseed(start(), seed)
+
+def shift_start(+seed: U32) -> Shift:
+  Shift{start_on(seed), 0, Nil{}, Nil{}, Running{}}
+
+def tick_of(w: World) -> U32:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, place, seed}:
+      tick
+
+def charges_of(w: World) -> List<&2, U32>:
+  match w:
+    case World{tick, player, traffic, oncoming, distance, zone, charges, status,
+               held, residual, leg, along, turn, place, seed}:
+      charges
+
+# The tick a charge was last ticketed, or none when it was not live.
+def last_ticket(live: List<&2, Ticket>, +id: U32, +none: U32) -> U32:
+  match live:
+    case Nil{}:
+      none
+    case h <> t:
+      match h:
+        case Ticket{+tid, tick, points}:
+          Bool.pick(U32, U32.is_eq(tid, id), tick, last_ticket(t, id, none))
+
+# A charge is ticketed now unless it was live and ticketed less than
+# `again_ticks` ago.
+def ticket_tick(+last: U32, +now: U32) -> U32:
+  Bool.pick(U32, U32.is_lt(U32.sub(now, last), again_ticks()), last, now)
+
+def none_before(+now: U32) -> U32:
+  U32.sub(now, again_ticks())
+
+# The charges live now, each with the tick it was last ticketed.
+def judge(ids: List<&2, U32>, +live: List<&2, Ticket>, +now: U32) -> List<&2, Ticket>:
+  match ids:
+    case Nil{}:
+      Nil{}
+    case +id <> t:
+      Ticket{id, ticket_tick(last_ticket(live, id, none_before(now)), now), R.points_of(id)}
+        <> judge(t, live, now)
+
+# The tickets written now: the live charges ticketed this tick.
+def written(live: List<&2, Ticket>, +now: U32) -> List<&2, Ticket>:
+  match live:
+    case Nil{}:
+      Nil{}
+    case +h <> +t:
+      match h:
+        case Ticket{id, +tick, points}:
+          Bool.pick(List<&2, Ticket>, U32.is_eq(tick, now), h <> written(t, now), written(t, now))
+
+def points_in(ts: List<&2, Ticket>) -> U32:
+  match ts:
+    case Nil{}:
+      0
+    case h <> t:
+      match h:
+        case Ticket{id, tick, points}:
+          U32.add(points, points_in(t))
+
+def append(a: List<&2, Ticket>, b: List<&2, Ticket>) -> List<&2, Ticket>:
+  match a:
+    case Nil{}:
+      b
+    case h <> t:
+      h <> append(t, b)
+
+def phase_after(crash: Bool, +points: U32) -> Phase:
+  Bool.pick(Phase, crash, Wrecked{},
+    Bool.pick(Phase, U32.is_lt(points, Lic.held_at_points()), Running{}, Held{}))
+
+def is_running(p: Phase) -> Bool:
+  match p:
+    case Running{}:
+      True{}
+    case _:
+      False{}
+
+# The world after a frame. When the frame ran no tick, nothing new is judged.
+def judged(moved: Bool, +w: World, +points: U32, +tickets: List<&2, Ticket>, +live: List<&2, Ticket>) -> Shift:
+  match moved:
+    case False{}:
+      Shift{w, points, tickets, live, Running{}}
+    case True{}:
+      +now = tick_of(w)
+      +live2 = judge(charges_of(w), live, now)
+      +fresh = written(live2, now)
+      +total = U32.add(points, points_in(fresh))
+      Shift{w, total, append(fresh, tickets), live2, phase_after(crashed(w), total)}
+
+def drive_on(go: Bool, +s: Shift, +ms: U32, +input: Controls) -> Shift:
+  match go:
+    case False{}:
+      s
+    case True{}:
+      match s:
+        case Shift{drive, +points, +tickets, +live, phase}:
+          +before = tick_of(drive)
+          +w = advance(drive, ms, input)
+          judged(U32.is_ne(tick_of(w), before), w, points, tickets, live)
+
+def phase_of(s: Shift) -> Phase:
+  match s:
+    case Shift{drive, points, tickets, live, phase}:
+      phase
+
+def shift_advance(+s: Shift, +ms: U32, +input: Controls) -> Shift:
+  drive_on(is_running(phase_of(s)), s, ms, input)
+
+def drive_of(s: Shift) -> World:
+  match s:
+    case Shift{drive, points, tickets, live, phase}:
+      drive
+
+def points_of(s: Shift) -> U32:
+  match s:
+    case Shift{drive, points, tickets, live, phase}:
+      points
+
+def held_at() -> U32:
+  Lic.held_at_points()
+
+def points_of_rule(+id: U32) -> U32:
+  R.points_of(id)
+
+# The worker's doors and networks go into the drive the shift carries.
+def with_drive(s: Shift, w: World) -> Shift:
+  match s:
+    case Shift{drive, points, tickets, live, phase}:
+      Shift{w, points, tickets, live, phase}

@@ -91,4 +91,10 @@ export class Around {
 
     this.town.update(camera, true);
   }
+
+  /** Stops the worker; the shift that drew this town is over. */
+  dispose(): void {
+    this.worker.terminate();
+    this.group.removeFromParent();
+  }
 }

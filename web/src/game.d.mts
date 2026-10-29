@@ -83,6 +83,21 @@ export type World = {
   seed: number;
 };
 
+export type Phase = Constructor<"Running" | "Held" | "Wrecked">;
+
+/** A charge written up: the rule, the tick it was written and its licence points. */
+export type Ticket = { $: "Ticket"; id: number; tick: number; points: number };
+
+export type Shift = {
+  $: "Shift";
+  drive: World;
+  points: number;
+  /** Newest first. */
+  tickets: BendList<Ticket>;
+  live: BendList<Ticket>;
+  phase: Phase;
+};
+
 export interface Game {
   start(): World;
   advance(world: World, ms: number, input: Controls): World;
@@ -118,6 +133,12 @@ export interface Game {
   door_net(seed: number, door: Door): BendList<Way>;
   wants_net(world: World): boolean;
   with_net(world: World, door: Door, net: BendList<Way>): World;
+  shift_start(seed: number): Shift;
+  shift_advance(shift: Shift, ms: number, input: Controls): Shift;
+  drive_of(shift: Shift): World;
+  with_drive(shift: Shift, world: World): Shift;
+  held_at(): number;
+  points_of_rule(id: number): number;
 }
 
 declare const game: Game;

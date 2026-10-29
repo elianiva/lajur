@@ -24,6 +24,10 @@ export class Ahead {
     };
   }
 
+  dispose(): void {
+    this.worker.terminate();
+  }
+
   /** Asks for the doors of the leg the car is on and of each leg it may take next. */
   prefetch(world: World): void {
     const seed = game.seed_of(world);

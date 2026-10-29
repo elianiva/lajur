@@ -1489,6 +1489,97 @@ def tier_go(rs: List<Rule>, +id: U32, acc: U32) -> U32:
 def tier_of(+id: U32) -> U32:
   tier_go(catalogue(), id, 99)
 
+# ---------------------------------------------------------------------------
+# Licence points, Perpol 5/2021 Pasal 35 and 36
+#
+# A violation or a crash puts points on the driver's licence, by the penal
+# article of UU 22/2009 it falls under. Pasal 35 ayat (2) names its 5-point
+# cases as a penal article read with (jo) a duty article, so those match on
+# both; ayat (3) and (4) name penal articles alone. Pasal 36 grades crashes.
+# The most specific list wins: a crash first, then the jo pairs. A rule with
+# no penal article gets no points. Pasal 35 ayat (2) reads 287 ayat (1) jo
+# 106 ayat (4) twice, for huruf b and huruf c; the catalogue does not keep the
+# huruf, so a sign and a marking both get the pair's 5 points.
+# ---------------------------------------------------------------------------
+
+def is_in(+x: U32, +lo: U32, +hi: U32) -> Bool:
+  Bool.and(Bool.not(U32.is_lt(x, lo)), Bool.not(U32.is_lt(hi, x)))
+
+def pen_is(+pen: U32, +pen_ay: U32, +want: U32, +want_ay: U32) -> Bool:
+  Bool.and(U32.is_eq(pen, want), U32.is_eq(pen_ay, want_ay))
+
+def jo(+pen: U32, +art: U32, +ay: U32, +want: U32, +want_art: U32, +want_ay: U32) -> Bool:
+  Bool.and(U32.is_eq(pen, want), Bool.and(U32.is_eq(art, want_art), U32.is_eq(ay, want_ay)))
+
+# Pasal 36 ayat (2): 310 (3), (4) and 311 (4), (5).
+def crash_twelve(+pen: U32, +pen_ay: U32) -> Bool:
+  Bool.or(Bool.and(U32.is_eq(pen, 310), is_in(pen_ay, 3, 4)),
+          Bool.and(U32.is_eq(pen, 311), is_in(pen_ay, 4, 5)))
+
+# Pasal 36 ayat (3): 275 (2), 311 (2), (3) and 312.
+def crash_ten(+pen: U32, +pen_ay: U32) -> Bool:
+  Bool.or(pen_is(pen, pen_ay, 275, 2),
+  Bool.or(Bool.and(U32.is_eq(pen, 311), is_in(pen_ay, 2, 3)), U32.is_eq(pen, 312)))
+
+# Pasal 36 ayat (4): 310 (1), (2) and 311 (1).
+def crash_five(+pen: U32, +pen_ay: U32) -> Bool:
+  Bool.or(Bool.and(U32.is_eq(pen, 310), is_in(pen_ay, 1, 2)), pen_is(pen, pen_ay, 311, 1))
+
+# Pasal 35 ayat (2): the jo pairs.
+def jo_five(+art: U32, +ay: U32, +pen: U32, +pen_ay: U32) -> Bool:
+  Bool.or(jo(pen, art, ay, 281, 77, 1),
+  Bool.or(jo(pen, art, ay, 283, 106, 1),
+  Bool.or(Bool.and(U32.is_eq(pen_ay, 2), jo(pen, art, ay, 285, 106, 3)),
+  Bool.or(jo(pen, art, ay, 286, 106, 3),
+  Bool.or(Bool.and(is_in(pen_ay, 1, 3), jo(pen, art, ay, 287, 106, 4)),
+  Bool.or(Bool.and(U32.is_eq(pen_ay, 5), jo(pen, art, ay, 287, 106, 4)),
+  Bool.or(Bool.and(pen_is(pen, pen_ay, 287, 5), U32.is_eq(art, 115)),
+  Bool.or(Bool.and(U32.is_eq(pen, 296), U32.is_eq(art, 114)),
+          Bool.and(U32.is_eq(pen, 297), U32.is_eq(art, 115))))))))))
+
+# Pasal 35 ayat (3).
+def pen_three(+pen: U32, +pen_ay: U32) -> Bool:
+  Bool.or(is_in(pen, 279, 280),
+  Bool.or(U32.is_eq(pen, 284),
+  Bool.or(pen_is(pen, pen_ay, 285, 2),
+  Bool.or(U32.is_eq(pen, 286),
+  Bool.or(Bool.and(U32.is_eq(pen, 287), Bool.or(is_in(pen_ay, 1, 2), U32.is_eq(pen_ay, 5))),
+  Bool.or(Bool.and(U32.is_eq(pen, 288), Bool.or(U32.is_eq(pen_ay, 1), U32.is_eq(pen_ay, 3))),
+  Bool.or(U32.is_eq(pen, 298),
+  Bool.or(U32.is_eq(pen, 305), is_in(pen, 307, 308)))))))))
+
+# Pasal 35 ayat (4).
+def pen_one(+pen: U32, +pen_ay: U32) -> Bool:
+  Bool.or(pen_is(pen, pen_ay, 275, 1),
+  Bool.or(U32.is_eq(pen, 276),
+  Bool.or(U32.is_eq(pen, 278),
+  Bool.or(U32.is_eq(pen, 282),
+  Bool.or(pen_is(pen, pen_ay, 285, 1),
+  Bool.or(Bool.and(U32.is_eq(pen, 287), Bool.or(is_in(pen_ay, 3, 4), U32.is_eq(pen_ay, 6))),
+  Bool.or(pen_is(pen, pen_ay, 288, 2),
+  Bool.or(is_in(pen, 289, 295),
+  Bool.or(is_in(pen, 300, 304), U32.is_eq(pen, 306))))))))))
+
+def points_for(+art: U32, +ay: U32, +pen: U32, +pen_ay: U32) -> U32:
+  Bool.pick(U32, crash_twelve(pen, pen_ay), 12,
+  Bool.pick(U32, crash_ten(pen, pen_ay), 10,
+  Bool.pick(U32, crash_five(pen, pen_ay), 5,
+  Bool.pick(U32, jo_five(art, ay, pen, pen_ay), 5,
+  Bool.pick(U32, pen_three(pen, pen_ay), 3,
+  Bool.pick(U32, pen_one(pen, pen_ay), 1, 0))))))
+
+def points_go(rs: List<Rule>, +id: U32, acc: U32) -> U32:
+  match rs:
+    case Nil{}:
+      acc
+    case h <> t:
+      match h:
+        case Rule{+rid, tier, months, days, fine, +art, +ay, +pen_art, +pen_ay}:
+          points_go(t, id, pick_u32(U32.is_eq(rid, id), points_for(art, ay, pen_art, pen_ay), acc))
+
+def points_of(+id: U32) -> U32:
+  points_go(catalogue(), id, 0)
+
 # The catalogue uses the precedence tiers where the articles demand them.
 def tiers_ok() -> Bool:
   Bool.and(U32.is_eq(tier_of(6), 0),

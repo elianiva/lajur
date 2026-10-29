@@ -1,4 +1,4 @@
-import { citation, fine, ruleName, type Snapshot } from "./bend.ts";
+import { citation, fine, points, ruleName, type Snapshot } from "./bend.ts";
 
 const rupiah = new Intl.NumberFormat("id-ID");
 
@@ -145,55 +145,105 @@ class Dial {
   }
 }
 
+/** The licence: one pip per point up to the count that holds it. */
+class Licence {
+  private pips = need<HTMLOListElement>("#pips");
+  private shown = -1;
+
+  update(points: number, heldAt: number): void {
+    if (this.pips.childElementCount !== heldAt) {
+      this.pips.replaceChildren(
+        ...Array.from({ length: heldAt }, () => document.createElement("li")),
+      );
+      this.shown = -1;
+    }
+    if (points === this.shown) return;
+    this.shown = points;
+    [...this.pips.children].forEach((pip, k) => pip.classList.toggle("on", k < points));
+  }
+}
+
+const SLIP_MS = 3200;
+
+function ticketRow(id: number, count = 1): HTMLLIElement {
+  const row = document.createElement("li");
+  const name = document.createElement("strong");
+  name.textContent = count > 1 ? `${ruleName(id)} ×${count}` : ruleName(id);
+  const where = document.createElement("span");
+  where.textContent = citation(id);
+  const cost = document.createElement("em");
+  const pts = points(id) * count;
+  cost.textContent = pts > 0 ? `+${pts} poin` : "Warning";
+  row.append(name, where, cost);
+  return row;
+}
+
+const ENDINGS: Record<Snapshot["phase"], string> = {
+  Running: "Tilang",
+  Held: "SIM held",
+  Wrecked: "Crashed",
+};
+
 /** Reads the model's numbers into the overlay. Formats; decides nothing. */
 export class Hud {
   private dial = new Dial(need<SVGElement>("#dial"));
+  private licence = new Licence();
   private lamps = need<HTMLElement>("#lamps");
+  private slips = need<HTMLOListElement>("#slips");
   private panel = need<HTMLElement>("#verdict");
+  private ending = need("#ending");
   private causes = need("#causes");
   private total = need("#total b");
-  private shown: string | null = null;
+  private tally = need("#tally b");
+  private seen = 0;
+  private ended = false;
 
   update(state: Snapshot): void {
     this.dial.update(state.speed, state.limit);
+    this.licence.update(state.points, state.heldAt);
     this.lamps.dataset.signal = state.signal;
 
-    if (state.crashed) this.verdict(state);
-    else this.dismiss();
+    // Tickets arrive newest first; each new one gets its own slip.
+    const fresh = state.tickets.length - this.seen;
+    for (const ticket of state.tickets.slice(0, Math.max(fresh, 0)).reverse()) this.slip(ticket.id);
+    this.seen = state.tickets.length;
+
+    if (state.phase !== "Running" && !this.ended) this.verdict(state);
+  }
+
+  /** A new shift: no slips, no verdict. */
+  reset(): void {
+    this.seen = 0;
+    this.ended = false;
+    this.slips.replaceChildren();
+    this.panel.hidden = true;
+  }
+
+  private slip(id: number): void {
+    const row = ticketRow(id);
+    this.slips.prepend(row);
+    setTimeout(() => row.remove(), SLIP_MS);
   }
 
   private verdict(state: Snapshot): void {
-    const key = state.charges.join(",");
-    if (this.shown === key) return;
-    this.shown = key;
-
+    this.ended = true;
+    this.ending.textContent = ENDINGS[state.phase];
     this.causes.replaceChildren();
-    if (state.charges.length === 0) {
+    const counts = new Map<number, number>();
+    for (const t of [...state.tickets].reverse()) counts.set(t.id, (counts.get(t.id) ?? 0) + 1);
+    if (counts.size === 0) {
       const clean = document.createElement("li");
       clean.className = "clean";
       clean.textContent = "No article broken";
       this.causes.append(clean);
     }
     let sum = 0;
-    for (const id of state.charges) {
-      const row = document.createElement("li");
-      const name = document.createElement("strong");
-      name.textContent = ruleName(id);
-      const where = document.createElement("span");
-      where.textContent = citation(id);
-      const price = document.createElement("em");
-      price.textContent = rupiah.format(fine(id));
-      sum += fine(id);
-      row.append(name, where, price);
-      this.causes.append(row);
+    for (const [id, count] of counts) {
+      this.causes.append(ticketRow(id, count));
+      sum += fine(id) * count;
     }
     this.total.textContent = rupiah.format(sum);
+    this.tally.textContent = `${state.points} / ${state.heldAt}`;
     this.panel.hidden = false;
-  }
-
-  private dismiss(): void {
-    if (this.shown === null) return;
-    this.shown = null;
-    this.panel.hidden = true;
   }
 }

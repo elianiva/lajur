@@ -850,3 +850,60 @@ law a_point_is_clear_of_a_cut_only_by_its_reach:
 
 def a_point_is_clear_of_a_cut_only_by_its_reach():
   {==}
+
+# ===========================================================================
+# The shift
+# ===========================================================================
+
+# A charge is a ticket the moment it starts, with the points Perpol 5/2021
+# Pasal 35 puts on the licence for it.
+law a_new_charge_is_ticketed_at_once:
+  { G.judge([21], Nil{}, 1000) == [G.Ticket{21, 1000, 5}] : List<&2, G.Ticket> }
+
+def a_new_charge_is_ticketed_at_once():
+  {==}
+
+# A charge that lasts is one ticket for five seconds, then another.
+law a_lasting_charge_is_one_ticket_for_five_seconds:
+  { G.judge([21], [G.Ticket{21, 1000, 5}], 1299) == [G.Ticket{21, 1000, 5}] : List<&2, G.Ticket> }
+
+def a_lasting_charge_is_one_ticket_for_five_seconds():
+  {==}
+
+law a_lasting_charge_is_ticketed_again_after_five_seconds:
+  { G.written(G.judge([21], [G.Ticket{21, 1000, 5}], 1300), 1300) == [G.Ticket{21, 1300, 5}] : List<&2, G.Ticket> }
+
+def a_lasting_charge_is_ticketed_again_after_five_seconds():
+  {==}
+
+# A charge that stops and starts again is a new ticket.
+law a_charge_that_ends_is_dropped:
+  { G.judge([], [G.Ticket{21, 1000, 5}], 1010) == [] : List<&2, G.Ticket> }
+
+def a_charge_that_ends_is_dropped():
+  {==}
+
+law a_shift_starts_with_a_clean_licence:
+  { G.points_of(G.shift_start(20261024)) == 0 : U32 }
+
+def a_shift_starts_with_a_clean_licence():
+  {==}
+
+# Perpol 5/2021 Pasal 38: at 12 points the licence is held, and the shift ends.
+law eleven_points_keep_the_shift_going:
+  { G.phase_after(False{}, 11) == G.Running{} : G.Phase }
+
+def eleven_points_keep_the_shift_going():
+  {==}
+
+law twelve_points_end_the_shift:
+  { G.phase_after(False{}, 12) == G.Held{} : G.Phase }
+
+def twelve_points_end_the_shift():
+  {==}
+
+law a_crash_ends_the_shift:
+  { G.phase_after(True{}, 0) == G.Wrecked{} : G.Phase }
+
+def a_crash_ends_the_shift():
+  {==}

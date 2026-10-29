@@ -7,7 +7,17 @@ import { Around } from "./render/around.ts";
 import { Route } from "./render/route.ts";
 import { Traffic } from "./render/traffic.ts";
 import { Ahead } from "./ahead.ts";
-import { advance, bodyLength, plan, planKey, restart, snapshot, start } from "./bend.ts";
+import {
+  advance,
+  bodyLength,
+  plan,
+  planKey,
+  snapshot,
+  start,
+  withDrive,
+  type Shift,
+  type Snapshot,
+} from "./bend.ts";
 import { Ink, light, lookByKey, restyle } from "./render/look.ts";
 
 const VIEW_HEIGHT = 46;
@@ -67,24 +77,53 @@ sun.shadow.normalBias = 0.05;
 scene.add(sun, sun.target);
 light(scene, hemi, sun, look);
 
-// The model first: it owns the seed, the road and every rule.
-let world = start();
-let state = snapshot(world);
-
-const ahead = new Ahead();
-ahead.prefetch(world);
-const route = new Route();
-let planned = planKey(world);
-route.sync(plan(world));
-const town = new Around(state.seed);
-scene.add(town.group);
-
-const player = buildCar("Sedan", PLAYER_COLOUR, bodyLength("Sedan"));
-const traffic = new Traffic(route, player);
-scene.add(traffic.group);
-
 const hud = new Hud();
 const keyboard = new Keyboard(window);
+
+/** One shift: the model and everything drawn from its seed. */
+class Run {
+  shift: Shift;
+  state: Snapshot;
+  ahead = new Ahead();
+  route = new Route();
+  town: Around;
+  traffic: Traffic;
+  private planned: number;
+
+  constructor(seed: number) {
+    this.shift = start(seed);
+    this.state = snapshot(this.shift);
+    this.ahead.prefetch(this.shift.drive);
+    this.planned = planKey(this.shift.drive);
+    this.route.sync(plan(this.shift.drive));
+    this.town = new Around(seed);
+    scene.add(this.town.group);
+    const player = buildCar("Sedan", PLAYER_COLOUR, bodyLength("Sedan"));
+    this.traffic = new Traffic(this.route, player);
+    scene.add(this.traffic.group);
+  }
+
+  step(ms: number): void {
+    const next = advance(this.shift, ms, keyboard.controls());
+    this.shift = withDrive(next, this.ahead.fill(next.drive));
+    this.state = snapshot(this.shift);
+    const key = planKey(this.shift.drive);
+    if (key !== this.planned) {
+      this.planned = key;
+      this.route.sync(plan(this.shift.drive));
+      this.ahead.prefetch(this.shift.drive);
+    }
+  }
+
+  dispose(): void {
+    this.ahead.dispose();
+    this.town.dispose();
+    this.traffic.group.removeFromParent();
+  }
+}
+
+const SEED = 20261024;
+let run = new Run(SEED);
 
 let heading = 0;
 let previous = performance.now();
@@ -92,6 +131,7 @@ let previous = performance.now();
 function follow(dt: number): void {
   // The camera sits behind the car and turns with the road; the angle eases so
   // a bend swings the view instead of snapping it.
+  const traffic = run.traffic;
   let delta = traffic.heading - heading;
   delta = Math.atan2(Math.sin(delta), Math.cos(delta));
   heading += delta * Math.min(1, dt * 4);
@@ -110,26 +150,22 @@ function follow(dt: number): void {
 }
 
 function step(ms: number): void {
-  world = ahead.fill(advance(world, ms, keyboard.controls()));
-  state = snapshot(world);
-  const key = planKey(world);
-  if (key !== planned) {
-    planned = key;
-    route.sync(plan(world));
-    ahead.prefetch(world);
-  }
-
-  traffic.update(state, ms / 1000);
+  run.step(ms);
+  run.traffic.update(run.state, ms / 1000);
   follow(ms / 1000);
-  town.update(traffic.position, route.next(), camera);
-  hud.update(state);
+  run.town.update(run.traffic.position, run.route.next(), camera);
+  hud.update(run.state);
 }
 
 function frame(now: number): void {
   const elapsed = Math.min(now - previous, 100);
   previous = now;
 
-  if (keyboard.takeRestart()) world = restart(world);
+  if (keyboard.takeRestart()) {
+    run.dispose();
+    run = new Run(SEED);
+    hud.reset();
+  }
   step(Math.round(elapsed));
 
   // Chunks stream in with the kit's materials; bring them into the look.

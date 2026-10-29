@@ -177,6 +177,104 @@ body {
   opacity: 0.6;
 }
 
+#tally {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding-top: 4px;
+  font-size: 13px;
+}
+
+/* The licence: a card with one pip per point up to the count that holds it. */
+#licence {
+  position: fixed;
+  top: var(--m);
+  left: var(--m);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 1.5);
+  padding: var(--u) calc(var(--u) * 1.5);
+  border-radius: 10px;
+  background: rgba(16, 22, 26, 0.6);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  pointer-events: none;
+}
+
+#pips {
+  display: grid;
+  grid-template-columns: repeat(12, 10px);
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#pips li {
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  transition: background 0.2s;
+}
+
+#pips li.on {
+  background: var(--warn);
+}
+
+/* A ticket the moment it is written: a small slip under the top edge. */
+#slips {
+  position: fixed;
+  top: var(--m);
+  left: 50%;
+  translate: -50% 0;
+  display: grid;
+  gap: var(--u);
+  width: 300px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+#slips li,
+#verdict li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px calc(var(--u) * 2);
+}
+
+#slips li {
+  padding: var(--u) calc(var(--u) * 1.5);
+  background: var(--slip);
+  border-left: 4px solid var(--warn);
+  box-shadow: var(--shadow);
+  animation: rise 0.2s ease-out;
+}
+
+#slips li strong {
+  font-size: 13px;
+}
+
+#slips li span {
+  grid-row: 2;
+  font-size: 10px;
+  opacity: 0.65;
+}
+
+#slips li em {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--warn);
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -185,6 +283,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  #slips li,
   #verdict,
   #lamps svg {
     animation: none;

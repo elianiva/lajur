@@ -640,6 +640,30 @@ def Laws.four_grounds_lower_a_limit():
 def Laws.accident_history_is_read_over_three_years():
   {==}
 
+def Laws.speeding_puts_5_points_on_the_licence():
+  {==}
+
+def Laws.running_a_red_light_puts_5_points_on_the_licence():
+  {==}
+
+def Laws.changing_lane_without_a_signal_puts_1_point_on_the_licence():
+  {==}
+
+def Laws.a_crash_with_damage_puts_5_points_on_the_licence():
+  {==}
+
+def Laws.leaving_a_crash_puts_10_points_on_the_licence():
+  {==}
+
+def Laws.a_rule_with_no_penalty_puts_no_points_on_the_licence():
+  {==}
+
+def Laws.twelve_points_hold_the_licence():
+  {==}
+
+def Laws.eighteen_points_revoke_the_licence():
+  {==}
+
 def Laws.a_car_licence_covers_3500_kg():
   {==}
 

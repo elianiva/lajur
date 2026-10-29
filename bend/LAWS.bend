@@ -448,6 +448,31 @@ law accident_history_is_read_over_three_years:
 # Perpol 5/2021 — licences
 # ===========================================================================
 
+# Pasal 35 and 36: the points a violation or a crash puts on a licence.
+law speeding_puts_5_points_on_the_licence:
+  { R.points_of(21) == 5 : U32 }
+
+law running_a_red_light_puts_5_points_on_the_licence:
+  { R.points_of(7) == 5 : U32 }
+
+law changing_lane_without_a_signal_puts_1_point_on_the_licence:
+  { R.points_of(11) == 1 : U32 }
+
+law a_crash_with_damage_puts_5_points_on_the_licence:
+  { R.points_of(59) == 5 : U32 }
+
+law leaving_a_crash_puts_10_points_on_the_licence:
+  { R.points_of(28) == 10 : U32 }
+
+law a_rule_with_no_penalty_puts_no_points_on_the_licence:
+  { Bool.or(U32.is_ne(R.points_of(1), 0), U32.is_ne(R.points_of(52), 0)) == False{} : Bool }
+
+law twelve_points_hold_the_licence:
+  { L.held_at_points() == 12 : U32 }
+
+law eighteen_points_revoke_the_licence:
+  { L.revoked_at_points() == 18 : U32 }
+
 law a_car_licence_covers_3500_kg:
   { M.sim_max_weight(M.A{}) == 3500 : U32 }
 
