@@ -7,46 +7,81 @@ const KEYS = {
   down: ["ArrowDown", "KeyS", "Space"],
 } as const;
 
-type Held = Record<keyof typeof KEYS, boolean>;
+type Field = keyof typeof KEYS;
+type Held = Record<Field, boolean>;
+
+/** Keys that act once per press rather than while held. */
+export type Command = "start" | "pause" | "restart" | "menu" | "mute";
+
+const COMMANDS: Record<string, Command> = {
+  Enter: "start",
+  Escape: "pause",
+  KeyP: "pause",
+  KeyR: "restart",
+  KeyQ: "menu",
+  KeyM: "mute",
+};
+
+const none = (): Held => ({ left: false, right: false, up: false, down: false });
 
 /**
- * Keyboard to the model's input record. Nothing here decides what a key means
- * beyond which field of `Controls` it sets.
+ * Keyboard and touch pads to the model's input record. Nothing here decides
+ * what a key means beyond which field of `Controls` it sets, or which screen
+ * command it names.
  */
 export class Keyboard {
-  private held: Held = { left: false, right: false, up: false, down: false };
-  private restarting = false;
+  private held = none();
+  private touched = none();
+  private commands: Command[] = [];
 
   constructor(target: Window) {
     target.addEventListener("keydown", this.press);
     target.addEventListener("keyup", this.release);
     target.addEventListener("blur", this.forget);
+    for (const pad of document.querySelectorAll<HTMLElement>("[data-pad]")) this.bind(pad);
+    if (matchMedia("(pointer: coarse)").matches) document.body.dataset.touch = "";
+    target.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "touch") document.body.dataset.touch = "";
+    });
   }
 
   controls(): Controls {
-    return {
-      $: "Controls",
-      left: this.held.left,
-      right: this.held.right,
-      up: this.held.up,
-      down: this.held.down,
-    };
+    const on = (f: Field) => this.held[f] || this.touched[f];
+    return { $: "Controls", left: on("left"), right: on("right"), up: on("up"), down: on("down") };
   }
 
-  takeRestart(): boolean {
-    const was = this.restarting;
-    this.restarting = false;
-    return was;
+  /** The commands pressed since the last call, oldest first. */
+  take(): Command[] {
+    return this.commands.splice(0);
+  }
+
+  /** A button on screen that names a command. */
+  send(command: Command): void {
+    this.commands.push(command);
+  }
+
+  private bind(pad: HTMLElement): void {
+    const field = pad.dataset.pad as Field;
+    const set = (on: boolean) => (event: PointerEvent) => {
+      event.preventDefault();
+      this.touched[field] = on;
+      pad.classList.toggle("on", on);
+    };
+    pad.addEventListener("pointerdown", set(true));
+    for (const name of ["pointerup", "pointercancel", "pointerleave"] as const)
+      pad.addEventListener(name, set(false));
   }
 
   private press = (event: KeyboardEvent) => {
-    if (event.code === "KeyR") {
-      this.restarting = true;
+    const command = COMMANDS[event.code];
+    if (command && !event.repeat) {
+      this.commands.push(command);
+      event.preventDefault();
       return;
     }
     for (const [field, codes] of Object.entries(KEYS)) {
       if (codes.includes(event.code as never)) {
-        this.held[field as keyof Held] = true;
+        this.held[field as Field] = true;
         event.preventDefault();
       }
     }
@@ -54,13 +89,12 @@ export class Keyboard {
 
   private release = (event: KeyboardEvent) => {
     for (const [field, codes] of Object.entries(KEYS)) {
-      if (codes.includes(event.code as never)) {
-        this.held[field as keyof Held] = false;
-      }
+      if (codes.includes(event.code as never)) this.held[field as Field] = false;
     }
   };
 
   private forget = () => {
-    this.held = { left: false, right: false, up: false, down: false };
+    this.held = none();
+    this.touched = none();
   };
 }

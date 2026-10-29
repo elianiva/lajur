@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import "./style.css";
 import { Hud } from "./hud.ts";
-import { Keyboard } from "./input.ts";
+import { Keyboard, type Command } from "./input.ts";
+import { Sound } from "./sound.ts";
 import { buildCar, PLAYER_COLOUR } from "./assets/cars.ts";
 import { Around } from "./render/around.ts";
 import { Route } from "./render/route.ts";
@@ -131,7 +132,49 @@ class Run {
 const SEED = 20261024;
 let run = new Run(SEED);
 
+/** The screen the player is on. Only `playing` advances the model. */
+type Screen = "menu" | "playing" | "paused" | "finished";
+let screen: Screen = "menu";
+const pause = document.querySelector<HTMLElement>("#pause")!;
+const menu = document.querySelector<HTMLElement>("#menu")!;
+const sound = new Sound();
+
+function show(next: Screen): void {
+  screen = next;
+  document.body.dataset.screen = next;
+  pause.hidden = next !== "paused";
+  menu.hidden = next !== "menu";
+  if (next === "playing") sound.wake();
+}
+
+function fresh(next: Screen): void {
+  run.dispose();
+  run = new Run(SEED);
+  hud.reset();
+  sound.reset();
+  shake = 0;
+  show(next);
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command]"))
+  button.addEventListener("click", () => keyboard.send(button.dataset.command as Command));
+
+function obey(command: Command): void {
+  if (command === "mute") {
+    sound.wake();
+    sound.toggle();
+  } else if (command === "start" && screen === "menu") show("playing");
+  else if (command === "start" && screen === "finished") fresh("playing");
+  else if (command === "pause" && screen === "playing") show("paused");
+  else if (command === "pause" && screen === "paused") show("playing");
+  else if (command === "restart" && screen !== "menu") fresh("playing");
+  else if (command === "menu" && screen !== "menu" && screen !== "playing") fresh("menu");
+}
+
+show("menu");
+
 let heading = 0;
+let shake = 0;
 let previous = performance.now();
 
 function follow(dt: number): void {
@@ -146,6 +189,12 @@ function follow(dt: number): void {
   camera.position.copy(traffic.position).add(offset);
   const ahead = LOOK_AHEAD.clone().applyAxisAngle(UP, -heading).add(traffic.position);
   camera.lookAt(ahead);
+  // A crash shakes the view, and the shake dies away.
+  if (shake > 0) {
+    camera.position.x += (Math.random() - 0.5) * shake * 1.6;
+    camera.position.z += (Math.random() - 0.5) * shake * 1.6;
+    shake = Math.max(0, shake - dt * 1.8);
+  }
 
   const sunAt = new THREE.Vector3(...look.sunFrom)
     .normalize()
@@ -155,26 +204,28 @@ function follow(dt: number): void {
   sun.target.position.copy(traffic.position);
 }
 
-function step(ms: number): void {
+function step(ms: number, wall: number): void {
+  const was = run.state.phase;
   run.step(ms);
-  run.traffic.update(run.state, ms / 1000);
-  follow(ms / 1000);
+  if (was === "Running" && run.state.phase === "Wrecked") shake = 1;
+  if (screen === "playing" && run.state.phase !== "Running") show("finished");
+  run.traffic.update(run.state, wall / 1000);
+  follow(wall / 1000);
   run.town.update(run.traffic.position, run.route.next(), camera);
-  run.stop.update(run.state.order, run.traffic.position, ms / 1000);
+  run.stop.update(run.state.order, run.traffic.position, wall / 1000);
   run.signal.update(run.state.light);
   hud.update(run.state, run.traffic.position);
+  sound.update(run.state, screen === "playing", wall / 1000);
 }
 
 function frame(now: number): void {
-  const elapsed = Math.min(now - previous, 100);
+  const elapsed = Math.round(Math.min(now - previous, 100));
   previous = now;
 
-  if (keyboard.takeRestart()) {
-    run.dispose();
-    run = new Run(SEED);
-    hud.reset();
-  }
-  step(Math.round(elapsed));
+  for (const command of keyboard.take()) obey(command);
+  // Off the road the town still streams in and the camera still eases; the
+  // model holds still.
+  step(screen === "playing" ? elapsed : 0, elapsed);
 
   // Chunks stream in with the kit's materials; bring them into the look.
   restyle(scene, look);

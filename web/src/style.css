@@ -199,19 +199,179 @@ body {
   font-weight: 800;
 }
 
-#verdict kbd {
+.panel kbd {
   display: inline-grid;
   place-items: center;
-  margin-top: calc(var(--u) * 2);
-  min-width: 32px;
-  padding: 4px var(--u);
-  border: 1px solid var(--ink);
+  min-width: 26px;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
   border-radius: 6px;
   font: inherit;
+  font-family: var(--mono);
   font-size: 11px;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
+.panel nav {
+  display: flex;
+  gap: var(--u);
+  margin-top: calc(var(--u) * 2);
+}
+
+.panel button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  padding: var(--u) calc(var(--u) * 1.5);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.panel button:hover,
+.panel button:focus-visible {
+  background: var(--ink);
+  color: var(--slip);
+}
+
+/* Pause: a slip like the receipt, over a dimmed street. */
+#pause {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: fit-content;
+  height: fit-content;
+  padding: calc(var(--u) * 3);
+  background: var(--slip);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 100vmax rgba(16, 22, 26, 0.35),
+    var(--shadow);
+  border-radius: 4px;
+}
+
+#pause h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+/* The title: the street behind it, a slip in front. */
+#menu {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: calc(var(--u) * 3);
+  background: linear-gradient(rgba(16, 22, 26, 0.15), rgba(16, 22, 26, 0.55));
+  color: #fff;
+}
+
+#menu h1 {
+  margin: 0;
+  font-size: 96px;
+  font-weight: 900;
+  letter-spacing: -4px;
+  line-height: 1;
+  text-shadow: 0 6px 24px rgba(16, 22, 26, 0.45);
+}
+
+#menu #go {
+  padding: calc(var(--u) * 2) calc(var(--u) * 4);
+  border: none;
+  background: var(--amber);
+  color: var(--ink);
+  font-size: 20px;
+  box-shadow: var(--shadow);
+}
+
+#menu #go:hover,
+#menu #go:focus-visible {
+  background: #fff;
+}
+
+#keys {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: var(--u) calc(var(--u) * 2);
+  margin: 0;
+  padding: calc(var(--u) * 2);
+  border-radius: 10px;
+  background: rgba(16, 22, 26, 0.6);
+  font-size: 14px;
+}
+
+#keys dt {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+#keys dd {
+  margin: 0;
+}
+
+#menu[hidden],
+#pause[hidden],
+.panel[hidden],
+body[data-screen="menu"] #hud,
+body[data-screen="menu"] #licence,
+body[data-screen="menu"] #shift,
+body[data-screen="menu"] #order,
+body[data-screen="menu"] #slips,
+body[data-screen="finished"] #order {
+  display: none;
+}
+
+/* Touch: four pads, steering on the left thumb, pedals on the right, shown
+   once the device has a coarse pointer or is touched. */
+#pads {
+  display: none;
+}
+
+body[data-touch][data-screen="playing"] #pads {
+  position: fixed;
+  inset: auto 0 var(--m);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 var(--m);
+  pointer-events: none;
+}
+
+body[data-touch] #pads button {
+  width: 72px;
+  height: 72px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(16, 22, 26, 0.5);
+  color: #fff;
+  font-size: 26px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+body[data-touch] #pads button.on {
+  background: var(--amber);
+  color: var(--ink);
+}
+
+body[data-touch] #pads button:nth-child(2) {
+  margin-right: auto;
+  margin-left: var(--u);
+}
+
+body[data-touch] #pads button:nth-child(3) {
+  margin-right: var(--u);
+}
+
+body[data-touch] #hud {
+  bottom: calc(var(--m) + 88px);
+}
 #tally {
   display: flex;
   justify-content: space-between;
@@ -401,5 +561,35 @@ body {
   #verdict,
   #lamps svg {
     animation: none;
+  }
+}
+
+/* A phone: smaller margins and dial; the clock and the order under the
+   licence instead of beside it. */
+@media (max-width: 640px) {
+  :root {
+    --m: calc(var(--u) * 2);
+  }
+
+  #dial {
+    width: 168px;
+    height: 168px;
+  }
+
+  #shift {
+    top: calc(var(--m) + 48px);
+  }
+
+  #order {
+    top: calc(var(--m) + 112px);
+  }
+
+  #slips {
+    top: calc(var(--m) + 196px);
+    width: calc(100% - var(--m) * 2);
+  }
+
+  #menu h1 {
+    font-size: 72px;
   }
 }

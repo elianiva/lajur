@@ -37,15 +37,49 @@
 
     <ol id="slips"></ol>
 
-    <section id="verdict" hidden>
+    <section id="verdict" class="panel" hidden>
       <h1 id="ending">Tilang</h1>
       <p id="fares"><span>Fares</span><b></b></p>
       <p id="rating"><span>Rating</span><b></b></p>
       <ul id="causes"></ul>
       <p id="total"><span>Rp</span><b></b></p>
       <p id="tally"><span>Poin</span><b></b></p>
-      <kbd>R</kbd>
+      <nav>
+        <button data-command="restart"><kbd>R</kbd>Again</button>
+        <button data-command="menu"><kbd>Q</kbd>Menu</button>
+      </nav>
     </section>
+
+    <section id="pause" class="panel" hidden>
+      <h1>Paused</h1>
+      <nav>
+        <button data-command="pause"><kbd>Esc</kbd>Resume</button>
+        <button data-command="restart"><kbd>R</kbd>Restart</button>
+        <button data-command="menu"><kbd>Q</kbd>Menu</button>
+      </nav>
+    </section>
+
+    <section id="menu" class="panel">
+      <h1>lajur</h1>
+      <button id="go" data-command="start"><kbd>Enter</kbd>Start shift</button>
+      <dl id="keys">
+        <dt><kbd>↑</kbd><kbd>↓</kbd></dt>
+        <dd>Gas, brake</dd>
+        <dt><kbd>←</kbd><kbd>→</kbd></dt>
+        <dd>Indicate, change lane, turn</dd>
+        <dt><kbd>Esc</kbd></dt>
+        <dd>Pause</dd>
+        <dt><kbd>M</kbd></dt>
+        <dd>Sound</dd>
+      </dl>
+    </section>
+
+    <div id="pads">
+      <button data-pad="left" aria-label="Indicate left">◀</button>
+      <button data-pad="right" aria-label="Indicate right">▶</button>
+      <button data-pad="down" aria-label="Brake">■</button>
+      <button data-pad="up" aria-label="Gas">▲</button>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
