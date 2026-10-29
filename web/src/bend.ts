@@ -3,6 +3,16 @@ import type { BendList, Body, Car, Controls, Lane, Shift, Signal, World } from "
 
 export type { Body, Controls, Shift, Signal, World };
 
+/** The stop the car drives to, in metres, and what it pays. */
+export interface OrderView {
+  aboard: boolean;
+  x: number;
+  z: number;
+  fare: number;
+  /** Seconds until the drop-off is due; negative when late. */
+  dueIn: number;
+}
+
 /** A ticket as the slip shows it. */
 export interface TicketView {
   id: number;
@@ -43,6 +53,11 @@ export interface Snapshot {
   phase: Shift["phase"]["$"];
   /** Newest first. */
   tickets: TicketView[];
+  /** Seconds left in the shift. */
+  clock: number;
+  earned: number;
+  served: number;
+  order: OrderView;
   traffic: CarView[];
   oncoming: CarView[];
 }
@@ -154,6 +169,17 @@ function ids(list: World["charges"]): number[] {
   return out;
 }
 
+function orderView(shift: Shift): OrderView {
+  const at = game.order_point(shift);
+  return {
+    aboard: shift.order.aboard,
+    x: (at.x | 0) / 100,
+    z: (at.z | 0) / 100,
+    fare: shift.order.fare,
+    dueIn: ((shift.order.due | 0) - (shift.drive.tick | 0)) / 60,
+  };
+}
+
 export function snapshot(shift: Shift): Snapshot {
   const world = shift.drive;
   // A manoeuvre is a count of ticks, not a jump: the car sits part way between
@@ -181,6 +207,10 @@ export function snapshot(shift: Shift): Snapshot {
     heldAt: game.held_at(),
     phase: shift.phase.$,
     tickets: items(shift.tickets).map((t) => ({ id: t.id, tick: t.tick, points: t.points })),
+    clock: game.clock_left(shift) / 60,
+    earned: shift.earned,
+    served: shift.served,
+    order: orderView(shift),
     // On a lokal street the main road's traffic is out of sight.
     traffic: code === 3 ? [] : cars(world.traffic, code),
     oncoming: code === 3 ? [] : cars(world.oncoming, code, true),

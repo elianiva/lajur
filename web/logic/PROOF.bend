@@ -891,19 +891,98 @@ def a_shift_starts_with_a_clean_licence():
 
 # Perpol 5/2021 Pasal 38: at 12 points the licence is held, and the shift ends.
 law eleven_points_keep_the_shift_going:
-  { G.phase_after(False{}, 11) == G.Running{} : G.Phase }
+  { G.phase_after(False{}, 11, 0) == G.Running{} : G.Phase }
 
 def eleven_points_keep_the_shift_going():
   {==}
 
 law twelve_points_end_the_shift:
-  { G.phase_after(False{}, 12) == G.Held{} : G.Phase }
+  { G.phase_after(False{}, 12, 0) == G.Held{} : G.Phase }
 
 def twelve_points_end_the_shift():
   {==}
 
 law a_crash_ends_the_shift:
-  { G.phase_after(True{}, 0) == G.Wrecked{} : G.Phase }
+  { G.phase_after(True{}, 0, 0) == G.Wrecked{} : G.Phase }
 
 def a_crash_ends_the_shift():
+  {==}
+
+# A charge that puts no points on the licence is a warning, given once while
+# it lasts.
+law a_warning_is_given_once_while_it_lasts:
+  { G.judge([52], [G.Ticket{52, 1000, 0}], 1300) == [G.Ticket{52, 1000, 0}] : List<&2, G.Ticket> }
+
+def a_warning_is_given_once_while_it_lasts():
+  {==}
+
+# Pasal 108 ayat (1): a shift starts in the kerb lane.
+law a_shift_starts_in_the_kerb_lane:
+  { G.lane_of(G.player_of(G.drive_of(G.shift_start(20261024)))) == G.Outer{} : G.Lane }
+
+def a_shift_starts_in_the_kerb_lane():
+  {==}
+
+law a_shift_lasts_four_minutes:
+  { G.shift_ticks() == 14400 : U32 }
+
+def a_shift_lasts_four_minutes():
+  {==}
+
+law the_shift_runs_until_the_clock_is_out:
+  { G.phase_after(False{}, 0, 14399) == G.Running{} : G.Phase }
+
+def the_shift_runs_until_the_clock_is_out():
+  {==}
+
+law the_shift_is_over_when_the_clock_is_out:
+  { G.phase_after(False{}, 0, 14400) == G.Over{} : G.Phase }
+
+def the_shift_is_over_when_the_clock_is_out():
+  {==}
+
+# A passenger boards, or is set down, only when the car stands still at the
+# stop on the main road.
+law a_passenger_boards_at_a_standstill:
+  { G.at_order(G.Order{False{}, 1, 3, True{}, 0, 41700, 0, 0}, G.Leg{1, 3, 1, 64972}, 42000, 0, False{}) == True{} : Bool }
+
+def a_passenger_boards_at_a_standstill():
+  {==}
+
+law a_rolling_car_takes_no_passenger:
+  { G.at_order(G.Order{False{}, 1, 3, True{}, 0, 41700, 0, 0}, G.Leg{1, 3, 1, 64972}, 42000, 1, False{}) == False{} : Bool }
+
+def a_rolling_car_takes_no_passenger():
+  {==}
+
+law a_car_25_metres_off_the_stop_takes_no_passenger:
+  { G.at_order(G.Order{False{}, 1, 3, True{}, 0, 41700, 0, 0}, G.Leg{1, 3, 1, 64972}, 44200, 0, False{}) == False{} : Bool }
+
+def a_car_25_metres_off_the_stop_takes_no_passenger():
+  {==}
+
+# Driven the other way, the stop is the same distance from the road's west
+# crossing.
+law a_stop_is_the_same_place_either_way:
+  { G.at_order(G.Order{False{}, 1, 3, True{}, 0, 41700, 0, 0}, G.Leg{2, 3, 3, 64972}, 23272, 0, False{}) == True{} : Bool }
+
+def a_stop_is_the_same_place_either_way():
+  {==}
+
+law a_fare_is_5000_and_5_a_metre:
+  { G.fare_for(100000) == 10000 : U32 }
+
+def a_fare_is_5000_and_5_a_metre():
+  {==}
+
+law a_drop_off_on_time_pays_the_fare:
+  { G.paid(9000, 100, 100) == 9000 : U32 }
+
+def a_drop_off_on_time_pays_the_fare():
+  {==}
+
+law a_late_drop_off_pays_half:
+  { G.paid(9000, 100, 101) == 4500 : U32 }
+
+def a_late_drop_off_pays_half():
   {==}

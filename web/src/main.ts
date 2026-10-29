@@ -5,6 +5,7 @@ import { Keyboard } from "./input.ts";
 import { buildCar, PLAYER_COLOUR } from "./assets/cars.ts";
 import { Around } from "./render/around.ts";
 import { Route } from "./render/route.ts";
+import { Stop } from "./render/stop.ts";
 import { Traffic } from "./render/traffic.ts";
 import { Ahead } from "./ahead.ts";
 import {
@@ -88,6 +89,7 @@ class Run {
   route = new Route();
   town: Around;
   traffic: Traffic;
+  stop = new Stop();
   private planned: number;
 
   constructor(seed: number) {
@@ -100,7 +102,7 @@ class Run {
     scene.add(this.town.group);
     const player = buildCar("Sedan", PLAYER_COLOUR, bodyLength("Sedan"));
     this.traffic = new Traffic(this.route, player);
-    scene.add(this.traffic.group);
+    scene.add(this.traffic.group, this.stop.group);
   }
 
   step(ms: number): void {
@@ -119,6 +121,7 @@ class Run {
     this.ahead.dispose();
     this.town.dispose();
     this.traffic.group.removeFromParent();
+    this.stop.group.removeFromParent();
   }
 }
 
@@ -154,7 +157,8 @@ function step(ms: number): void {
   run.traffic.update(run.state, ms / 1000);
   follow(ms / 1000);
   run.town.update(run.traffic.position, run.route.next(), camera);
-  hud.update(run.state);
+  run.stop.update(run.state.order, run.traffic.position, ms / 1000);
+  hud.update(run.state, run.traffic.position);
 }
 
 function frame(now: number): void {

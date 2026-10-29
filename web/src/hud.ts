@@ -180,6 +180,7 @@ function ticketRow(id: number, count = 1): HTMLLIElement {
 
 const ENDINGS: Record<Snapshot["phase"], string> = {
   Running: "Tilang",
+  Over: "Shift over",
   Held: "SIM held",
   Wrecked: "Crashed",
 };
@@ -195,10 +196,28 @@ export class Hud {
   private causes = need("#causes");
   private total = need("#total b");
   private tally = need("#tally b");
+  private clock = need("#clock");
+  private earned = need("#earned");
+  private order = need<HTMLElement>("#order");
+  private task = need("#task");
+  private far = need("#far");
+  private due = need("#due");
+  private fares = need("#fares b");
   private seen = 0;
   private ended = false;
 
-  update(state: Snapshot): void {
+  update(state: Snapshot, car: { x: number; z: number }): void {
+    const left = Math.ceil(state.clock);
+    this.clock.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    this.earned.textContent = `Rp${rupiah.format(state.earned)}`;
+    const o = state.order;
+    this.order.dataset.aboard = String(o.aboard);
+    this.task.textContent = o.aboard ? `Drop-off · Rp${rupiah.format(o.fare)}` : "Pickup";
+    this.far.textContent = `${Math.round(Math.hypot(o.x - car.x, o.z - car.z) / 10) * 10} m`;
+    const due = Math.ceil(o.dueIn);
+    this.due.textContent = o.aboard ? (due >= 0 ? `${due} s` : "Late") : "";
+    this.due.classList.toggle("late", due < 0);
+
     this.dial.update(state.speed, state.limit);
     this.licence.update(state.points, state.heldAt);
     this.lamps.dataset.signal = state.signal;
@@ -244,6 +263,7 @@ export class Hud {
     }
     this.total.textContent = rupiah.format(sum);
     this.tally.textContent = `${state.points} / ${state.heldAt}`;
+    this.fares.textContent = `${state.served} · Rp${rupiah.format(state.earned)}`;
     this.panel.hidden = false;
   }
 }

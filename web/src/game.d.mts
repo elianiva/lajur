@@ -83,7 +83,21 @@ export type World = {
   seed: number;
 };
 
-export type Phase = Constructor<"Running" | "Held" | "Wrecked">;
+export type Phase = Constructor<"Running" | "Over" | "Held" | "Wrecked">;
+
+/** A passenger waiting (`aboard` false) or being carried (true) to a stop on a road. */
+export type Order = {
+  $: "Order";
+  aboard: boolean;
+  ki: number;
+  kj: number;
+  east: boolean;
+  t: number;
+  cm: number;
+  fare: number;
+  /** The tick the drop-off is due by. */
+  due: number;
+};
 
 /** A charge written up: the rule, the tick it was written and its licence points. */
 export type Ticket = { $: "Ticket"; id: number; tick: number; points: number };
@@ -96,6 +110,9 @@ export type Shift = {
   tickets: BendList<Ticket>;
   live: BendList<Ticket>;
   phase: Phase;
+  order: Order;
+  earned: number;
+  served: number;
 };
 
 export interface Game {
@@ -139,6 +156,8 @@ export interface Game {
   with_drive(shift: Shift, world: World): Shift;
   held_at(): number;
   points_of_rule(id: number): number;
+  clock_left(shift: Shift): number;
+  order_point(shift: Shift): Pt;
 }
 
 declare const game: Game;
