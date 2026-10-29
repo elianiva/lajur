@@ -283,9 +283,14 @@ body {
   letter-spacing: -0.5px;
 }
 
-#earned {
+#earned,
+#stars {
   font-size: 16px;
   font-weight: 700;
+}
+
+#stars {
+  color: var(--amber);
 }
 
 #order {
@@ -324,7 +329,8 @@ body {
   color: var(--warn);
 }
 
-#fares {
+#fares,
+#rating {
   display: flex;
   justify-content: space-between;
   margin: 0 0 var(--u);

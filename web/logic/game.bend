@@ -572,8 +572,10 @@ type Car is Data:
 def respawn_lane(id: U32, tick: U32) -> Lane:
   lane_at(U32.mod(mix(id, tick), 2))
 
-def respawn_gap(id: U32, tick: U32) -> U32:
-  U32.add(7000, U32.mod(U32.div(mix(id, tick), 3), 5000))
+# Traffic thickens as the shift goes on: the spread of a fresh car's gap
+# shrinks from 50 m to 25 m over the first four minutes.
+def respawn_gap(id: U32, +tick: U32) -> U32:
+  U32.add(7000, U32.mod(U32.div(mix(id, tick), 3), U32.sub(5000, U32.min(U32.div(tick, 6), 2500))))
 
 def respawn_body(id: U32, tick: U32) -> Body:
   body_at(U32.mod(U32.div(mix(id, tick), 5), 7))
@@ -1620,7 +1622,7 @@ type Order is Data:
 
 type Shift is Data:
   Shift{drive: World, points: U32, tickets: List<&2, Ticket>, live: List<&2, Ticket>,
-        phase: Phase, order: Order, earned: U32, served: U32}
+        phase: Phase, order: Order, earned: U32, served: U32, stars: U32}
 
 # A charge that lasts is ticketed again after this many ticks.
 def again_ticks() -> U32:
@@ -1716,24 +1718,25 @@ def fare_for(+cm: U32) -> U32:
   U32.sub(rp, U32.mod(rp, 500))
 
 # The time an order allows: a second for every six metres as the crow flies,
-# and fifteen seconds to stop and set down.
-def allow_for(+cm: U32) -> U32:
-  U32.add(900, U32.div(U32.mul(cm, 60), 600))
+# and fifteen seconds to stop and set down. Each passenger served, up to
+# five, asks for 0.6 m a second more: 9 m a second by the sixth order.
+def allow_for(+cm: U32, +served: U32) -> U32:
+  U32.add(900, U32.div(U32.mul(cm, 60), U32.add(600, U32.mul(60, U32.min(served, 5)))))
 
 def stop_point(+seed: U32, o: Order) -> W.Pt:
   match o:
     case Order{aboard, ki, kj, east, t, cm, fare, due}:
       W.curve_point(seed, ki, kj, east, t)
 
-def priced(o: Order, +seed: U32, +from: W.Pt, +now: U32) -> Order:
+def priced(o: Order, +seed: U32, +from: W.Pt, +now: U32, +served: U32) -> Order:
   match o:
     case Order{aboard, +ki, +kj, +east, +t, cm, fare, due}:
       +d = W.dist(from, W.curve_point(seed, ki, kj, east, t))
-      Order{True{}, ki, kj, east, t, cm, fare_for(d), U32.add(now, allow_for(d))}
+      Order{True{}, ki, kj, east, t, cm, fare_for(d), U32.add(now, allow_for(d, served))}
 
 # The passenger boards: the drop-off is past the crossing ahead.
 def boarded(+seed: U32, +o: Order, +leg: Leg, +n: U32, +now: U32) -> Order:
-  priced(stop_beyond(seed, leg, n, True{}), seed, stop_point(seed, o), now)
+  priced(stop_beyond(seed, leg, n, True{}), seed, stop_point(seed, o), now, n)
 
 # The car is at the stop when it stands still on that road, either way,
 # within 25 metres of it, out of any lokal street.
@@ -1779,7 +1782,7 @@ def start_on(+seed: U32) -> World:
   reseed(start(), seed)
 
 def shift_start(+seed: U32) -> Shift:
-  Shift{start_on(seed), 0, Nil{}, Nil{}, Running{}, pickup_near(seed, leg_from(seed, 1, 3, 1), 20000, 0), 0, 0}
+  Shift{start_on(seed), 0, Nil{}, Nil{}, Running{}, pickup_near(seed, leg_from(seed, 1, 3, 1), 20000, 0), 0, 0, 50}
 
 def tick_of(w: World) -> U32:
   match w:
@@ -1890,18 +1893,49 @@ def order_was_aboard(o: Order) -> Bool:
     case Order{aboard, ki, kj, east, t, cm, fare, due}:
       aboard
 
+# ---- The rating -------------------------------------------------------------
+#
+# The passengers rate the driver in tenths of a star, from 1.0 to 5.0, and a
+# fare is paid in proportion: Rp10.000 at five stars is Rp8.000 at four. A
+# shift starts at five. Every point a ticket puts on the licence costs a
+# tenth; a drop-off on time earns two tenths back, a late one costs five.
+
+def stars_lost(+stars: U32, +lost: U32) -> U32:
+  Bool.pick(U32, U32.is_lt(U32.add(lost, 10), stars), U32.sub(stars, lost), 10)
+
+def stars_after(+stars: U32, done: Bool, +late: Bool) -> U32:
+  match done:
+    case False{}:
+      stars
+    case True{}:
+      Bool.pick(U32, late, stars_lost(stars, 5), U32.min(U32.add(stars, 2), 50))
+
+def rated(+pay: U32, +stars: U32) -> U32:
+  +x = U32.div(U32.mul(pay, stars), 50)
+  U32.sub(x, U32.mod(x, 100))
+
+def order_due(o: Order) -> U32:
+  match o:
+    case Order{aboard, ki, kj, east, t, cm, fare, due}:
+      due
+
+def stars_of(s: Shift) -> U32:
+  match s:
+    case Shift{drive, points, tickets, live, phase, order, earned, served, stars}:
+      stars
+
 def paid_up(next: Order & U32, w: World, points: U32, tickets: List<&2, Ticket>, live: List<&2, Ticket>,
-            phase: Phase, earned: U32, served: U32) -> Shift:
+            phase: Phase, earned: U32, served: U32, +rate: U32, stars: U32) -> Shift:
   match next:
     case (o, pay):
-      Shift{w, points, tickets, live, phase, o, U32.add(earned, pay), served}
+      Shift{w, points, tickets, live, phase, o, U32.add(earned, rated(pay, rate)), served, stars}
 
 # The world after a frame. When the frame ran no tick, nothing new is judged.
 def judged(moved: Bool, +w: World, +points: U32, +tickets: List<&2, Ticket>, +live: List<&2, Ticket>,
-           +order: Order, +earned: U32, +served: U32) -> Shift:
+           +order: Order, +earned: U32, +served: U32, +stars: U32) -> Shift:
   match moved:
     case False{}:
-      Shift{w, points, tickets, live, Running{}, order, earned, served}
+      Shift{w, points, tickets, live, Running{}, order, earned, served, stars}
     case True{}:
       +now = tick_of(w)
       +live2 = judge(charges_of(w), live, now)
@@ -1909,9 +1943,11 @@ def judged(moved: Bool, +w: World, +points: U32, +tickets: List<&2, Ticket>, +li
       +total = U32.add(points, points_in(fresh))
       +arrived = at_order(order, leg_of(w), along_of(w), speed_now(w), side_now(w))
       +done = Bool.and(arrived, order_was_aboard(order))
+      +rate = stars_lost(stars, points_in(fresh))
       paid_up(served_on(arrived, seed_of(w), order, leg_of(w), along_of(w), now, served), w,
               total, append(fresh, tickets), live2, phase_after(crashed(w), total, now),
-              earned, U32.add(served, Bool.to_u32(done)))
+              earned, U32.add(served, Bool.to_u32(done)), rate,
+              stars_after(rate, done, U32.is_lt(order_due(order), now)))
 
 def drive_on(go: Bool, +s: Shift, +ms: U32, +input: Controls) -> Shift:
   match go:
@@ -1919,14 +1955,14 @@ def drive_on(go: Bool, +s: Shift, +ms: U32, +input: Controls) -> Shift:
       s
     case True{}:
       match s:
-        case Shift{drive, +points, +tickets, +live, phase, +order, +earned, +served}:
+        case Shift{drive, +points, +tickets, +live, phase, +order, +earned, +served, +stars}:
           +before = tick_of(drive)
           +w = advance(drive, ms, input)
-          judged(U32.is_ne(tick_of(w), before), w, points, tickets, live, order, earned, served)
+          judged(U32.is_ne(tick_of(w), before), w, points, tickets, live, order, earned, served, stars)
 
 def phase_of(s: Shift) -> Phase:
   match s:
-    case Shift{drive, points, tickets, live, phase, order, earned, served}:
+    case Shift{drive, points, tickets, live, phase, order, earned, served, stars}:
       phase
 
 def shift_advance(+s: Shift, +ms: U32, +input: Controls) -> Shift:
@@ -1934,12 +1970,12 @@ def shift_advance(+s: Shift, +ms: U32, +input: Controls) -> Shift:
 
 def drive_of(s: Shift) -> World:
   match s:
-    case Shift{drive, points, tickets, live, phase, order, earned, served}:
+    case Shift{drive, points, tickets, live, phase, order, earned, served, stars}:
       drive
 
 def points_of(s: Shift) -> U32:
   match s:
-    case Shift{drive, points, tickets, live, phase, order, earned, served}:
+    case Shift{drive, points, tickets, live, phase, order, earned, served, stars}:
       points
 
 def held_at() -> U32:
@@ -1956,14 +1992,14 @@ def clock_left(s: Shift) -> U32:
 # Where the order waits or goes, on the ground, for the renderer.
 def order_point(s: Shift) -> W.Pt:
   match s:
-    case Shift{drive, points, tickets, live, phase, order, earned, served}:
+    case Shift{drive, points, tickets, live, phase, order, earned, served, stars}:
       stop_point(seed_of(drive), order)
 
 # The worker's doors and networks go into the drive the shift carries.
 def with_drive(s: Shift, w: World) -> Shift:
   match s:
-    case Shift{drive, points, tickets, live, phase, order, earned, served}:
-      Shift{w, points, tickets, live, phase, order, earned, served}
+    case Shift{drive, points, tickets, live, phase, order, earned, served, stars}:
+      Shift{w, points, tickets, live, phase, order, earned, served, stars}
 
 # The light the car drives toward, and the crossing it hangs at and the one
 # behind it, for the renderer.

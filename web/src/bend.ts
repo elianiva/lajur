@@ -69,6 +69,8 @@ export interface Snapshot {
   clock: number;
   earned: number;
   served: number;
+  /** Stars, 1.0 to 5.0. */
+  stars: number;
   order: OrderView;
   light: LightView;
   traffic: CarView[];
@@ -236,6 +238,7 @@ export function snapshot(shift: Shift): Snapshot {
     clock: game.clock_left(shift) / 60,
     earned: shift.earned,
     served: shift.served,
+    stars: shift.stars / 10,
     order: orderView(shift),
     light: lightView(world),
     // On a lokal street the main road's traffic is out of sight.

@@ -113,6 +113,8 @@ export type Shift = {
   order: Order;
   earned: number;
   served: number;
+  /** The passengers' rating, in tenths of a star. */
+  stars: number;
 };
 
 export interface Game {

@@ -1035,3 +1035,65 @@ law passing_on_green_is_charged_nothing:
 
 def passing_on_green_is_charged_nothing():
   {==}
+
+# ===========================================================================
+# The rating and the ramp
+# ===========================================================================
+
+law a_shift_starts_at_five_stars:
+  { G.stars_of(G.shift_start(20261024)) == 50 : U32 }
+
+def a_shift_starts_at_five_stars():
+  {==}
+
+# Every point a ticket puts on the licence costs a tenth of a star.
+law a_five_point_ticket_costs_half_a_star:
+  { G.stars_lost(50, 5) == 45 : U32 }
+
+def a_five_point_ticket_costs_half_a_star():
+  {==}
+
+law the_rating_never_falls_below_one_star:
+  { G.stars_lost(12, 5) == 10 : U32 }
+
+def the_rating_never_falls_below_one_star():
+  {==}
+
+law a_drop_off_on_time_earns_two_tenths:
+  { G.stars_after(40, True{}, False{}) == 42 : U32 }
+
+def a_drop_off_on_time_earns_two_tenths():
+  {==}
+
+law the_rating_never_rises_above_five_stars:
+  { G.stars_after(49, True{}, False{}) == 50 : U32 }
+
+def the_rating_never_rises_above_five_stars():
+  {==}
+
+law a_late_drop_off_costs_half_a_star:
+  { G.stars_after(40, True{}, True{}) == 35 : U32 }
+
+def a_late_drop_off_costs_half_a_star():
+  {==}
+
+law a_fare_at_four_stars_pays_four_fifths:
+  { G.rated(10000, 40) == 8000 : U32 }
+
+def a_fare_at_four_stars_pays_four_fifths():
+  {==}
+
+# Each passenger served, up to five, asks for 0.6 m a second more.
+law a_later_order_allows_less_time:
+  { Bool.and(U32.is_eq(G.allow_for(60000, 0), 6900), U32.is_eq(G.allow_for(60000, 5), 4900)) == True{} : Bool }
+
+def a_later_order_allows_less_time():
+  {==}
+
+# Traffic thickens: at the start a fresh car comes back 70 to 120 m ahead,
+# late in the shift 70 to 95 m.
+law late_traffic_comes_back_closer:
+  { U32.is_lt(G.respawn_gap(3, 15000), 9500) == True{} : Bool }
+
+def late_traffic_comes_back_closer():
+  {==}

@@ -199,6 +199,8 @@ export class Hud {
   private tally = need("#tally b");
   private clock = need("#clock");
   private earned = need("#earned");
+  private stars = need("#stars");
+  private rating = need("#rating b");
   private order = need<HTMLElement>("#order");
   private task = need("#task");
   private far = need("#far");
@@ -211,6 +213,7 @@ export class Hud {
     const left = Math.ceil(state.clock);
     this.clock.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
     this.earned.textContent = `Rp${rupiah.format(state.earned)}`;
+    this.stars.textContent = `★ ${state.stars.toFixed(1)}`;
     const o = state.order;
     this.order.dataset.aboard = String(o.aboard);
     this.task.textContent = o.aboard ? `Drop-off · Rp${rupiah.format(o.fare)}` : "Pickup";
@@ -267,6 +270,7 @@ export class Hud {
     this.total.textContent = rupiah.format(sum);
     this.tally.textContent = `${state.points} / ${state.heldAt}`;
     this.fares.textContent = `${state.served} · Rp${rupiah.format(state.earned)}`;
+    this.rating.textContent = `★ ${state.stars.toFixed(1)}`;
     this.panel.hidden = false;
   }
 }
